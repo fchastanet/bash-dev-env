@@ -11,7 +11,7 @@ HELP="$(
 ${__HELP_TITLE}Description:${__HELP_NORMAL} installs requirements(fchastanet/bash-tools-framework)
 ${__HELP_TITLE}Usage:${__HELP_NORMAL} ${SCRIPT_NAME}
 
-.INCLUDE "${ORIGINAL_TEMPLATE_DIR}/_includes/author.tpl"
+.INCLUDE "${TEMPLATE_DIR}/_includes/author.tpl"
 EOF
 )"
 Args::defaultHelp "${HELP}" "$@"
@@ -20,18 +20,14 @@ Git::cloneOrPullIfNoChanges \
   "${ROOT_DIR}/vendor/bash-tools-framework" \
   "https://github.com/fchastanet/bash-tools-framework.git"
 
+Log::displayInfo "Copying useful binaries from bash-tools-framework"
 declare -a externalBinaries=(
-  awkLint
-  buildPushDockerImages
-  dockerLint
-  generateShellDoc
-  runBuildContainer
-  shellcheckLint
-  "test"
+  "${FRAMEWORK_DIR}/bin/awkLint"
+  "${FRAMEWORK_DIR}/bin/buildBinFiles"
+  "${FRAMEWORK_DIR}/bin/generateShellDoc"
+  "${FRAMEWORK_DIR}/bin/megalinter"
+  "${FRAMEWORK_DIR}/bin/runBuildContainer"
+  "${FRAMEWORK_DIR}/bin/shellcheckLint"
+  "${FRAMEWORK_DIR}/bin/test"
 )
-
-declare bin
-for bin in "${externalBinaries[@]}"; do
-  Log::displayInfo "Creating symlink to bash-tools-framework/bin/${bin} in bin directory"
-  ln -srf "${VENDOR_DIR}/bash-tools-framework/bin/${bin}" "${ROOT_DIR}/bin/${bin}"
-done
+cp -v "${externalBinaries[@]}" "${ROOT_DIR}/bin"

@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2034
-
 #####################################
 # GENERATED FILE FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/build/installRequirements.sh
 # DO NOT EDIT IT
@@ -116,7 +114,9 @@ export __HELP_TITLE
 export __HELP_NORMAL
 
 Args::defaultHelp() {
-  if ! Args::defaultHelpNoExit "$@"; then
+  local helpArg=$1
+  shift || true
+  if ! Args::defaultHelpNoExit "${helpArg}" "$@"; then
     exit 0
   fi
 }
@@ -193,7 +193,7 @@ Log::fatal() {
 }
 
 Args::defaultHelpNoExit() {
-  local helpArg="$1"
+  local helpArg=$1
   shift || true
   # shellcheck disable=SC2034
   local args
@@ -203,7 +203,11 @@ Args::defaultHelpNoExit() {
   while true; do
     case $1 in
       -h | --help)
-        Args::showHelp "${helpArg}"
+        if [[ "$(type -t "${helpArg}")" = "function" ]]; then
+          "${helpArg}" "$@"
+        else
+          Args::showHelp "${helpArg}"
+        fi
         return 1
         ;;
       --)
@@ -319,7 +323,7 @@ Git::pullIfNoChanges() {
   if [[ -d "${dir}/.git" ]]; then
     (
       cd "${dir}"
-      git update-index --refresh
+      git update-index --refresh &>/dev/null || true
       if git diff-index --quiet HEAD --; then
         Log::displayInfo "Pull git repository '${dir}' as no changes detected"
         git pull --progress
@@ -523,6 +527,13 @@ if ((BASH_FRAMEWORK_LOG_LEVEL > __LEVEL_OFF)); then
   fi
 fi
 
+if [[ -d "${ROOT_DIR}/vendor/bash-tools-framework" ]]; then
+  FRAMEWORK_DIR="$(cd "${ROOT_DIR}/vendor/bash-tools-framework" && pwd -P)"
+else
+  # shellcheck disable=SC2034
+  FRAMEWORK_DIR="${ROOT_DIR}/vendor/bash-tools-framework"
+fi
+
 if [[ "$(id -u)" = "0" ]]; then
   Log::fatal "this script should be executed as normal user"
 fi
@@ -534,6 +545,9 @@ ${__HELP_TITLE}Usage:${__HELP_NORMAL} ${SCRIPT_NAME}
 
 ${__HELP_TITLE}Author:${__HELP_NORMAL}
 [François Chastanet](https://github.com/fchastanet)
+
+${__HELP_TITLE}Source file:${__HELP_NORMAL}
+https://github.com/fchastanet/bash-dev-env/tree/master/src/build/installRequirements.sh
 
 ${__HELP_TITLE}License:${__HELP_NORMAL}
 MIT License
@@ -547,18 +561,14 @@ Git::cloneOrPullIfNoChanges \
   "${ROOT_DIR}/vendor/bash-tools-framework" \
   "https://github.com/fchastanet/bash-tools-framework.git"
 
+Log::displayInfo "Copying useful binaries from bash-tools-framework"
 declare -a externalBinaries=(
-  awkLint
-  buildPushDockerImages
-  dockerLint
-  generateShellDoc
-  runBuildContainer
-  shellcheckLint
-  "test"
+  "${FRAMEWORK_DIR}/bin/awkLint"
+  "${FRAMEWORK_DIR}/bin/buildBinFiles"
+  "${FRAMEWORK_DIR}/bin/generateShellDoc"
+  "${FRAMEWORK_DIR}/bin/megalinter"
+  "${FRAMEWORK_DIR}/bin/runBuildContainer"
+  "${FRAMEWORK_DIR}/bin/shellcheckLint"
+  "${FRAMEWORK_DIR}/bin/test"
 )
-
-declare bin
-for bin in "${externalBinaries[@]}"; do
-  Log::displayInfo "Creating symlink to bash-tools-framework/bin/${bin} in bin directory"
-  ln -srf "${VENDOR_DIR}/bash-tools-framework/bin/${bin}" "${ROOT_DIR}/bin/${bin}"
-done
+cp -v "${externalBinaries[@]}" "${ROOT_DIR}/bin"

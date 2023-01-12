@@ -29,9 +29,11 @@ TODO.local.md
 
 # bash-tools-framework binaries
 /bin/awkLint
+/bin/buildBinFiles
 /bin/buildPushDockerImages
 /bin/dockerLint
 /bin/generateShellDoc
 /bin/runBuildContainer
 /bin/shellcheckLint
 /bin/test
+/bin/megalinter

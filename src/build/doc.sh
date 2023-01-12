@@ -32,4 +32,4 @@ sed -i -E \
   -e 's#^> \*\*_TIP:_\*\* (.*)$#> [!TIP|label:\1]#' \
   "${DOC_DIR}/README.md"
 
-cp -R "${ROOT_DIR}/docs" "${DOC_DIR}/docs"
+cp -R "${ROOT_DIR}/docs" "${DOC_DIR}"

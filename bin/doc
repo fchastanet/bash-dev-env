@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2034
-
 #####################################
 # GENERATED FILE FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/build/doc.sh
 # DO NOT EDIT IT
@@ -116,13 +114,15 @@ export __HELP_TITLE
 export __HELP_NORMAL
 
 Args::defaultHelp() {
-  if ! Args::defaultHelpNoExit "$@"; then
+  local helpArg=$1
+  shift || true
+  if ! Args::defaultHelpNoExit "${helpArg}" "$@"; then
     exit 0
   fi
 }
 
 Args::defaultHelpNoExit() {
-  local helpArg="$1"
+  local helpArg=$1
   shift || true
   # shellcheck disable=SC2034
   local args
@@ -132,7 +132,11 @@ Args::defaultHelpNoExit() {
   while true; do
     case $1 in
       -h | --help)
-        Args::showHelp "${helpArg}"
+        if [[ "$(type -t "${helpArg}")" = "function" ]]; then
+          "${helpArg}" "$@"
+        else
+          Args::showHelp "${helpArg}"
+        fi
         return 1
         ;;
       --)
@@ -152,6 +156,12 @@ Args::showHelp() {
 
 # FUNCTIONS
 
+if [[ -d "${ROOT_DIR}/vendor/bash-tools-framework" ]]; then
+  FRAMEWORK_DIR="$(cd "${ROOT_DIR}/vendor/bash-tools-framework" && pwd -P)"
+else
+  # shellcheck disable=SC2034
+  FRAMEWORK_DIR="${ROOT_DIR}/vendor/bash-tools-framework"
+fi
 DOC_DIR="${ROOT_DIR}/pages"
 
 HELP="$(
@@ -161,6 +171,9 @@ ${__HELP_TITLE}Usage:${__HELP_NORMAL} ${SCRIPT_NAME}
 
 ${__HELP_TITLE}Author:${__HELP_NORMAL}
 [François Chastanet](https://github.com/fchastanet)
+
+${__HELP_TITLE}Source file:${__HELP_NORMAL}
+https://github.com/fchastanet/bash-tools-framework/tree/master/src/build/doc.sh
 
 ${__HELP_TITLE}License:${__HELP_NORMAL}
 MIT License
@@ -187,4 +200,4 @@ sed -i -E \
   -e 's#^> \*\*_TIP:_\*\* (.*)$#> [!TIP|label:\1]#' \
   "${DOC_DIR}/README.md"
 
-cp -R "${ROOT_DIR}/docs" "${DOC_DIR}/docs"
+cp -R "${ROOT_DIR}/docs" "${DOC_DIR}"
