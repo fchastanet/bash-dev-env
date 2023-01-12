@@ -565,6 +565,7 @@ Log::displayInfo "Copying useful binaries from bash-tools-framework"
 declare -a externalBinaries=(
   "${FRAMEWORK_DIR}/bin/awkLint"
   "${FRAMEWORK_DIR}/bin/buildBinFiles"
+  "${FRAMEWORK_DIR}/bin/findShebangFiles"
   "${FRAMEWORK_DIR}/bin/generateShellDoc"
   "${FRAMEWORK_DIR}/bin/megalinter"
   "${FRAMEWORK_DIR}/bin/runBuildContainer"

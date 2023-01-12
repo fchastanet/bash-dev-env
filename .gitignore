@@ -37,3 +37,4 @@ TODO.local.md
 /bin/shellcheckLint
 /bin/test
 /bin/megalinter
+/bin/findShebangFiles
