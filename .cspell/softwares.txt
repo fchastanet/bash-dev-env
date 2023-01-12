@@ -109,3 +109,4 @@ DOCKERHUB
 buildx
 tagname
 htmlhintrc
+mysqldump

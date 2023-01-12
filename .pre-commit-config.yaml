@@ -2,9 +2,9 @@
 repos:
   - repo: local
     hooks:
-      - id: fixShebangExecutionBit
-        name: fixShebangExecutionBit
-        entry: bash -c './bin/findShebangFiles chmod +x'
+      - id: install-requirements
+        name: install-requirements
+        entry: bash -c './bin/installRequirements'
         language: system
         always_run: true
         require_serial: true
@@ -13,14 +13,13 @@ repos:
 
   - repo: local
     hooks:
-      - id: remove-megalinter-containers
-        name: remove-megalinter-containers
-        entry:
-          bash -c 'set -x && docker ps -a -q --filter="name=megalinter" | xargs
-          -r docker rm || true'
+      - id: fixShebangExecutionBit
+        name: fixShebangExecutionBit
+        entry: bash -c './bin/findShebangFiles chmod +x'
         language: system
         always_run: true
         require_serial: true
+        fail_fast: true
         verbose: true
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -46,11 +45,6 @@ repos:
   - repo: https://github.com/jumanjihouse/pre-commit-hooks
     rev: 3.0.0
     hooks:
-      - id: shellcheck
-        # shellcheck does not validate correctly zsh files
-        # x modifier: extended. Spaces and text after a # in the pattern are ignored
-        exclude: (?x)^( vendor/.*| \.tpl| ^bin/.*| .\.zsh| \.zshrc| install )$
-
       - id: shfmt
         args: [-i, '2', -ci]
         exclude: (.\.zsh$|/\.zshrc$)
@@ -67,9 +61,9 @@ repos:
 
   - repo: local
     hooks:
-      - id: install-requirements
-        name: install-requirements
-        entry: bash -c './bin/installRequirements'
+      - id: shellcheckLint
+        name: shellcheckLint
+        entry: bash -c './bin/shellcheckLint --staged -f tty'
         language: system
         always_run: true
         require_serial: true
