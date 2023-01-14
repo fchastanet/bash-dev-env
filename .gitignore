@@ -38,3 +38,4 @@ TODO.local.md
 /bin/test
 /bin/megalinter
 /bin/findShebangFiles
+/bin/frameworkLint

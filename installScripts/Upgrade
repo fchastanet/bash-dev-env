@@ -25,11 +25,9 @@ installScripts_Upgrade_defaultVariables() {
 }
 
 installScripts_Upgrade_checkVariables() {
-  if [[ -z "${UPGRADE_UBUNTU_VERSION+xxx}" ]]; then
-    Log::displayError "UPGRADE_UBUNTU_VERSION should be defined"
+  if ! Assert::varExistsAndNotEmpty "UPGRADE_UBUNTU_VERSION"; then
     return 1
-  fi
-  if ! Array::contains "${UPGRADE_UBUNTU_VERSION}" "lts" "dev"; then
+  elif ! Array::contains "${UPGRADE_UBUNTU_VERSION}" "lts" "dev"; then
     Log::displayError "UPGRADE_UBUNTU_VERSION values expects to be lts or dev"
     return 1
   fi
@@ -261,6 +259,21 @@ Assert::expectNonRootUser() {
   fi
 }
 
+Assert::varExistsAndNotEmpty() {
+  local varName="$1"
+  if ! Assert::validVariableName "${varName}"; then
+    Log::displayError "${varName} - invalid variable name"
+    return 3
+  fi
+  if [[ -z "${!varName+unset}" ]]; then
+    Log::displayError "${varName} - not defined"
+    return 1
+  elif [[ -z "${!varName}" ]]; then
+    Log::displayError "${varName} - please provide a value"
+    return 2
+  fi
+}
+
 engine::installScript::showHelp() {
   local description="$1"
   local helpVariables="$2"
@@ -354,6 +367,10 @@ Log::fatal() {
 # @return 0 on success, 1 if max retries count reached
 Retry::default() {
   Retry::parameterized 5 15 "" "$@"
+}
+
+Assert::validVariableName() {
+  echo "$1" | grep -q '^[_[:alpha:]][_[:alpha:][:digit:]]*$' || return 1
 }
 
 # lazy initialization

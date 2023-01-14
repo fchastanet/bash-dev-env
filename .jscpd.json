@@ -13,7 +13,7 @@
     "vendor/bash-tools-framework/.cspell/*",
     "vendor/bats*/**",
     "pages/README.md",
-    "src/engine/installScript/optionsParse.sh",
+    "src/engine/installScript/_optionsParse.sh",
     "pages/docs/**",
     "**/snippets/**",
     "**/.venv/**",

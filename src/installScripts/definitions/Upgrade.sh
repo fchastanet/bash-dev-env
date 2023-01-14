@@ -25,11 +25,9 @@ installScripts_Upgrade_defaultVariables() {
 }
 
 installScripts_Upgrade_checkVariables() {
-  if [[ -z "${UPGRADE_UBUNTU_VERSION+xxx}" ]]; then
-    Log::displayError "UPGRADE_UBUNTU_VERSION should be defined"
+  if ! Assert::varExistsAndNotEmpty "UPGRADE_UBUNTU_VERSION"; then
     return 1
-  fi
-  if ! Array::contains "${UPGRADE_UBUNTU_VERSION}" "lts" "dev"; then
+  elif ! Array::contains "${UPGRADE_UBUNTU_VERSION}" "lts" "dev"; then
     Log::displayError "UPGRADE_UBUNTU_VERSION values expects to be lts or dev"
     return 1
   fi

@@ -2,7 +2,7 @@
 # BIN_FILE=${ROOT_DIR}/installScripts/Upgrade
 # ROOT_DIR_RELATIVE_TO_BIN_DIR=..
 
-.INCLUDE "${TEMPLATE_DIR}/installScriptDefinitions/Upgrade.sh"
+.INCLUDE "${TEMPLATE_DIR}/installScripts/definitions/Upgrade.sh"
 
 showHelp() {
   # shellcheck disable=SC2154
@@ -12,7 +12,7 @@ showHelp() {
     "$(installScripts_Upgrade_dependencies)"
 }
 
-.INCLUDE "${TEMPLATE_DIR}/engine/installScript/header.sh"
+.INCLUDE "${TEMPLATE_DIR}/engine/installScript/_header.sh"
 
 installScripts_Upgrade_install
 installScripts_Upgrade_configure

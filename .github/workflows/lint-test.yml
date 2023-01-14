@@ -38,6 +38,9 @@ jobs:
           set -exo pipefail
           ./bin/awkLint | tee logs/awk-checkstyle.xml
 
+      - name: Linting - Framework
+        run: ./bin/frameworkLint | tee logs/framework-checkstyle.xml
+
       - name: build bin files + check md5
         run: |
           set -exo pipefail

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2034
+
+# describe the functions that will be skipped from being imported
+FRAMEWORK_FUNCTIONS_IGNORE_REGEXP='^Acquire::ForceIPv4$'
+# describe the files that do not contain function to be imported
+NON_FRAMEWORK_FILES_REGEXP="(.bats$|/testsData/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/_|^src/batsHeaders.sh$)"
+# describe the files that are allowed to not have a function matching the filename
+FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP="^\..*$|^install$|^bin/|^build.sh$|^gitHooks/|^(src/)?installScripts/|^profile.*|_.*.sh$"
+# Source directories
+FRAMEWORK_SRC_DIRS=(
+  "${ROOT_DIR}/vendor/bash-tools-framework/src"
+)
