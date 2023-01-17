@@ -41,6 +41,11 @@ jobs:
       - name: Linting - Framework
         run: ./bin/frameworkLint | tee logs/framework-checkstyle.xml
 
+      - name: Linting - Definitions
+        run: |
+          ./bin/definitionLint src/installScripts/definitions | tee \
+            logs/definitions-checkstyle.xml
+
       - name: build bin files + check md5
         run: |
           set -exo pipefail

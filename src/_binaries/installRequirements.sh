@@ -31,5 +31,6 @@ declare -a externalBinaries=(
   "${FRAMEWORK_DIR}/bin/shellcheckLint"
   "${FRAMEWORK_DIR}/bin/test"
   "${FRAMEWORK_DIR}/bin/frameworkLint"
+  "${FRAMEWORK_DIR}/bin/definitionLint"
 )
 cp -v "${externalBinaries[@]}" "${ROOT_DIR}/bin"

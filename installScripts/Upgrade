@@ -106,7 +106,7 @@ showHelp() {
 }
 
 #####################################
-# GENERATED FILE FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/installScripts/Upgrade.sh
+# GENERATED FILE FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/installScripts/scripts/Upgrade.sh
 # DO NOT EDIT IT
 #####################################
 
@@ -304,7 +304,7 @@ ${__HELP_TITLE}Author:${__HELP_NORMAL}
 [François Chastanet](https://github.com/fchastanet)
 
 ${__HELP_TITLE}Source file:${__HELP_NORMAL}
-https://github.com/fchastanet/bash-tools-framework/tree/master/src/installScripts/Upgrade.sh
+https://github.com/fchastanet/bash-tools-framework/tree/master/src/installScripts/scripts/Upgrade.sh
 
 ${__HELP_TITLE}License:${__HELP_NORMAL}
 MIT License
@@ -370,7 +370,7 @@ Retry::default() {
 }
 
 Assert::validVariableName() {
-  echo "$1" | grep -q '^[_[:alpha:]][_[:alpha:][:digit:]]*$' || return 1
+  echo "$1" | LC_ALL=POSIX grep -E -q '^[A-Za-z_0-9:]+$'
 }
 
 # lazy initialization
