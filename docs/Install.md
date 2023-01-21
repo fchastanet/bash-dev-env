@@ -16,7 +16,7 @@ files of your distribution:
 
 - update `/etc/hosts`
 - add/update `/etc/wsl.conf`
-- add `/etc/sudoers.d/${USERNAME}-upgrade-no-password`
+- add `/etc/sudoers.d/${USER_NAME}-upgrade-no-password`
 - add `/etc/sudoers.d/bash-dev-env`
 - update `/etc/inputrc`
 - add file `/etc/profile.d/updateEnv.sh` that contains every common environment

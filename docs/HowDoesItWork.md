@@ -50,8 +50,8 @@ This function is responsible for:
 
 - exporting the following variables from .env:
 
-  - USERGROUP
-  - USERNAME
+  - USER_GROUP
+  - USER_NAME
   - USER_MAIL
   - DEV_USER_NAME
   - LDAP_LOGIN
@@ -59,8 +59,8 @@ This function is responsible for:
 
 - deducing and export the following variables
 
-  - USERID => computed from USERNAME provided by .env file
-  - USERGROUPID => computed from USERGROUP provided by .env file
+  - USERID => computed from USER_NAME provided by .env file
+  - USER_GROUP_ID => computed from USER_GROUP provided by .env file
   - LIB_DIR => `<full path to lib directory>`
   - ROOT_DIR => `<full path to this project directory>`
   - HOSTIP
@@ -72,7 +72,7 @@ This function is responsible for:
 
   - CONF_DIR => defaults to ${ROOT_DIR}/conf
   - LOGS_DIR => defaults to ${ROOT_DIR}/logs
-  - PROJECTS_DIR => defaults to ${USERHOME}/projects
+  - PROJECTS_DIR => defaults to ${USER_HOME}/projects
   - BACKUP_DIR => defaults to ${ROOT_DIR}/backup
   - SCRIPTS_DIR => defaults to ${ROOT_DIR}/scripts
 

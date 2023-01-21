@@ -3,21 +3,17 @@
 export SKIP_INSTALL
 export SKIP_CONFIGURE
 export SKIP_TEST
-export PREPARE_EXPORT
-export SKIP_DEPENDENCIES
 
 SKIP_INSTALL=0
 SKIP_CONFIGURE=0
 SKIP_TEST=0
-PREPARE_EXPORT=0
-SKIP_DEPENDENCIES=0
 
 # read command parameters
 # $@ is all command line parameters passed to the script.
 # -o is for short options like -h
 # -l is for long options with double dash like --help
 # the comma separates different long options
-LONG_OPTIONS="help,prepare-export,skip-test,skip-tests,skip-config,skip-configure,skip-configuration,skip-install,skip-installation,skip-dependencies"
+LONG_OPTIONS="help,skip-test,skip-tests,skip-config,skip-configure,skip-configuration,skip-install,skip-installation"
 SHORT_OPTIONS="h"
 
 options=$(getopt -l "${LONG_OPTIONS}" -o "${SHORT_OPTIONS}" -- "$@" 2>/dev/null) || {
@@ -32,9 +28,6 @@ while true; do
       showHelp
       exit 0
       ;;
-    --prepare-export)
-      PREPARE_EXPORT=1
-      ;;
     --skip-installation | --skip-install)
       SKIP_INSTALL=1
       ;;
@@ -43,9 +36,6 @@ while true; do
       ;;
     --skip-test | --skip-tests)
       SKIP_TEST=1
-      ;;
-    --skip-dependencies)
-      SKIP_DEPENDENCIES=1
       ;;
     --)
       shift || true

@@ -110,3 +110,4 @@ buildx
 tagname
 htmlhintrc
 mysqldump
+substr

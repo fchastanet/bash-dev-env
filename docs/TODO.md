@@ -34,10 +34,10 @@ This section describes features that could be improved.
 
 This function has too much responsibilities and has to be cut in more
 specialized functions. Check that each `.env` variable validity is checked. What
-happens if `USERNAME` does not exists. Create /etc/sudoers.d/bash-dev-env should
-be moved to Anacron configuration. Some complex computation like `IPCONFIG`(not
-sure it is still useful by the way) should be computed in a dedicated function
-(lazy load).
+happens if `USER_NAME` does not exists. Create /etc/sudoers.d/bash-dev-env
+should be moved to Anacron configuration. Some complex computation like
+`IPCONFIG`(not sure it is still useful by the way) should be computed in a
+dedicated function (lazy load).
 
 ### 1.2. Refactor lib/loadAndCheckConfig.sh - loadProfile
 

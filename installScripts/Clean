@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# META_SCRIPT=Upgrade
+# META_SCRIPT=Clean
 
 #####################################
-# GENERATED FILE FROM https://github.com/fchastanet/bash-dev-env/tree/master/tree/master/src/installScripts/scripts/Upgrade.sh
+# GENERATED FILE FROM https://github.com/fchastanet/bash-dev-env/tree/master/tree/master/src/installScripts/scripts/Clean.sh
 # DO NOT EDIT IT
 #####################################
 
@@ -114,59 +114,12 @@ export __HELP_EXAMPLE
 export __HELP_TITLE
 export __HELP_NORMAL
 
-Apt::install() {
-  Retry::default sudo apt-get install -y -q "$@"
-}
-
-Apt::remove() {
-  Retry::default sudo dpkg --purge "$@"
-}
-
-Apt::update() {
-  Retry::default sudo apt-get update -y --fix-missing -o Acquire::ForceIPv4=true
-}
-
-# check if an element is contained in an array
-#
-# **Arguments**:
-# $@ - first parameter is the needle, rest is the array
-#
-# **Examples**:
-#
-# ```shell
-#  Array::contains "${libPath}" "${__BASH_FRAMEWORK_IMPORTED_FILES[@]}"
-# ```
-#
-# Returns 0 if found, 1 otherwise
-Array::contains() {
-  local element
-  for element in "${@:2}"; do
-    [[ "${element}" = "$1" ]] && return 0
-  done
-  return 1
-}
-
 # Public: exits with message if current user is root
 #
 # **Exit**: code 1 if current user is root
 Assert::expectNonRootUser() {
   if [[ "$(id -u)" = "0" ]]; then
     Log::fatal "The script must not be run as root"
-  fi
-}
-
-Assert::varExistsAndNotEmpty() {
-  local varName="$1"
-  if ! Assert::validVariableName "${varName}"; then
-    Log::displayError "${varName} - invalid variable name"
-    return 3
-  fi
-  if [[ -z "${!varName+unset}" ]]; then
-    Log::displayError "${varName} - not defined"
-    return 1
-  elif [[ -z "${!varName}" ]]; then
-    Log::displayError "${varName} - please provide a value"
-    return 2
   fi
 }
 
@@ -503,7 +456,7 @@ ${__HELP_TITLE}Author:${__HELP_NORMAL}
 [François Chastanet](https://github.com/fchastanet)
 
 ${__HELP_TITLE}Source file:${__HELP_NORMAL}
-https://github.com/fchastanet/bash-dev-env/tree/master/tree/master/src/installScripts/scripts/Upgrade.sh
+https://github.com/fchastanet/bash-dev-env/tree/master/tree/master/src/installScripts/scripts/Clean.sh
 
 ${__HELP_TITLE}License:${__HELP_NORMAL}
 MIT License
@@ -539,20 +492,6 @@ Log::displayError() {
   Log::logError "$1"
 }
 
-# Display message using info color (bg light blue/fg white)
-# @param {String} $1 message
-Log::displayHelp() {
-  echo -e "${__HELP_COLOR}HELP    - ${1}${__RESET_COLOR}" >&2
-  Log::logHelp "$1"
-}
-
-# Display message using info color (bg light blue/fg white)
-# @param {String} $1 message
-Log::displayInfo() {
-  echo -e "${__INFO_COLOR}INFO    - ${1}${__RESET_COLOR}" >&2
-  Log::logInfo "$1"
-}
-
 # Display message using error color (red) and exit immediately with error status 1
 # @param {String} $1 message
 Log::fatal() {
@@ -566,13 +505,6 @@ Log::headLine() {
   local message
   message="$(UI::textLine "${type}" " ")"
   echo -e "${__TEST_COLOR}${message}${__RESET_COLOR}"
-}
-
-# Retry a command 5 times with a delay of 15 seconds between each attempt
-# @param          $@ the command to run
-# @return 0 on success, 1 if max retries count reached
-Retry::default() {
-  Retry::parameterized 5 15 "" "$@"
 }
 
 stats::computeFromLog() {
@@ -675,8 +607,19 @@ Assert::firstNameLastName() {
   [[ $1 =~ ${regexp} ]]
 }
 
-Assert::validVariableName() {
-  echo "$1" | LC_ALL=POSIX grep -E -q '^[A-Za-z_0-9:]+$'
+Assert::varExistsAndNotEmpty() {
+  local varName="$1"
+  if ! Assert::validVariableName "${varName}"; then
+    Log::displayError "${varName} - invalid variable name"
+    return 3
+  fi
+  if [[ -z "${!varName+unset}" ]]; then
+    Log::displayError "${varName} - not defined"
+    return 1
+  elif [[ -z "${!varName}" ]]; then
+    Log::displayError "${varName} - please provide a value"
+    return 2
+  fi
 }
 
 # Public: determine if the script is executed under WSL
@@ -833,6 +776,20 @@ Log::displayDebug() {
   Log::logDebug "$1"
 }
 
+# Display message using info color (bg light blue/fg white)
+# @param {String} $1 message
+Log::displayHelp() {
+  echo -e "${__HELP_COLOR}HELP    - ${1}${__RESET_COLOR}" >&2
+  Log::logHelp "$1"
+}
+
+# Display message using info color (bg light blue/fg white)
+# @param {String} $1 message
+Log::displayInfo() {
+  echo -e "${__INFO_COLOR}INFO    - ${1}${__RESET_COLOR}" >&2
+  Log::logInfo "$1"
+}
+
 # Display message using skip color (yellow)
 # @param {String} $1 message
 Log::displaySkipped() {
@@ -917,43 +874,6 @@ Log::rotate() {
   fi
 }
 
-# Retry a command several times depending on parameters
-# @param {int}    $1 max retries
-# @param {int}    $2 delay between attempt
-# @param {String} $3 message to display to describe the attempt
-# @param ...      $@ rest of parameters, the command to run
-# @return 0 on success
-# @return 1 if max retries count reached
-# @return 2 if maxRetries invalid value
-Retry::parameterized() {
-  local maxRetries=$1
-  shift || true
-  local delayBetweenTries=$1
-  shift || true
-  local message="$1"
-  shift || true
-  local retriesCount=1
-  if [[ "${maxRetries}" -lt 1 ]]; then
-    Log::displayError "invalid maxRetry value"
-    return 2
-  fi
-
-  while true; do
-    Log::displayInfo "Attempt ${retriesCount}/${maxRetries}: ${message}"
-    if "$@"; then
-      break
-    elif [[ "${retriesCount}" -lt "${maxRetries}" ]]; then
-      Log::displayWarning "Command failed. Wait for ${delayBetweenTries} seconds"
-      ((retriesCount++))
-      sleep "${delayBetweenTries}"
-    else
-      Log::displayError "The command has failed after ${retriesCount} attempts."
-      return 1
-    fi
-  done
-  return 0
-}
-
 # Display given text and complete the rest of the line with given character
 # @param {String} $1 text to display
 # @param {String} $2 (default:#) character to use to complete the line
@@ -972,6 +892,10 @@ Wsl::cachedWslpathFromWslVar() {
   local value
   value="$(Wsl::cachedWslvar "${var}")"
   Wsl::cachedWslpath "${value}"
+}
+
+Assert::validVariableName() {
+  echo "$1" | LC_ALL=POSIX grep -E -q '^[A-Za-z_0-9:]+$'
 }
 
 # Internal: common log message
@@ -1149,7 +1073,7 @@ fi
 # shellcheck disable=SC2034
 INSTALL_SCRIPTS_DIR="${ROOT_DIR}/installScripts"
 
-SCRIPT="Upgrade"
+SCRIPT="Clean"
 
 # we need non root user to be sure that all variables will be correctly deduced
 Assert::expectNonRootUser
@@ -1162,100 +1086,51 @@ showHelp() {
     "$("installScripts_${SCRIPT}_dependencies")"
 }
 
-installScripts_Upgrade_helpDescription() {
-  echo "Upgrade ubuntu apt softwares"
+installScripts_Clean_helpDescription() {
+  echo "Clean"
 }
 
-installScripts_Upgrade_helpVariables() {
-  # shellcheck disable=SC2317
-  cat <<EOF
-  ${__HELP_EXAMPLE}UPGRADE_UBUNTU_VERSION${__HELP_NORMAL}
-    possible values:
-    0             => no upgrade at all
-    lts (default) => UPGRADE to latest ubuntu lts version
-    dev           => UPGRADE to latest ubuntu dev version
-
-EOF
+installScripts_Clean_helpVariables() {
+  true
 }
 
-installScripts_Upgrade_listVariables() {
-  echo "UPGRADE_UBUNTU_VERSION"
+installScripts_Clean_listVariables() {
+  true
 }
 
-installScripts_Upgrade_defaultVariables() {
-  export UPGRADE_UBUNTU_VERSION="lts"
+installScripts_Clean_defaultVariables() {
+  true
 }
 
-installScripts_Upgrade_checkVariables() {
-  if ! Assert::varExistsAndNotEmpty "UPGRADE_UBUNTU_VERSION"; then
-    return 1
-  elif ! Array::contains "${UPGRADE_UBUNTU_VERSION}" "lts" "dev"; then
-    Log::displayError "UPGRADE_UBUNTU_VERSION values expects to be lts or dev"
-    return 1
-  fi
+installScripts_Clean_checkVariables() {
+  true
 }
 
-installScripts_Upgrade_fortunes() {
+installScripts_Clean_fortunes() {
   return 0
 }
 
-installScripts_Upgrade_dependencies() {
+installScripts_Clean_dependencies() {
   return 0
 }
 
-installScripts_Upgrade_breakOnConfigFailure() {
+installScripts_Clean_breakOnConfigFailure() {
   return 0
 }
 
-installScripts_Upgrade_breakOnTestFailure() {
+installScripts_Clean_breakOnTestFailure() {
   return 0
 }
 
-installScripts_Upgrade_install() {
-  # Needed before do-release-upgrade because WSL doesn't support Systemd directly
-  Apt::remove snapd || true
-  mv /etc/apt/apt.conf.d/20snapd.conf{,.disabled} || true
-  Apt::update
-  Retry::default sudo apt-get upgrade -y
-  Retry::default sudo apt-get dist-upgrade -y
-  Retry::default sudo apt-get autoremove -y
-
-  # add do-release-upgrade
-  Apt::install ubuntu-release-upgrader-core
-
-  # configure to upgrade to the latest LTS development release
-  sudo sed -i -r 's/^Prompt=.*$/Prompt=lts/g' /etc/update-manager/release-upgrades
-  if sudo do-release-upgrade -c; then
-    if [[ "${UPGRADE_UBUNTU_VERSION}" = "lts" ]]; then
-      Log::displayInfo "Upgrading to latest lts ubuntu - please be patient, it can take a long time"
-      Retry::default sudo do-release-upgrade -f DistUpgradeViewNonInteractive --allow-third-party
-      Log::displayHelp "Please restart wsl - 'wsl --shutdown'"
-    else
-      Log::displayHelp "An lts ubuntu upgrade is available, update UPGRADE_UBUNTU_VERSION=lts in .env file if you want to upgrade next time (use with caution)"
-    fi
-  fi
-
-  # configure to upgrade to the latest non-LTS development release
-  sudo sed -i -r 's/^Prompt=.*$/Prompt=normal/g' /etc/update-manager/release-upgrades
-  if sudo do-release-upgrade -c; then
-    if [[ "${UPGRADE_UBUNTU_VERSION}" = "dev" ]]; then
-      Log::displayInfo "Upgrading to latest non-lts ubuntu - please be patient, it can take a long time"
-      Retry::default sudo do-release-upgrade -f DistUpgradeViewNonInteractive --allow-third-party
-      Log::displayHelp "Please restart wsl - 'wsl --shutdown'"
-    else
-      Log::displayHelp "A non-lts ubuntu upgrade is available, update UPGRADE_UBUNTU_VERSION=dev in .env file if you want to upgrade next time (use with caution)"
-    fi
-  fi
-
-  # restore to lts development release
-  sudo sed -i -r 's/^Prompt=.*$/Prompt=lts/g' /etc/update-manager/release-upgrades
-}
-
-installScripts_Upgrade_configure() {
+installScripts_Clean_install() {
   return 0
 }
 
-installScripts_Upgrade_test() {
+installScripts_Clean_configure() {
+  return 0
+}
+
+installScripts_Clean_test() {
   return 0
 }
 

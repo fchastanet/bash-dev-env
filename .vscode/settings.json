@@ -6,7 +6,8 @@
     "megalinter-reports": true,
     "**/bin": true,
     "_site": true,
-    "vendor": true
+    "vendor": true,
+    "install": true
   },
   "files.exclude": {
     "**/.git": true

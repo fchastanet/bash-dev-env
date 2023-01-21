@@ -7,3 +7,5 @@ else
   # shellcheck disable=SC2034
   FRAMEWORK_DIR="${ROOT_DIR}/vendor/bash-tools-framework"
 fi
+# shellcheck disable=SC2034
+INSTALL_SCRIPTS_DIR="${ROOT_DIR}/installScripts"

@@ -13,6 +13,8 @@ source "${FRAMEWORK_DIR}/src/Env/load.sh"
 source "${FRAMEWORK_DIR}/src/Log/__all.sh"
 
 export REPOSITORY_URL="https://github.com/fchastanet/bash-dev-env/tree/master"
+export SCRIPT
+
 # srcFile     : file that needs to be compiled
 # templateDir : directory from which bash-tpl templates will be searched
 # binDir      : fallback bin directory in case BIN_FILE has not been provided
@@ -22,7 +24,7 @@ declare -a params=("${SRC_DIR}" "${BIN_DIR}" "${ROOT_DIR}" "${SRC_DIR}")
 if (($# == 0)); then
   while IFS= read -r file; do
     "${FRAMEWORK_DIR}/bin/constructBinFile" "${file}" "${params[@]}"
-  done < <(find "${SRC_DIR}/build" "${SRC_DIR}/installScripts" -name "*.sh")
+  done < <(find "${SRC_DIR}/engine" "${SRC_DIR}/installScripts" -name "*.sh")
 else
   for file in "$@"; do
     file="$(realpath "${file}")"
