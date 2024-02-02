@@ -14,9 +14,9 @@ jobs:
     permissions:
       # needed by ouzi-dev/commit-status-updater@v2
       statuses: write
-      # needed by peter-evans/create-pull-request@v5
+      # needed by peter-evans/create-pull-request@v6
       pull-requests: write
-      # needed by peter-evans/create-pull-request@v5
+      # needed by peter-evans/create-pull-request@v6
       contents: write
 
     steps:
@@ -79,7 +79,7 @@ jobs:
         if: failure()
         continue-on-error: true
         # kics-scan ignore-line
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v6
         with:
           branch: update/pre-commit-fixes
           title: lint fixes
