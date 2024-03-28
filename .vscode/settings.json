@@ -1,15 +1,22 @@
 {
   "search.useIgnoreFiles": true,
   "search.exclude": {
-    "report": true,
-    "backup": true,
-    "megalinter-reports": true,
-    "**/bin": true,
     "_site": true,
+    "**/bin": true,
+    "backup": true,
+    "distro": true,
+    "install": true,
+    "installScripts/**": true,
+    "megalinter-reports": true,
+    "node_modules": true,
+    "pages/docs": true,
+    "report": true,
+    "tmp": true,
     "vendor": true
   },
   "files.exclude": {
-    "**/.git": true
+    "**/.git": true,
+    "node_modules": true
   },
   "markdown.extension.toc.omittedFromToc": {
     "*.md": ["# %%"]

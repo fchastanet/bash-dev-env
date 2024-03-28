@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [[ "${USER}" != "root" ]]; then
+  (echo >&2 "This script need root access")
+  exit 1
+fi
+
+@COMMAND@

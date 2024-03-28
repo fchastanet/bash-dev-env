@@ -1,0 +1,4 @@
+# use difftool to compare a commit in main/diff view with its parent
+# https://github.com/jonas/tig/issues/219#issuecomment-406817763
+bind main w !git difftool -d %(commit)^!
+bind diff w !git difftool -d %(commit)^!

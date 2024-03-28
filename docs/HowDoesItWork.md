@@ -52,16 +52,15 @@ This function is responsible for:
 
   - USERGROUP
   - USERNAME
-  - USER_MAIL
-  - DEV_USER_NAME
-  - LDAP_LOGIN
+  - GIT_USER_MAIL
+  - GIT_USERNAME
+  - SSH_LOGIN
   - POWERSHELL_BIN
 
 - deducing and export the following variables
 
   - USERID => computed from USERNAME provided by .env file
-  - USERGROUPID => computed from USERGROUP provided by .env file
-  - LIB_DIR => `<full path to lib directory>`
+  - USERGROUP_ID => computed from USERGROUP provided by .env file
   - ROOT_DIR => `<full path to this project directory>`
   - HOSTIP
   - IPCONFIG => heavy computation of the right command to use for ipconfig
@@ -72,9 +71,9 @@ This function is responsible for:
 
   - CONF_DIR => defaults to ${ROOT_DIR}/conf
   - LOGS_DIR => defaults to ${ROOT_DIR}/logs
-  - PROJECTS_DIR => defaults to ${USERHOME}/projects
+  - PROJECTS_DIR => defaults to ${USER_HOME}/projects
   - BACKUP_DIR => defaults to ${ROOT_DIR}/backup
-  - SCRIPTS_DIR => defaults to ${ROOT_DIR}/scripts
+  - INSTALL_SCRIPTS_DIR => defaults to ${ROOT_DIR}/scripts
 
 - setting sudoer without password temporarily
 
@@ -82,14 +81,14 @@ This function is responsible for:
     it expires
   - create /etc/sudoers.d/bash-dev-env (check refactoring needed section)
 
-- installing and configuring the file `/etc/profile.d/updateEnv.sh`
+- installing and configuring the file `${HOME}/.bash-dev-env`
   - the aim of this file is to provide common configuration variables for both
-    ZshProfile and BashProfile
+    ShellZsh and ShellBash
   - the main advantage of this file is that it can be automatically updated
     without risking to overwrite .bashrc file
   - the variable OVERWRITE_CONFIG_FILES is ignored
   - it provides the following environment variables, among others: PATH,
-    COMPOSER_HOME, AWS_REGION, AWS_PROFILE, LDAP_LOGIN, ...
+    COMPOSER_HOME, AWS_REGION, AWS_PROFILE, SSH_LOGIN, ...
   - all these variables can then be reused by all the different script
     configurations like ssh aliases, Saml2Aws, ...
   - this file loads this project .env file so variables like SHOW_FORTUNES and
@@ -122,7 +121,7 @@ Some of the functions you can find:
 - `getGithubLatestRelease` very useful in order to get last release version of a
   github project
 - `upgradeGithubRelease`
-- `Functions::isWsl`
+- `Assert::wsl`
 - `NetFunctions::addHost` add host in /etc/hosts and windows hosts file if wsl
   (backup file before updates)
 - validator functions

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "$(tput setaf 2)   .~~.   .~~.    $(date +"%A, %e %B %Y, %r")"
+echo "$(tput setaf 2)  '. \ ' ' / .'   $(uname -srmo)"

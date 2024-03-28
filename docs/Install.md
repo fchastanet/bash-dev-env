@@ -19,7 +19,7 @@ files of your distribution:
 - add `/etc/sudoers.d/${USERNAME}-upgrade-no-password`
 - add `/etc/sudoers.d/bash-dev-env`
 - update `/etc/inputrc`
-- add file `/etc/profile.d/updateEnv.sh` that contains every common environment
+- add file `${HOME}/.bash-dev-env` that contains every common environment
   variable for easier future update
 - update `/etc/update-manager/release-upgrades` following UPGRADE_UBUNTU_VERSION
   .env variable chosen
@@ -88,7 +88,7 @@ code .env
 **launch the installation for wsl and follow the instructions**
 
 ```sh
-sudo ./install -p default
+./install -p default
 ```
 
 That's it, you're environment is installed and configured, you are ready to
@@ -100,5 +100,5 @@ develop !
 independently** eg:
 
 ```sh
-sudo ./install ZshProfile
+./install ShellZsh
 ```

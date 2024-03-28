@@ -1,0 +1,30 @@
+#!/bin/bash
+# pam_motd does not carry the environment
+[ -f /etc/default/locale ] && . /etc/default/locale
+export LANG
+
+display_date_ago() {
+  (
+    tempHistory=$(mktemp -p /tmp -d)
+    trap 'rm -Rf ${tempHistory}' EXIT INT TERM ABRT
+    cd "${tempHistory}" || exit 1
+    git init -q
+    git -c user.email=0 -c user.name=0 commit -q -m 0 --allow-empty --date="$1"
+    git show --format=%ar
+  )
+}
+if [[ -f /var/log/automatic-upgrade ]]; then
+  echo
+  echo "$(tput setaf 1)(*) Weekly Automatic upgrade is failing -- please check logs /var/log/automatic-upgrade"
+  echo "last execution date: $(display_date_ago "$(date -r /var/log/automatic-upgrade)")"
+  echo "$(tput setaf 1)(*) try to launch the process manually : sudo /etc/cron.weekly/upgrade"
+  echo -n "$(tput sgr0)"
+  sed -n "/ERROR   - /p" /var/log/automatic-upgrade | tail -5
+  sed -n "/HELP    - /p" /var/log/automatic-upgrade
+elif [[ -f /var/log/automatic-upgrade-success ]]; then
+  echo
+  echo "$(tput setaf 2)(*) Weekly Automatic upgrade success -- last execution date: $(display_date_ago "$(date -r /var/log/automatic-upgrade-success)")"
+  echo -n "$(tput sgr0)"
+  sed -n "/HELP    - /p" /var/log/automatic-upgrade-success
+fi
+echo -n "$(tput sgr0)"

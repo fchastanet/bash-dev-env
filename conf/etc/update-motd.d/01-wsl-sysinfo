@@ -1,0 +1,49 @@
+#!/bin/bash
+# pam_motd does not carry the environment
+if [[ -f /etc/default/locale ]]; then
+  source /etc/default/locale
+fi
+export LANG
+cores=$(grep -c ^processor /proc/cpuinfo 2>/dev/null)
+[[ "${cores}" -eq "0" ]] && cores=1
+threshold="${cores:-1}.0"
+if [[ "$(echo "$(cut -f1 -d ' ' /proc/loadavg) < ${threshold}" | bc)" != "1" ]]; then
+  echo
+  echo " System information disabled due to load higher than ${threshold}"
+  exit 0
+fi
+
+((upSeconds = "$(/usr/bin/cut -d. -f1 /proc/uptime)"))
+((secs = upSeconds % 60))
+((mins = upSeconds / 60 % 60))
+((hours = upSeconds / 3600 % 24))
+((days = upSeconds / 86400))
+UPTIME=$(printf "%d days, %02dh%02dm%02ds" "${days}" "${hours}" "${mins}" "${secs}")
+
+# get the load averages
+read -r one five fifteen rest </proc/loadavg
+
+diskSpaceTotal="$(df -h | awk '{if($(NF) == "/") {print $(NF-1)," (",$(NF-3),"/",$(NF-2),")"; exit;}}')"
+memoryFree="$(free -h --mega | awk '/Mem:/{print $7}')"
+memoryTotal="$(free -h --mega | awk '/Mem:/{print $2}')"
+
+echo "$(tput setaf 1)   .~ .~~~..~."
+echo "$(tput setaf 1)  : .~.'~'.~. :   Uptime.............:   ${UPTIME}"
+echo "$(tput setaf 1) ~ (   ) (   ) ~  Memory.............:   ${memoryFree} (Free) / ${memoryTotal} (Total)"
+echo "$(tput setaf 1)( : '~'.~.'~' : ) "
+echo "$(tput setaf 1) ~ .~ (   ) ~. ~  Load Averages......:   ${one}, ${five}, ${fifteen} (1, 5, 15 min)"
+echo "$(tput setaf 1)  (  : '~' :  )   Running Processes..:   $(ps ax | wc -l | tr -d " ")"
+echo "$(tput setaf 1)   '~ .~~~. ~'    Host IP Address....:   $(ip route show default | awk '/default/ {print $3}')"
+echo "$(tput setaf 1)       '~'        Home Disk Space....:   ${diskSpaceTotal}"
+echo -n "$(tput sgr0)"
+
+# show zombie processes
+PS="$(pgrep -a -r Z)"
+
+nbZombies="$(echo "${PS}" | wc -l)"
+((nbZombies--)) # -1 remove header
+if ((nbZombies > 0)); then
+  echo
+  echo "$(tput setaf 1)There is ${nbZombies} Zombie(s):$(tput sgr0)"
+  echo "${PS}"
+fi

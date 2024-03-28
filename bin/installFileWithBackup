@@ -1,0 +1,1624 @@
+#!/usr/bin/env bash
+###############################################################################
+# GENERATED FACADE FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_binaries/tools/installFileWithBackup.sh
+# DO NOT EDIT IT
+# @generated
+###############################################################################
+# shellcheck disable=SC2288,SC2034
+# BIN_FILE=${BASH_DEV_ENV_ROOT_DIR}/bin/installFileWithBackup
+# FACADE
+
+# ensure that no user aliases could interfere with
+# commands used in this script
+unalias -a || true
+shopt -u expand_aliases
+
+# shellcheck disable=SC2034
+((failures = 0)) || true
+
+# Bash will remember & return the highest exit code in a chain of pipes.
+# This way you can catch the error inside pipes, e.g. mysqldump | gzip
+set -o pipefail
+set -o errexit
+
+# Command Substitution can inherit errexit option since bash v4.4
+shopt -s inherit_errexit || true
+
+# if set, and job control is not active, the shell runs the last command
+# of a pipeline not executed in the background in the current shell
+# environment.
+shopt -s lastpipe
+
+# a log is generated when a command fails
+set -o errtrace
+
+# use nullglob so that (file*.php) will return an empty array if no file
+# matches the wildcard
+shopt -s nullglob
+
+# ensure regexp are interpreted without accentuated characters
+export LC_ALL=POSIX
+
+export TERM=xterm-256color
+
+# avoid interactive install
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+
+# store command arguments for later usage
+# shellcheck disable=SC2034
+declare -a BASH_FRAMEWORK_ARGV=("$@")
+# shellcheck disable=SC2034
+declare -a ORIGINAL_BASH_FRAMEWORK_ARGV=("$@")
+
+# @see https://unix.stackexchange.com/a/386856
+# shellcheck disable=SC2317
+interruptManagement() {
+  # restore SIGINT handler
+  trap - INT
+  # ensure that Ctrl-C is trapped by this script and not by sub process
+  # report to the parent that we have indeed been interrupted
+  kill -s INT "$$"
+}
+trap interruptManagement INT
+SCRIPT_NAME=${0##*/}
+REAL_SCRIPT_FILE="$(readlink -e "$(realpath "${BASH_SOURCE[0]}")")"
+if [[ -n "${EMBED_CURRENT_DIR}" ]]; then
+  CURRENT_DIR="${EMBED_CURRENT_DIR}"
+else
+  CURRENT_DIR="$(cd "$(readlink -e "${REAL_SCRIPT_FILE%/*}")" && pwd -P)"
+fi
+
+################################################
+# Temp dir management
+################################################
+
+KEEP_TEMP_FILES="${KEEP_TEMP_FILES:-0}"
+export KEEP_TEMP_FILES
+
+# PERSISTENT_TMPDIR is not deleted by traps
+PERSISTENT_TMPDIR="${TMPDIR:-/tmp}/bash-framework"
+export PERSISTENT_TMPDIR
+mkdir -p "${PERSISTENT_TMPDIR}"
+
+# shellcheck disable=SC2034
+TMPDIR="$(mktemp -d -p "${PERSISTENT_TMPDIR:-/tmp}" -t bash-framework-$$-XXXXXX)"
+export TMPDIR
+
+# temp dir cleaning
+# shellcheck disable=SC2317
+cleanOnExit() {
+  if [[ "${KEEP_TEMP_FILES:-0}" = "1" ]]; then
+    Log::displayInfo "KEEP_TEMP_FILES=1 temp files kept here '${TMPDIR}'"
+  elif [[ -n "${TMPDIR+xxx}" ]]; then
+    Log::displayDebug "KEEP_TEMP_FILES=0 removing temp files '${TMPDIR}'"
+    rm -Rf "${TMPDIR:-/tmp/fake}" >/dev/null 2>&1
+  fi
+}
+trap cleanOnExit EXIT HUP QUIT ABRT TERM
+
+# @description display help and exits if one of args is -h|--help
+# @arg $1 helpArg:String|Function the help string to display or the function to call to display the help
+# @arg $@ args:String[] list of options
+# @option -h short help option
+# @option --help long help option
+# @exitcode 0 displays help and exit with code 0 if -h or --help option is in the args list
+# @stdout displays help if -h or --help option is in the args list
+Args::defaultHelp() {
+  local helpArg=$1
+  shift || true
+  if ! Args::defaultHelpNoExit "${helpArg}" "$@"; then
+    exit 0
+  fi
+}
+
+# @description checks if function name provided exists
+# @arg $1 functionName:String
+# @exitcode 1 if function name doesn't exist
+Assert::functionExists() {
+  declare -F "$1" >/dev/null
+}
+
+envFileTemplate="$(
+  cat <<'EOF'
+# shellcheck disable=SC2034
+# wsl username
+USERNAME="wsl"
+USERGROUP="wsl"
+USER_HOME="/home/wsl"
+
+# your login to connect to ssh servers if any
+SSH_LOGIN=""
+
+# your git full name 'FirstName LastName'
+GIT_USERNAME=""
+# email used for git 'ldap@domain.com'
+GIT_USER_MAIL=""
+# email used to connect to aws
+AWS_USER_MAIL="fchastanet@gmail.com"
+# app id to connect to aws account
+AWS_APP_ID=""
+AWS_PROFILE=""
+AWS_DEFAULT_REGION=""
+AWS_TEST_SECRET_ID=""
+AWS_DEFAULT_DOCKER_REGISTRY_ID=""
+
+# hostname of the distro
+DISTRO_HOSTNAME="wslHost"
+
+# conf files that will be used to configure the different tools
+CONF_DIR="${BASH_DEV_ENV_ROOT_DIR}/conf"
+
+# conf files that will be used to configure the different tools
+# some tools configuration will use CONF_DIR as template and
+# copy files into this directory
+CONF_OVERRIDE_DIR="${BASH_DEV_ENV_ROOT_DIR}/conf.override"
+
+# where to install bash-tools, ...
+# shellcheck disable=SC2153
+PROJECTS_DIR="${USER_HOME}/projects"
+
+# where overridden config files will be backed up
+BACKUP_DIR="${BASH_DEV_ENV_ROOT_DIR}/backup"
+# backup files/dirs before installing new file (ussually 1, but 0 if using distro)
+BACKUP_BEFORE_INSTALL=1
+# logs CONF_DIR
+LOGS_DIR="${BASH_DEV_ENV_ROOT_DIR}/logs"
+# installScripts dir
+INSTALL_SCRIPTS_DIR="${BASH_DEV_ENV_ROOT_DIR}/installScripts"
+
+# 0   => no upgrade at all
+# lts => UPGRADE to latest ubuntu lts version
+# dev => UPGRADE to latest ubuntu dev version
+# Use if you know what you are doing,
+# could cause some packages to not being available yet
+UPGRADE_UBUNTU_VERSION=0
+
+# -----------------------------------------
+# PROFILES options
+
+# Choose your AWS authenticator tool
+# possible choices: Saml2Aws, Awsume
+AWS_AUTHENTICATOR="Saml2Aws"
+
+# Choose your preferred shell
+# possible choices: ShellBash (Legacy experience), ShellZsh (Recommended experience)
+PREFERRED_SHELL="ShellBash"
+
+# Display Fortune tooltip at bash/zsh session open
+SHOW_FORTUNES=1
+
+# Display MOTD at bash/zsh session open
+SHOW_MOTD=1
+
+# Install Docker inside wsl
+DOCKER_INSIDE_WSL=1
+
+# Configuration files are overwritten even if exists
+# !!!! First time initialization: let this value to 1 !!!!
+# Value 0:
+# - If target configuration file exists, displays a message and do not overwrite the file
+# - If target configuration file doesn't exist, installs the file
+# Value 1
+# - install or overwrite the file without checking existence
+OVERWRITE_CONFIG_FILES=1
+
+# Windows files can be overridden if 1
+# if 0
+# - skip changes to %USERPROFILE%/.wslconfig
+# - skip copying fonts
+CHANGE_WINDOWS_FILES=1
+
+# Indicate that install script can warn you using speaker when your input is needed
+CAN_TALK_DURING_INSTALLATION=${CAN_TALK_DURING_INSTALLATION:-1}
+
+# if 0 install script will skip all interactive activity (saml2aws, ...),
+# so dependent installation will be skipped as well
+INSTALL_INTERACTIVE=${INSTALL_INTERACTIVE:-1}
+
+# display elapsed time since last log
+DISPLAY_DURATION=1
+
+# -----------------------------------------
+# WSLCONFIG - these parameters will help to automatically
+# configure %USERPROFILE%/.wslconfig file
+# Adjust these values to your needs
+# @see https://docs.microsoft.com/en-us/windows/wsl/wsl-config
+# Recommended 50% of total memory
+WSLCONFIG_MAX_MEMORY=8GB
+# personally I prefer run out of memory instead of beginning swapping
+# So I know immediately if some processes have to be stopped
+WSLCONFIG_SWAP=0
+
+# -----------------------------------------
+# Hacks
+# on some configurations we have to force path of some windows commands
+#POWERSHELL_BIN=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+#IPCONFIG_BIN=/mnt/c/Windows/system32/ipconfig.exe
+#WSL_EXE_BIN=/mnt/c/Windows/system32/wsl.exe
+
+# -----------------------------------------
+# Distro
+# Only necessary when using the script distro
+# to create or update a wsl distribution
+
+# The name of the distro displayed in `wsl -l -v` command
+DISTRO_NAME="UbuntuTest"
+# where to download the distribution
+DISTRO_URL="https://aka.ms/wslubuntu2004"
+# Profile to use with install command
+DISTRO_INSTALL_PROFILE="default"
+# The path where bash-dev-env project will be copied into target distro
+DISTRO_BASH_DEV_ENV_TARGET_DIR="${BASH_DEV_ENV_ROOT_DIR}"
+EOF
+)"
+
+# @description load .env file
+# @arg $1 envFile:String the file to load
+Engine::Config::loadConfig() {
+  if [[ "${BASH_DEV_ENV_CONFIG_LOADED:-}" = "1" ]]; then
+    return 0
+  fi
+  local envFile="${BASH_DEV_ENV_ROOT_DIR}/.env"
+  Engine::Config::createEnvFileFromTemplate \
+    "${envFile}" "${envFileTemplate}" || exit 1
+  set -o allexport
+  # shellcheck source=/.env.template
+  source <(echo "${envFileTemplate}")
+  # shellcheck source=/.env
+  source "${BASH_DEV_ENV_ROOT_DIR}/.env"
+  set +o allexport
+
+  # load environment variables ID, VERSION_CODENAME
+  Engine::Config::loadOsRelease
+
+  if ! Engine::Config::checkEnv; then
+    Log::displayError "one or more variables are invalid, check above logs and fix '${envFile}' file accordingly"
+    return 1
+  fi
+
+  Engine::Config::loadUserVariables
+  Engine::Config::loadHostIp
+
+  Engine::Config::requireWslu
+
+  #Linux::Wsl::initEnv
+  Engine::Config::loadWslVariables
+
+  Engine::Config::installBashDevEnv
+
+  Log::requireLoad
+
+  export PATH="${PATH}:${USER_HOME}/.local/bin"
+
+  export BASH_DEV_ENV_CONFIG_LOADED=1
+}
+
+# @description Log namespace provides 2 kind of functions
+# - Log::display* allows to display given message with
+#   given display level
+# - Log::log* allows to log given message with
+#   given log level
+# Log::display* functions automatically log the message too
+# @see Env::requireLoad to load the display and log level from .env file
+
+# @description log level off
+export __LEVEL_OFF=0
+# @description log level error
+export __LEVEL_ERROR=1
+# @description log level warning
+export __LEVEL_WARNING=2
+# @description log level info
+export __LEVEL_INFO=3
+# @description log level success
+export __LEVEL_SUCCESS=3
+# @description log level debug
+export __LEVEL_DEBUG=4
+
+# @description verbose level off
+export __VERBOSE_LEVEL_OFF=0
+# @description verbose level info
+export __VERBOSE_LEVEL_INFO=1
+# @description verbose level info
+export __VERBOSE_LEVEL_DEBUG=2
+# @description verbose level info
+export __VERBOSE_LEVEL_TRACE=3
+
+# @description Display message using debug color (grey)
+# @arg $1 message:String the message to display
+Log::displayDebug() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_DEBUG)); then
+    echo -e "${__DEBUG_COLOR}DEBUG   - ${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logDebug "$1"
+}
+
+FIRST_LOG_DATE="$(date '+%s%3N')"
+LOG_LAST_LOG_DATE="${FIRST_LOG_DATE}"
+LOG_LAST_LOG_DATE_INIT=1
+
+# @description Display message using info color (bg light blue/fg white)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+Log::displayInfo() {
+  local type="${2:-INFO}"
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
+    local durationMsg=""
+    if ((DISPLAY_DURATION == 1)); then
+      local duration
+      local -i currentLogDate
+      currentLogDate="$(date '+%s%3N')"
+      if ((LOG_LAST_LOG_DATE_INIT == 1)); then
+        LOG_LAST_LOG_DATE_INIT=0
+        duration="Ref"
+      else
+        duration="$(( (currentLogDate - FIRST_LOG_DATE) /1000 ))s/+$(( (currentLogDate - LOG_LAST_LOG_DATE) /1000 ))s"
+      fi
+      LOG_LAST_LOG_DATE="${currentLogDate}"
+      durationMsg="$(date '+%H:%M:%S.%3N')(${duration}) - "
+    fi
+    echo -e "${__INFO_COLOR}${type}    - ${durationMsg}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logInfo "$1" "${type}"
+}
+
+# @description ensure COMMAND_BIN_DIR env var is set
+# and PATH correctly prepared
+# @noargs
+# @set COMMAND_BIN_DIR string the directory where to find this command
+# @set PATH string add directory where to find this command binary
+Compiler::Facade::requireCommandBinDir() {
+  COMMAND_BIN_DIR="${CURRENT_DIR}"
+  Env::pathPrepend "${COMMAND_BIN_DIR}"
+}
+
+# @description display help if one of args is -h|--help
+# @arg $1 helpArg:String|Function the help string to display or the function to call to display the help
+# @arg $@ args:String[] list of options
+# @option -h short help option
+# @option --help long help option
+# @exitcode 1 displays help and returns with code 1 if -h or --help option is in the args list
+# @stdout displays help if -h or --help option is in the args list
+Args::defaultHelpNoExit() {
+  local helpArg=$1
+  shift || true
+  # shellcheck disable=SC2034
+  local args
+  args="$(getopt -l help -o h -- "$@" 2>/dev/null)" || true
+  eval set -- "${args}"
+
+  while true; do
+    case $1 in
+      -h | --help)
+        if [[ "$(type -t "${helpArg}")" = "function" ]]; then
+          "${helpArg}" "$@"
+        else
+          Args::showHelp "${helpArg}"
+        fi
+        return 1
+        ;;
+      --)
+        break
+        ;;
+      *)
+        # ignore
+        ;;
+    esac
+  done
+}
+
+# @description check validity of .env variables
+# @env CHECK_ENV int 0 to avoid checking environment
+# @noargs
+Engine::Config::checkEnv() {
+  if [[ "${CHECK_ENV:-1}" = "0" ]]; then
+    return 0
+  fi
+  local errorCount=0 || true
+  checkNotEmpty() {
+    local var="$1"
+    if ! Assert::varExistsAndNotEmpty "${var}"; then
+      ((++errorCount))
+      return 1
+    fi
+  }
+  checkVarAndDir() {
+    local var="$1"
+    local mode="${2:-}"
+    local status=0
+    if checkNotEmpty "${var}"; then
+      if ! mkdir -p "${!var}"; then
+        Log::displayError "variable ${var} - impossible to create the directory '${!var}'"
+        ((errorCount++))
+        return 1
+      fi
+      if [[ "${mode}" =~ w && ! -w "${!var}" ]]; then
+        Log::displayError "variable ${var} - directory '${!var}' is not writable"
+        ((status++))
+        ((errorCount++))
+      fi
+      if [[ "${mode}" =~ r && ! -r "${!var}" ]]; then
+        Log::displayError "variable ${var} - directory '${!var}' is not accessible"
+        ((status++))
+        ((errorCount++))
+      fi
+    fi
+
+    return "${status}"
+  }
+  checkValidValues() {
+    local var="$1"
+    shift || true
+    local -a validValues=("$@")
+    if ! Array::contains "${!var}" "${validValues[@]}"; then
+      Log::displayError "variable ${var} - value ${!var} is not part of the following values ${validValues[*]}"
+      ((++errorCount))
+    fi
+  }
+
+  if ! echo "${ID}" | grep -qEw 'debian|ubuntu'; then
+    Log::fatal "This script is built to support only Debian or Ubuntu distributions. You are using ${ID}."
+  fi
+
+  if checkNotEmpty USERNAME && ! getent passwd "${USERNAME}" 2>/dev/null >/dev/null; then
+    Log::displayError "USERNAME - user '${USERNAME}' does not exist"
+    ((errorCount++))
+  fi
+
+  if [[ -n "${SSH_LOGIN:-}" ]] && ! Assert::ldapLogin "${SSH_LOGIN}"; then
+    Log::displayError "SSH_LOGIN - invalid ldap login (format expected firstNameLastName) in ${BASH_DEV_ENV_ROOT_DIR}/.env file"
+    ((errorCount++))
+  fi
+
+  if checkNotEmpty "GIT_USERNAME" && ! Assert::firstNameLastName "${GIT_USERNAME}"; then
+    Log::displayError "GIT_USERNAME - invalid format, expected : firstName lastName"
+    ((errorCount++))
+  fi
+
+  if checkNotEmpty "GIT_USER_MAIL" && ! Assert::emailAddress "${GIT_USER_MAIL}"; then
+    Log::displayError "GIT_USER_MAIL - invalid email address"
+    ((errorCount++))
+  fi
+
+  if checkNotEmpty "AWS_USER_MAIL" && ! Assert::emailAddress "${AWS_USER_MAIL}"; then
+    Log::displayError "AWS_USER_MAIL - invalid email address"
+    ((errorCount++))
+  fi
+
+  checkVarAndDir CONF_DIR r || true
+  checkVarAndDir CONF_OVERRIDE_DIR r || true
+  checkVarAndDir PROJECTS_DIR r || true
+  checkVarAndDir BACKUP_DIR rw || true
+  checkVarAndDir LOGS_DIR rw || true
+  checkVarAndDir INSTALL_SCRIPTS_DIR r || true
+  checkVarAndDir USER_HOME rw || true
+
+  checkValidValues UPGRADE_UBUNTU_VERSION 0 lts dev
+  checkValidValues AWS_AUTHENTICATOR Saml2Aws Awsume
+  checkValidValues PREFERRED_SHELL ShellBash ShellZsh
+
+  checkValidValues SHOW_FORTUNES 0 1
+  checkValidValues SHOW_MOTD 0 1
+  checkValidValues DOCKER_INSIDE_WSL 0 1
+  checkValidValues OVERWRITE_CONFIG_FILES 0 1
+  checkValidValues CHANGE_WINDOWS_FILES 0 1
+  checkValidValues CAN_TALK_DURING_INSTALLATION 0 1
+  checkValidValues INSTALL_INTERACTIVE 0 1
+
+  checkNotEmpty WSLCONFIG_MAX_MEMORY
+  checkValidValues WSLCONFIG_SWAP 0 1
+
+  return "${errorCount}"
+}
+
+# @description if .env does not exist, initialize it with .env.template
+Engine::Config::createEnvFileFromTemplate() {
+  local envFile="$1"
+  local envFileTemplate="$2"
+
+  if [[ ! -f "${envFile}" ]]; then
+    echo "${envFileTemplate}" >"${envFile}"
+    Log::displayError "a default env file has been created, please edit ${envFile}"
+    return 1
+  fi
+}
+
+# @description install or update "${USER_HOME}/.bash-dev-env" file
+# @env WINDOWS_PROFILE_DIR
+# @env BASH_DEV_ENV_ROOT_DIR
+# @env USER_HOME
+# EMBED "${BASH_DEV_ENV_ROOT_DIR}/home/.bash-dev-env" as bashDevEnv
+Engine::Config::installBashDevEnv() {
+  # shellcheck disable=SC2317
+  bashDevEnvConfig() {
+    sed -E -i \
+      -e "s#BASH_DEV_ENV_ROOT_DIR=.*\$#BASH_DEV_ENV_ROOT_DIR=${BASH_DEV_ENV_ROOT_DIR}#g" \
+      -e "s#WINDOWS_PROFILE_DIR=.*\$#WINDOWS_PROFILE_DIR=${WINDOWS_PROFILE_DIR}#g" \
+      "${USER_HOME}/.bash-dev-env"
+    sudo ln -sf "${USER_HOME}/.bash-dev-env" /root/.bash-dev-env
+  }
+  local fileToInstall
+  # shellcheck disable=SC2154
+  fileToInstall="$(Conf::dynamicConfFile "home/.bash-dev-env" "${embed_file_updateEnv}")" || return 1
+  OVERWRITE_CONFIG_FILES=1 Install::file \
+    "${fileToInstall}" "${USER_HOME}/.bash-dev-env" \
+    "${USERNAME}" "${USERGROUP}" bashDevEnvConfig
+}
+
+# @description deduce wsl host ip
+# @set HOST_IP exported env containing the IP
+Engine::Config::loadHostIp() {
+  HOST_IP="$(/sbin/ip route | awk '/default/ { print $3 }')"
+
+  export HOST_IP
+}
+
+# @description load /etc/os-release file
+# @set NAME
+# @set VERSION
+# @set ID
+# @set ID_LIKE
+# @set PRETTY_NAME
+# @set VERSION_ID
+# @set HOME_URL
+# @set SUPPORT_URL
+# @set BUG_REPORT_URL
+# @set PRIVACY_POLICY_URL
+# @set VERSION_CODENAME
+# @set UBUNTU_CODENAME
+Engine::Config::loadOsRelease() {
+  if [[ ! -f /etc/os-release ]]; then
+    Log::displayError "file /etc/os-release does not exists"
+    return 1
+  fi
+  # This will load environment variables ID, VERSION_CODENAME, ...
+  set -o allexport
+  source /etc/os-release
+  set +o allexport
+}
+
+# @description deduce USER_HOME, USER_ID, USERGROUP_ID and USERGROUP from USERNAME
+# @env USERNAME String the name of the user
+# @set USER_ID String
+# @set USERGROUP String
+# @set USERGROUP_ID String
+# @set USER_HOME String
+Engine::Config::loadUserVariables() {
+  # deduce user home and group
+  # shellcheck disable=SC2153
+  USER_ID="$(getent passwd "${USERNAME}" | cut -d: -f3)"
+  USERGROUP_ID="$(getent passwd "${USERNAME}" | cut -d: -f4)"
+  USERGROUP="$(getent group "${USERGROUP_ID}" | cut -d: -f1)"
+  USER_HOME="$(getent passwd "${USERNAME}" | cut -d: -f6)"
+
+  if [[ -z "${USERGROUP}" || -z "${USER_HOME}" ]]; then
+    Log::displayError "USERNAME - unable to deduce USERGROUP, USER_HOME from USERNAME"
+    return 1
+  fi
+
+  export USER_HOME
+  export USER_ID
+  export USERGROUP_ID
+  export USERGROUP
+}
+
+# @description load wsl env variables
+# @set BASE_MNT_C
+# @set WINDOWS_DIR
+# @set WINDOWS_PROFILE_DIR
+# @set LOCAL_APP_DATA
+# @set WINDOW_PATH
+# @set WSL_EXE_BIN
+# @set IPCONFIG_BIN
+# @set POWERSHELL_BIN
+# @env WSL_EXE_BIN
+# @env IPCONFIG_BIN
+# @env POWERSHELL_BIN
+Engine::Config::loadWslVariables() {
+  if ! Assert::wsl; then
+    # skip
+    return 0
+  fi
+  # shellcheck disable=SC1003
+  BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
+  export BASE_MNT_C
+
+  WINDOWS_DIR="$(Linux::Wsl::cachedWslpathFromWslVar SystemRoot)"
+  WINDOWS_DIR="${WINDOWS_DIR:-${BASE_MNT_C}/Windows}"
+  export WINDOWS_DIR
+
+  WINDOWS_PROFILE_DIR="$(Linux::Wsl::cachedWslpathFromWslVar USERPROFILE)"
+  WINDOWS_PROFILE_DIR="${WINDOWS_PROFILE_DIR:-${BASE_MNT_C}/Users/$(id -un)}"
+  export WINDOWS_PROFILE_DIR
+
+  LOCAL_APP_DATA="$(Linux::Wsl::cachedWslpathFromWslVar LOCALAPPDATA | tr -d '\n\r')"
+  export LOCAL_APP_DATA
+
+  # WINDOW_PATH
+  WINDOW_PATH="$(Linux::Wsl::cachedWslvar PATH)"
+  WINDOW_PATH="${WINDOW_PATH//;/:}"
+  WINDOW_PATH="${WINDOW_PATH//\\//}"
+  WINDOW_PATH="${WINDOW_PATH//C:/${BASE_MNT_C}}"
+
+  deduceBin() {
+    local var="$1"
+    local expectedFullPath="$2"
+    local expectedBin="$3"
+    if [[ -z "${!var+xxx}" ]]; then
+      eval "${var}=${expectedFullPath}"
+      if ! command -v "${!var}" >/dev/null 2>&1; then
+        eval "${var}=$(command -v "${expectedBin}" 2>/dev/null)"
+      fi
+    fi
+    if [[ -z "${!var:-}" ]] || ! command -v "${!var}" >/dev/null 2>&1; then
+      Log::fatal "variable ${var} - command ${expectedBin} not found"
+    fi
+    # shellcheck disable=SC2163
+    export "${var}"
+  }
+
+  checkBinary() {
+    local var="$1"
+    if [[ -z "${var}" || ! -x "${!var}" ]]; then
+      Log::displayError "variable ${var} - binary '${!var}' does not exist or not executable"
+      ((errorCount++))
+    fi
+  }
+
+  local errorCount=0
+  # IPCONFIG_BIN - which ipconfig.exe does not work when executed as root
+  deduceBin IPCONFIG_BIN "${WINDOWS_DIR}/System32/ipconfig.exe" "ipconfig.exe"
+  checkBinary IPCONFIG_BIN
+
+  deduceBin WSL_EXE_BIN "${WINDOWS_DIR}/System32/wsl.exe" "wsl.exe"
+  checkBinary WSL_EXE_BIN
+
+  deduceBin POWERSHELL_BIN "${WINDOWS_DIR}/System32/WindowsPowerShell/v1.0/powershell.exe" "powershell.exe"
+  checkBinary POWERSHELL_BIN
+
+  return "${errorCount}"
+}
+
+# @description install apt wslu if necessary providing wslvar, wslpath
+Engine::Config::requireWslu() {
+  if ! command -v wslvar &>/dev/null; then
+    Log::displayInfo "Installing pre-requisite Wslu : wslvar, wslpath, ... commands"
+    Linux::Apt::update
+    Linux::Apt::install --no-install-recommends wslu
+
+    # @see https://github.com/microsoft/WSL/issues/8843#issuecomment-1792256894
+    Log::displayInfo "Fix wsl interoperability due to wsl bug"
+    if [[ ! -f /usr/lib/binfmt.d/WSLInterop.conf &&
+      ! -f /etc/systemd/system/wsl-binfmt.service &&
+      -f /run/systemd/generator.early/wsl-binfmt.service ]]; then
+      sudo sh -c 'echo :WSLInterop:M::MZ::/init:PF > /usr/lib/binfmt.d/WSLInterop.conf'
+      sudo ln -s /run/systemd/generator.early/wsl-binfmt.service /etc/systemd/system/wsl-binfmt.service
+    fi
+  fi
+}
+
+# @description prepend directories to the PATH environment variable
+# @arg $@ args:String[] list of directories to prepend
+# @set PATH update PATH with the directories prepended
+Env::pathPrepend() {
+  local arg
+  for arg in "$@"; do
+    if [[ -d "${arg}" && ":${PATH}:" != *":${arg}:"* ]]; then
+      PATH="$(realpath "${arg}"):${PATH}"
+    fi
+  done
+}
+
+# @description Display message using error color (red)
+# @arg $1 message:String the message to display
+Log::displayError() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_ERROR)); then
+    echo -e "${__ERROR_COLOR}ERROR   - ${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logError "$1"
+}
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logDebug() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_DEBUG)); then
+    Log::logMessage "${2:-DEBUG}" "$1"
+  fi
+}
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logInfo() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
+    Log::logMessage "${2:-INFO}" "$1"
+  fi
+}
+
+# @description activate or not Log::display* and Log::log* functions
+# based on BASH_FRAMEWORK_DISPLAY_LEVEL and BASH_FRAMEWORK_LOG_LEVEL
+# environment variables loaded by Env::requireLoad
+# try to create log file and rotate it if necessary
+# @noargs
+# @set BASH_FRAMEWORK_LOG_LEVEL int to OFF level if BASH_FRAMEWORK_LOG_FILE is empty or not writable
+# @env BASH_FRAMEWORK_DISPLAY_LEVEL int
+# @env BASH_FRAMEWORK_LOG_LEVEL int
+# @env BASH_FRAMEWORK_LOG_FILE String
+# @env BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION int do log rotation if > 0
+# @exitcode 0 always successful
+# @stderr diagnostics information about log file is displayed
+# @require Env::requireLoad
+# @require UI::requireTheme
+Log::requireLoad() {
+  if [[ -z "${BASH_FRAMEWORK_LOG_FILE:-}" ]]; then
+    BASH_FRAMEWORK_LOG_LEVEL=${__LEVEL_OFF}
+    export BASH_FRAMEWORK_LOG_LEVEL
+  fi
+
+  if ((BASH_FRAMEWORK_LOG_LEVEL > __LEVEL_OFF)); then
+    if [[ ! -f "${BASH_FRAMEWORK_LOG_FILE}" ]]; then
+      if
+        ! mkdir -p "$(dirname "${BASH_FRAMEWORK_LOG_FILE}")" 2>/dev/null ||
+          ! touch --no-create "${BASH_FRAMEWORK_LOG_FILE}" 2>/dev/null
+      then
+        BASH_FRAMEWORK_LOG_LEVEL=${__LEVEL_OFF}
+        echo -e "${__ERROR_COLOR}ERROR   - File ${BASH_FRAMEWORK_LOG_FILE} is not writable${__RESET_COLOR}" >&2
+      fi
+    elif [[ ! -w "${BASH_FRAMEWORK_LOG_FILE}" ]]; then
+      BASH_FRAMEWORK_LOG_LEVEL=${__LEVEL_OFF}
+      echo -e "${__ERROR_COLOR}ERROR   - File ${BASH_FRAMEWORK_LOG_FILE} is not writable${__RESET_COLOR}" >&2
+    fi
+
+  fi
+
+  if ((BASH_FRAMEWORK_LOG_LEVEL > __LEVEL_OFF)); then
+    # will always be created even if not in info level
+    Log::logMessage "INFO" "Logging to file ${BASH_FRAMEWORK_LOG_FILE} - Log level ${BASH_FRAMEWORK_LOG_LEVEL}"
+    if ((BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION > 0)); then
+      Log::rotate "${BASH_FRAMEWORK_LOG_FILE}" "${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION}"
+    fi
+  fi
+}
+
+# @description display help
+# @arg $1 helpArg:String the help string to show
+# @stdout display help arg
+Args::showHelp() {
+  local helpArg="$1"
+  echo -e "${helpArg}"
+}
+
+# @description check if an element is contained in an array
+#
+# @arg $1 needle:String
+# @arg $@ array:String[]
+# @exitcode 0 if found
+# @exitcode 1 otherwise
+# @example
+#   Array::contains "${libPath}" "${__BASH_FRAMEWORK_IMPORTED_FILES[@]}"
+Array::contains() {
+  local element
+  for element in "${@:2}"; do
+    [[ "${element}" = "$1" ]] && return 0
+  done
+  return 1
+}
+
+# @description check if param is valid email address
+# @warning it is a very simple check, no RFC validation
+# @arg $1 emailAddress:String the full email address
+# @exitcode 1 if invalid email address
+Assert::emailAddress() {
+  local expectedRegexp="^\S+@\S+$"
+
+  [[ "$1" =~ ${expectedRegexp} ]]
+}
+
+# @description check if argument respects 2 or more words separated by a space
+# it supports accentuated characters and names with hyphen(-)
+# @arg $1 firstNameLastName:String
+# @exitcode 1 if regexp not matches
+# @see https://regex101.com/r/JyyfOM/1
+Assert::firstNameLastName() {
+  local regexp="^[^ ]+([ ][^ ]+)+$"
+  [[ $1 =~ ${regexp} ]]
+}
+
+# @description check if argument respects ldap login naming convention
+# only using lowercase characters a-z
+# @arg $1 ldapLogin:String
+# @exitcode 1 if regexp not matches
+Assert::ldapLogin() {
+  [[ $1 =~ ^[a-z]+$ ]]
+}
+
+# @description checks if variable name provided exists
+# @arg $1 varName:String
+# @exitcode 1 if variable doesn't exist
+# @exitcode 2 if variable value empty
+# @exitcode 3 if variable name invalid
+# @see Assert::validVariableName
+# @stderr diagnostics information is displayed
+Assert::varExistsAndNotEmpty() {
+  local varName="$1"
+  if ! Assert::validVariableName "${varName}"; then
+    Log::displayError "${varName} - invalid variable name"
+    return 3
+  fi
+  if [[ -z "${!varName+unset}" ]]; then
+    Log::displayError "${varName} - not defined"
+    return 1
+  elif [[ -z "${!varName}" ]]; then
+    Log::displayError "${varName} - please provide a value"
+    return 2
+  fi
+}
+
+# @description determine if the script is executed under WSL
+# cspell:disable
+# @example text
+#   uname GitBash windows (with wsl) => MINGW64_NT-10.0 ZOXFL-6619QN2 2.10.0(0.325/5/3) 2018-06-13 23:34 x86_64 Msys
+#   uname GitBash windows (wo wsl)   => MINGW64_NT-10.0 frsa02-j5cbkc2 2.9.0(0.318/5/3) 2018-01-12 23:37 x86_64 Msys
+#   uname wsl => Linux ZOXFL-6619QN2 4.4.0-17134-Microsoft #112-Microsoft Thu Jun 07 22:57:00 PST 2018 x86_64 x86_64 x86_64 GNU/Linux
+# cspell:enable
+#
+# @exitcode 1 on error
+Assert::wsl() {
+  [[ "$(uname -o)" = "GNU/Linux" ]]
+}
+
+# @description select right file to load depending if file exists in this order:
+# - from conf.override
+# - from embedded file if provided
+# - from conf dir
+# @arg $1 file:String
+# @arg $2 embedFile:String eventual embedded file
+# @exitcode 1 if file does not exist at all
+Conf::dynamicConfFile() {
+  local file="${1/#\//}" # remove first slash if any
+  local embedFile="${2:-}"
+  if [[ -f "${CONF_OVERRIDE_DIR}/${file}" ]]; then
+    echo "${CONF_OVERRIDE_DIR}/${file}"
+    return 0
+  elif [[ -f "${embedFile}" ]]; then
+    echo "${embedFile}"
+    return 0
+  elif [[ -f "${CONF_DIR}/${file}" ]]; then
+    echo "${CONF_DIR}/${file}"
+    return 0
+  fi
+  if [[ "${IGNORE_ERROR:-0}" = "0" ]]; then
+    Log::displayWarning "Conf::dynamicConfFile - ${file} does not exist in any config dirs declared"
+    return 1
+  fi
+}
+
+# @description installs file to given directory
+#
+# callbacks parameters `${fromFile} ${targetFile} $@`
+# @arg $1 fromFile - original file to copy
+# @arg $2 targetFile - target file
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @arg $5 successCallback:Function the callback to call when file is installed successfully, by default setUserRights callback is called
+# @arg $6 failureCallback:Function the callback to call when file installation has failed, by default unableToCopyCallback callback is called
+# @arg $@ callbacksParams:String[] additional parameters passed to callbacks
+# @exitcode 1 if fromFile is not readable
+# @exitcode 2 if backup file failure
+# @exitcode 3 if copy failure
+# @exitcode 0 on success or if OVERWRITE_CONFIG_FILES=0
+# @exitcode 0 on success or if CHANGE_WINDOWS_FILES=0 and target file is a windows file
+# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing directory
+# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target file is in windows file system, overwrite it
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env BASE_MNT_C String windows C drive base PATH
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_BEFORE_INSTALL Boolean (default: 1) backup file before installing the file
+Install::file() {
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+  local successCallback=${5:-Install::setUserRightsCallback}
+  local failureCallback=${6:-Install::unableToCopyCallback}
+  shift 6 || true
+
+  if [[ ! -f "${fromFile}" || ! -r "${fromFile}" ]]; then
+    Log::displayError "cannot read source file '${fromFile}'"
+    return 1
+  fi
+
+  # skip if OVERWRITE_CONFIG_FILES is 0 and target file exists
+  if [[ "${OVERWRITE_CONFIG_FILES}" = "0" && -f "${targetFile}" ]]; then
+    Log::displayWarning "File '${targetFile}' exists - Skip install (because OVERWRITE_CONFIG_FILES=0 in .env file)"
+    return 0
+  fi
+
+  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
+  if [[ "${CHANGE_WINDOWS_FILES}" = "0" && "${targetFile}" =~ ^${BASE_MNT_C} ]]; then
+    Log::displayWarning "File '${targetFile}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
+    return 0
+  fi
+
+  local targetDir
+  targetDir="$(dirname "${targetFile}")"
+  if [[ ! -d "${targetDir}" ]]; then
+    ${SUDO:-} mkdir -p "${targetDir}"
+    ${SUDO:-} chown "${userName}":"${userGroup}" "${targetDir}"
+  fi
+  local fromDir
+  fromDir="$(dirname "${fromFile}")"
+  local fromFilename
+  fromFilename="$(basename "${fromFile}")"
+
+  if [[ "${BACKUP_BEFORE_INSTALL:-1}" = "1" ]]; then
+    Backup::file "${targetFile}" || return 2
+  fi
+
+  if ${SUDO:-} cp "${fromFile}" "${targetFile}"; then
+    Log::displaySuccess "Installed file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fromFilename}' to '${targetFile}'"
+    ${successCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${fromDir#"${FRAMEWORK_ROOT_DIR}/"}" "${fromFilename}"
+  else
+    Log::displayError "unable to copy file from '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fromFilename}' to '${targetFile}'"
+    ${failureCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${fromDir#"${FRAMEWORK_ROOT_DIR}/"}" "${fromFilename}"
+    return 3
+  fi
+}
+
+# @description apt-get install
+# @arg $@ softwares:String[] list of softwares to install
+# @feature Retry::default
+# Linux::requireSudoCommand
+# @require Linux::requireUbuntu
+# @stdout diagnostics logs
+Linux::Apt::install() {
+  Log::displayInfo "Apt install $*"
+  Retry::default sudo apt-get install -y -q "$@"
+}
+
+# @description update apt packages list
+# @feature Retry::default
+# Linux::requireSudoCommand
+# @require Linux::requireUbuntu
+# @stdout diagnostics logs
+Linux::Apt::update() {
+  Log::displayInfo "Apt update ..."
+  Retry::default sudo apt-get update -y --fix-missing -o Acquire::ForceIPv4=true
+}
+
+# @description retrieve path from wslvar and then use wslpath to resolve it
+# using cache (cache is refreshed every day)
+# @arg $1 var:String the var to retrieve using wslvar
+# @arg $@ args:String[] (optional) additional arguments to pass to wslvar
+# @env WSL_TMPDIR String temp directory to store the wslpath cache (default value: TMPDIR), you can use PERSISTENT_TMPDIR instead
+# @exitcode * if Linux::Wsl::originalWslpath cannot find the path or Linux::Wsl::originalWslvar cannot find the var
+# @stderr diagnostics information is displayed
+# @require Linux::Wsl::requireWsl
+# @feature cache
+Linux::Wsl::cachedWslpathFromWslVar() {
+  local var="$1"
+  shift || true
+  local value
+  value="$(Linux::Wsl::cachedWslvar "${var}" "$@")" || return 1
+  Linux::Wsl::cachedWslpath "${value}" || return 1
+}
+
+# @description retrieve wslvar using cache (cache is refreshed every day)
+# @arg $@ args:String[] arguments to pass to wslvar
+# @env WSL_TMPDIR String temp directory to store the wslvar cache (default value: TMPDIR), you can use PERSISTENT_TMPDIR instead
+# @exitcode * if Linux::Wsl::originalWslvar cannot find the variable
+# @stderr diagnostics information is displayed
+# @require Linux::Wsl::requireWsl
+# @feature cache
+Linux::Wsl::cachedWslvar() {
+  local tempEnvFile
+  tempEnvFile="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_tools_wslvar_$(id -un)"
+
+  Cache::getPropertyValue "${tempEnvFile}" "$1" Linux::Wsl::originalWslvar "$@"
+}
+
+# @description Display message using error color (red) and exit immediately with error status 1
+# @arg $1 message:String the message to display
+Log::fatal() {
+  echo -e "${__ERROR_COLOR}FATAL   - ${1}${__RESET_COLOR}" >&2
+  Log::logFatal "$1"
+  exit 1
+}
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logError() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_ERROR)); then
+    Log::logMessage "${2:-ERROR}" "$1"
+  fi
+}
+
+# @description Internal: common log message
+# @example text
+#   [date]|[levelMsg]|message
+#
+# @example text
+#   2020-01-19 19:20:21|ERROR  |log error
+#   2020-01-19 19:20:21|SKIPPED|log skipped
+#
+# @arg $1 levelMsg:String message's level description (eg: STATUS, ERROR, ...)
+# @arg $2 msg:String the message to display
+# @env BASH_FRAMEWORK_LOG_FILE String log file to use, do nothing if empty
+# @env BASH_FRAMEWORK_LOG_LEVEL int log level log only if > OFF or fatal messages
+# @stderr diagnostics information is displayed
+# @require Env::requireLoad
+# @require Log::requireLoad
+Log::logMessage() {
+  local levelMsg="$1"
+  local msg="$2"
+  local date
+
+  if [[ -n "${BASH_FRAMEWORK_LOG_FILE}" ]] && ((BASH_FRAMEWORK_LOG_LEVEL > __LEVEL_OFF)); then
+    date="$(date '+%Y-%m-%d %H:%M:%S')"
+    touch "${BASH_FRAMEWORK_LOG_FILE}"
+    printf "%s|%7s|%s\n" "${date}" "${levelMsg}" "${msg}" >>"${BASH_FRAMEWORK_LOG_FILE}"
+  fi
+}
+
+# @description To be called before logging in the log file
+# @arg $1 file:string log file name
+# @arg $2 maxLogFilesCount:int maximum number of log files
+Log::rotate() {
+  local file="$1"
+  local maxLogFilesCount="${2:-5}"
+
+  if [[ ! -f "${file}" ]]; then
+    Log::displaySkipped "Log file ${file} doesn't exist yet"
+    return 0
+  fi
+  local i
+  for ((i = maxLogFilesCount - 1; i > 0; i--)); do
+    Log::displayInfo "Log rotation ${file}.${i} to ${file}.$((i + 1))"
+    mv "${file}."{"${i}","$((i + 1))"} &>/dev/null || true
+  done
+  if cp "${file}" "${file}.1" &>/dev/null; then
+    echo >"${file}" # reset log file
+    Log::displayInfo "Log rotation ${file} to ${file}.1"
+  fi
+}
+
+# @description ensure env files are loaded
+# @arg $@ list of default files to load at the end
+# @exitcode 1 if one of env files fails to load
+# @stderr diagnostics information is displayed
+# shellcheck disable=SC2120
+Env::requireLoad() {
+  local -a defaultFiles=("$@")
+  # get list of possible config files
+  local -a configFiles=()
+  if [[ -n "${BASH_FRAMEWORK_ENV_FILES[0]+1}" ]]; then
+    # BASH_FRAMEWORK_ENV_FILES is an array
+    configFiles+=("${BASH_FRAMEWORK_ENV_FILES[@]}")
+  fi
+  if [[ -f "$(pwd)/.framework-config" ]]; then
+    configFiles+=("$(pwd)/.framework-config")
+  fi
+  if [[ -f "${FRAMEWORK_ROOT_DIR}/.framework-config" ]]; then
+    configFiles+=("${FRAMEWORK_ROOT_DIR}/.framework-config")
+  fi
+  configFiles+=("${optionEnvFiles[@]}")
+  configFiles+=("${defaultFiles[@]}")
+
+  for file in "${configFiles[@]}"; do
+    # shellcheck source=/.framework-config
+    CURRENT_LOADED_ENV_FILE="${file}" source "${file}" || {
+      Log::displayError "while loading config file: ${file}"
+      return 1
+    }
+  done
+}
+
+# @description load color theme
+# @noargs
+# @env BASH_FRAMEWORK_THEME String theme to use
+# @env LOAD_THEME int 0 to avoid loading theme
+# @exitcode 0 always successful
+UI::requireTheme() {
+  if [[ "${LOAD_THEME:-1}" = "1" ]]; then
+    UI::theme "${BASH_FRAMEWORK_THEME-default}"
+  fi
+}
+
+# @description check if argument respects this framework variable naming convention
+# - if variable begins with an uppercase or underscore, following letters have to be uppercase or underscore
+# - variable name can includes ':' or '_' or digits but not as first letter
+# here valid variable name examples
+#
+# @arg $1 variableName:String
+# @exitcode 1 if regexp not matches
+# @see https://regex101.com/r/BUlPXS/1
+Assert::validVariableName() {
+  echo "$1" | LC_ALL=POSIX grep -E -q '(^[a-z][A-Za-z_0-9:]+$)|(^[A-Z_][A-Z_0-9:]+$)'
+}
+
+# @description Backup given file in the same directory or in BACKUP_DIR directory
+# backup file name is composed by following fields separated by -:
+#   - if BACKUP_DIR is not empty then escaped dirname separated by @
+#   - filename(without path)
+#   - date with format %Y%m%d_%H:%M:%S (Eg: 20240326_14:45:08)
+# @arg $1 file:String the file to backup
+# @stderr messages about backup file location
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_DIR if unlnow backup the file in the same directory
+# @exitcode 1 on copy failure
+Backup::file() {
+  local file="$1"
+  local backupFile dirname escapedDirname
+  if [[ -f "${file}" ]]; then
+    dirname="$(dirname "${file}")"
+    escapedDirname="$(sed -e 's#^/##; s#/#@#g' <<<"${dirname}")"
+    if [[ -z "${BACKUP_DIR:-}" ]]; then
+      backupFile="${dirname}/$(basename "${file}")-$(date +"%Y%m%d_%H:%M:%S")"
+    else
+      backupFile="${BACKUP_DIR}/${escapedDirname}@$(basename "${file}")-$(date +"%Y%m%d_%H:%M:%S")"
+    fi
+    Log::displayInfo "Backup file '${file}' to ${backupFile}"
+    ${SUDO:-} cp "${file}" "${backupFile}"
+  fi
+}
+
+# @description get property value from file
+# if not present compute it using propertyNotFoundCallback (if provided) and store it in property file
+# @arg $1 propertyFile:String the file in which the property will be searched
+# @arg $2 key:String the property key to search in property file
+# @arg $3 propertyNotFoundCallback:Function (optional) a callback to call if property key is not found in property file
+# @arg $@ args:String[] (optional) the arguments to pass to the propertyNotFoundCallback
+# @exitcode 1 if value is not found
+# @exitcode * if propertyNotFoundCallback fails
+# @stdout the property value given by property file or by the propertyNotFoundCallback
+Cache::getPropertyValue() {
+  local value
+  local propertyFile="$1"
+  shift || true
+  local key
+  key="$(echo -E "$1" | sed -E 's#\\#/#g')"
+  shift || true
+  local propertyNotFoundCallback=$1
+  shift || true
+
+  if grep -E "^${key}=.*" "${propertyFile}" &>/dev/null; then
+    grep -E "^${key}=" "${propertyFile}" | cut -d'=' -f2
+    return 0
+  elif [[ "$(type -t "${propertyNotFoundCallback}")" = "function" ]]; then
+    value="$("${propertyNotFoundCallback}" "$@")" || return $?
+    if [[ -n "${value}" ]]; then
+      echo -E "${key}=${value}" >>"${propertyFile}"
+    fi
+    echo -E "${value}"
+    return 0
+  fi
+  return 1
+}
+
+# @description install callback
+#   set file with root ownership and execution bit
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 on any failure
+# @see Install::file
+Install::setUserRightsCallback() {
+  # shellcheck disable=SC2034 # $1 not used
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+
+  ${SUDO:-} chown "${userName}":"${userGroup}" "${targetFile}"
+}
+
+# @description install callback
+#   default callback used called when file copy has failed
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @exitcode 1 always fail
+# @stderr diagnostics information is displayed
+# @see Install::file
+Install::unableToCopyCallback() {
+  local fromDir="$1"
+  local fileName="$2"
+  local targetFile="$3"
+  Log::fatal "unable to copy file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fileName}' to '${targetFile}'"
+}
+
+# @description retrieve wslpath using cache (cache is refreshed every day)
+# @arg $@ args:String[] arguments to pass to wslpath
+# @env WSL_TMPDIR String temp directory to store the wslpath cache (default value: TMPDIR), you can use PERSISTENT_TMPDIR instead
+# @exitcode * if Linux::Wsl::originalWslpath cannot find the path
+# @stderr diagnostics information is displayed
+# @require Linux::Wsl::requireWsl
+# @feature cache
+Linux::Wsl::cachedWslpath() {
+  local -a args=("$@")
+  local tempEnvFile key
+  tempEnvFile="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_tools_wslpath_$(id -un)"
+
+  key="$(Linux::Wsl::getKeyFromWslpathOptions "$@")"
+  Cache::getPropertyValue "${tempEnvFile}" "${key}" Linux::Wsl::originalWslpath "${args[@]}"
+}
+
+# @description call simply original wslvar command
+# @arg $@ args:String[] args to pass to wslvar
+# @exitcode * wslvar exit code
+# @stdout wslvar stdout
+# @require Linux::Wsl::requireWsl
+Linux::Wsl::originalWslvar() {
+  wslvar "$@" | sed -z '$ s/[\r\n]$//'
+}
+
+# @description Display message using skip color (yellow)
+# @arg $1 message:String the message to display
+Log::displaySkipped() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
+    echo -e "${__SKIPPED_COLOR}SKIPPED - ${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logSkipped "$1"
+}
+
+# @description Display message using success color (bg green/fg white)
+# @arg $1 message:String the message to display
+Log::displaySuccess() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
+    echo -e "${__SUCCESS_COLOR}SUCCESS - ${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logSuccess "$1"
+}
+
+# @description Display message using warning color (yellow)
+# @arg $1 message:String the message to display
+Log::displayWarning() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
+    echo -e "${__WARNING_COLOR}WARN    - ${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logWarning "$1"
+}
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logFatal() {
+  Log::logMessage "${2:-FATAL}" "$1"
+}
+
+# @description Retry a command 5 times with a delay of 15 seconds between each attempt
+# @arg $@ command:String[] the command to run
+# @exitcode 0 on success
+# @exitcode 1 if max retries count reached
+Retry::default() {
+  Retry::parameterized 5 15 "" "$@"
+}
+
+# @description load colors theme constants
+# @warning if tty not opened, noColor theme will be chosen
+# @arg $1 theme:String the theme to use (default, noColor)
+# @arg $@ args:String[]
+# @set __ERROR_COLOR String indicate error status
+# @set __INFO_COLOR String indicate info status
+# @set __SUCCESS_COLOR String indicate success status
+# @set __WARNING_COLOR String indicate warning status
+# @set __SKIPPED_COLOR String indicate skipped status
+# @set __DEBUG_COLOR String indicate debug status
+# @set __HELP_COLOR String indicate help status
+# @set __TEST_COLOR String not used
+# @set __TEST_ERROR_COLOR String not used
+# @set __HELP_TITLE_COLOR String used to display help title in help strings
+# @set __HELP_OPTION_COLOR String used to display highlight options in help strings
+#
+# @set __RESET_COLOR String reset default color
+#
+# @set __HELP_EXAMPLE String to remove
+# @set __HELP_TITLE String to remove
+# @set __HELP_NORMAL String to remove
+# shellcheck disable=SC2034
+UI::theme() {
+  local theme="${1-default}"
+  if [[ ! "${theme}" =~ -force$ ]] && ! Assert::tty; then
+    theme="noColor"
+  fi
+  case "${theme}" in
+    default | default-force)
+      theme="default"
+      ;;
+    noColor) ;;
+    *)
+      Log::fatal "invalid theme provided"
+      ;;
+  esac
+  if [[ "${theme}" = "default" ]]; then
+    BASH_FRAMEWORK_THEME="default"
+    # check colors applicable https://misc.flogisoft.com/bash/tip_colors_and_formatting
+    __ERROR_COLOR='\e[31m'         # Red
+    __INFO_COLOR='\e[44m'          # white on lightBlue
+    __SUCCESS_COLOR='\e[32m'       # Green
+    __WARNING_COLOR='\e[33m'       # Yellow
+    __SKIPPED_COLOR='\e[33m'       # Yellow
+    __DEBUG_COLOR='\e[37m'         # Grey
+    __HELP_COLOR='\e[7;49;33m'     # Black on Gold
+    __TEST_COLOR='\e[100m'         # Light magenta
+    __TEST_ERROR_COLOR='\e[41m'    # white on red
+    __HELP_TITLE_COLOR="\e[1;37m"  # Bold
+    __HELP_OPTION_COLOR="\e[1;34m" # Blue
+    # Internal: reset color
+    __RESET_COLOR='\e[0m' # Reset Color
+    # shellcheck disable=SC2155,SC2034
+    __HELP_EXAMPLE="$(echo -e "\e[2;97m")"
+    # shellcheck disable=SC2155,SC2034
+    __HELP_TITLE="$(echo -e "\e[1;37m")"
+    # shellcheck disable=SC2155,SC2034
+    __HELP_NORMAL="$(echo -e "\033[0m")"
+  else
+    BASH_FRAMEWORK_THEME="noColor"
+    # check colors applicable https://misc.flogisoft.com/bash/tip_colors_and_formatting
+    __ERROR_COLOR=''
+    __INFO_COLOR=''
+    __SUCCESS_COLOR=''
+    __WARNING_COLOR=''
+    __SKIPPED_COLOR=''
+    __DEBUG_COLOR=''
+    __HELP_COLOR=''
+    __TEST_COLOR=''
+    __TEST_ERROR_COLOR=''
+    __HELP_TITLE_COLOR=''
+    __HELP_OPTION_COLOR=''
+    # Internal: reset color
+    __RESET_COLOR=''
+    __HELP_EXAMPLE=''
+    __HELP_TITLE=''
+    __HELP_NORMAL=''
+  fi
+}
+
+# @description ensure linux distribution is ubuntu
+# @exitcode 1 if linux distribution is not ubuntu
+Linux::requireUbuntu() {
+  if ! Array::contains "$(Linux::getDistributorId)" "Ubuntu" "Debian"; then
+    Log::fatal "this script should be executed under Ubuntu or Debian OS"
+  fi
+}
+
+# @description ensure linux runs under wsl
+# @env WSL_GARBAGE_COLLECT int 0 to disable garbage collect of cache files
+# @exitcode 1 if linux does not run under wsl
+Linux::Wsl::requireWsl() {
+  Assert::wsl || return 1
+  if [[ "${WSL_GARBAGE_COLLECT:-1}" = "1" ]]; then
+    local tempEnvDir
+    tempEnvDir="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}"
+    File::garbageCollect "${tempEnvDir}/bash_tools_wslpath_$(id -un)" "1"
+    tempEnvDir="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}"
+    File::garbageCollect "${tempEnvDir}/bash_tools_wslvar_$(id -un)" "1"
+  fi
+}
+
+# @description check if tty (interactive mode) is active
+# @noargs
+# @exitcode 1 if tty not active
+# @env NON_INTERACTIVE if 1 consider as not interactive even if environment is interactive
+# @env INTERACTIVE if 1 consider as interactive even if environment is not interactive
+Assert::tty() {
+  if [[ "${NON_INTERACTIVE:-0}" = "1" ]]; then
+    return 1
+  fi
+  if [[ "${INTERACTIVE:-0}" = "1" ]]; then
+    return 0
+  fi
+  # check if stdout or stderr is connected to terminal
+  [[ -t 1 || -t 2 ]]
+}
+
+# @description delete files older than n days in given path
+# @warning use this function with caution as it will delete all files in given path without any prompt
+# @arg $1 path:String the directory in which files will be deleted or the file to delete
+# @arg $2 mtime:String expiration time in days (eg: 1 means 1 day) (default value: 1). Eg: +1 match files that have been accessed at least two days ago (rounding effect)
+# @arg $3 maxdepth:int Descend at most levels (a non-negative integer) levels of directories below the starting-points. (default value: 1)
+# @exitcode 1 if path not provided or empty
+# @exitcode * find command failure code
+# @stderr find output on error or diagnostics logs
+# @see man find atime
+File::garbageCollect() {
+  local path="$1"
+  local mtime="$2"
+  local maxdepth="${3:-1}"
+
+  if [[ -z "${path}" ]]; then
+    return 1
+  fi
+
+  if [[ ! -e "${path}" ]]; then
+    # path already removed
+    return 0
+  fi
+
+  Log::displayInfo "Garbage collect files older than ${mtime} days in path ${path} with max depth ${maxdepth}"
+  find "${path}" -depth -maxdepth "${maxdepth}" -type f -mtime "${mtime}" -print -delete
+}
+
+# @description Compute a cache from wslpath options
+# @arg $@ args:String[] arguments passed to wslpath
+# @stderr diagnostics information is displayed
+# @stdout the cache key deduced from the options
+# @require Linux::Wsl::requireWsl
+# @feature cache
+# @internal
+Linux::Wsl::getKeyFromWslpathOptions() {
+  local options
+  options=$(getopt -o "auwm" -- "$@" 2>/dev/null) || {
+    Log::displayError "invalid options specified"
+    return 1
+  }
+  local key="wslpath"
+  eval set -- "${options}"
+  while true; do
+    case "$1" in
+      -a | -u | -w | -m)
+        key="${key}$1"
+        ;;
+      --)
+        shift || true
+        break
+        ;;
+      *)
+        shift || true
+        Log::displayWarning "Unknown key $1"
+        ;;
+    esac
+    shift || true
+  done
+  echo -E "${key}_$1"
+}
+
+# @description call simply original wslpath command
+# @arg $@ args:String[] args to pass to wslpath
+# @exitcode * wslpath exit code
+# @stdout wslpath stdout
+# @require Linux::Wsl::requireWsl
+Linux::Wsl::originalWslpath() {
+  wslpath "$@"
+}
+
+# @description retrieve linux distributor id
+# @noargs
+# @exitcode 1 if lsb_release fails or not found
+# @stdout the linux distributor id
+Linux::getDistributorId() {
+  lsb_release -a 2>/dev/null | sed -En 's/Distributor ID:[ \t]+(.+)/\1/p'
+}
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logSkipped() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
+    Log::logMessage "${2:-SKIPPED}" "$1"
+  fi
+}
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logSuccess() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
+    Log::logMessage "${2:-SUCCESS}" "$1"
+  fi
+}
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logWarning() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
+    Log::logMessage "${2:-WARNING}" "$1"
+  fi
+}
+
+# @description Retry a command several times depending on parameters
+# @arg $1 maxRetries:int    $1 max retries
+# @arg $2 delay:int between attempt
+# @arg $3 message:String to display to describe the attempt
+# @arg $@ rest of parameters, the command to run
+# @exitcode 0 on success
+# @exitcode 1 if max retries count reached
+# @exitcode 2 if maxRetries invalid value
+Retry::parameterized() {
+  local maxRetries=$1
+  shift || true
+  local delayBetweenTries=$1
+  shift || true
+  local message="$1"
+  shift || true
+  local retriesCount=1
+  if [[ "${maxRetries}" -lt 1 ]]; then
+    Log::displayError "invalid maxRetry value"
+    return 2
+  fi
+
+  while true; do
+    Log::displayInfo "Attempt ${retriesCount}/${maxRetries}: ${message}"
+    if "$@"; then
+      break
+    elif [[ "${retriesCount}" -lt "${maxRetries}" ]]; then
+      Log::displayWarning "Command failed. Wait for ${delayBetweenTries} seconds"
+      ((retriesCount++))
+      sleep "${delayBetweenTries}"
+    else
+      Log::displayError "The command has failed after ${retriesCount} attempts."
+      return 1
+    fi
+  done
+  return 0
+}
+
+# FUNCTIONS
+
+facade_main_installFileWithBackupsh() {
+# REQUIRES
+Env::requireLoad
+UI::requireTheme
+Linux::requireUbuntu
+Linux::Wsl::requireWsl
+Log::requireLoad
+Compiler::Facade::requireCommandBinDir
+
+if Assert::functionExists initFacade; then
+  initFacade
+fi
+Engine::Config::loadConfig
+# @description create sudoer file and add traps to remove it at the end
+# @arg $1 sudoerFile:String the file path to create
+# @env USERNAME
+# shellcheck disable=SC2317
+local sudoerFile="${SUDOER_FILE_PREFIX}/etc/sudoers.d/bash-dev-env-no-password"
+if [[ -f "${sudoerFile}" ]]; then
+  # sudoerFile probably already managed by parent script
+  true
+else
+  cleanSudoer() {
+    if [[ -f "${sudoerFile}" ]]; then
+      ${SUDO:-sudo} rm -f "${sudoerFile}" || true
+    fi
+  }
+  trap cleanSudoer EXIT HUP QUIT ABRT TERM
+
+  Log::displayInfo "Creating sudoer file"
+  echo "${USERNAME} ALL=(ALL) NOPASSWD: ALL" |
+    ${SUDO:-sudo} tee "${sudoerFile}" >/dev/null
+  ${SUDO:-sudo} chmod 0440 "${sudoerFile}"
+fi
+
+# @require Compiler::Facade::requireCommandBinDir
+# ROOT_DIR_RELATIVE_TO_BIN_DIR=..
+
+HELP="$(
+  cat <<EOF
+${__HELP_TITLE}Synopsis:${__HELP_NORMAL} install a file and backup if exist
+
+${__HELP_TITLE}Usage:${__HELP_NORMAL} ${SCRIPT_NAME} <file> <targetFile>
+
+${__HELP_TITLE}Description:${__HELP_NORMAL}
+Backup target file
+and then install original file to target
+
+${__HELP_TITLE}Author:${__HELP_NORMAL}
+[François Chastanet](https://github.com/fchastanet)
+
+${__HELP_TITLE}Source file:${__HELP_NORMAL}
+https://github.com/fchastanet/bash-dev-env/tree/master/src/_binaries/tools/installFileWithBackup.sh
+
+${__HELP_TITLE}License:${__HELP_NORMAL}
+MIT License
+
+Copyright (c) 2022 François Chastanet
+EOF
+)"
+Args::defaultHelp "${HELP}" "$@"
+
+}
+
+facade_main_installFileWithBackupsh "$@"

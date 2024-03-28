@@ -36,7 +36,16 @@ repos:
       - id: shfmt
         args: [-i, '2', -ci]
         # x modifier: extended. Spaces and text after a # in the pattern are ignored
-        exclude: (?x)( ^vendor/| ^bin/| \.tpl$ | /testsData/)
+        exclude: |
+          (?x)(
+            ^vendor/|
+            ^bin/|
+            ^distro$|
+            ^install$|
+            ^installScripts/|
+            \.tpl$ |
+            /testsData/
+          )
         stages: [pre-commit]
 
       # Check both committed and uncommitted files for git conflict
@@ -46,7 +55,7 @@ repos:
         exclude: /testsData/
 
   - repo: https://github.com/fchastanet/bash-tools-framework
-    rev: 2.3.0
+    rev: 2.3.2
     hooks:
       - id: fixShebangExecutionBit
       - id: fixShebangExecutionBitGithubActions

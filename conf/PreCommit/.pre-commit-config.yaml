@@ -1,0 +1,16 @@
+---
+repos:
+  - repo: local
+    hooks:
+      - id: js-failure
+        name: js-failure
+        entry: bash -c 'set -x; echo "failure" > test.js; exit 1'
+        language: system
+        types: [javascript]
+        pass_filenames: true
+      - id: php-success
+        name: php-success
+        entry: bash -c 'set -x; echo "success" > test.php; exit 0'
+        language: system
+        types: [php]
+        pass_filenames: true

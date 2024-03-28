@@ -13,6 +13,7 @@ node_modules/
 yarn.lock
 
 .env
+.env.distro
 
 /profile.*.sh
 !/profile.default.sh
@@ -30,11 +31,4 @@ vendor
 
 TODO.local.md
 
-# bash-tools-framework binaries
-/bin/awkLint
-/bin/buildPushDockerImages
-/bin/dockerLint
-/bin/generateShellDoc
-/bin/runBuildContainer
-/bin/shellcheckLint
-/bin/test
+tmp

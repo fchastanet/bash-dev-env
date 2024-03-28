@@ -26,13 +26,13 @@ COMPILE_PARAMETERS=(
 )
 
 # describe the functions that will be skipped from being imported
-FRAMEWORK_FUNCTIONS_IGNORE_REGEXP="${FRAMEWORK_FUNCTIONS_IGNORE_REGEXP:-^(Namespace::functions|Functions::myFunction|Namespace::requireSomething|IMPORT::dir::file|Acquire::ForceIPv4)$}"
+FRAMEWORK_FUNCTIONS_IGNORE_REGEXP="${FRAMEWORK_FUNCTIONS_IGNORE_REGEXP:-^(M::MZ|Namespace::functions|Functions::myFunction|Namespace::requireSomething|IMPORT::dir::file|Acquire::ForceIPv4)$}"
 # describe the files that do not contain function to be imported
-NON_FRAMEWORK_FILES_REGEXP="${NON_FRAMEWORK_FILES_REGEXP:-^bin/|.env.*$|^snippets/|^profile.*.sh$|.framework-config|^install$|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/_binaries|^src/_includes|^src/batsHeaders.sh$|^conf/)}"
+NON_FRAMEWORK_FILES_REGEXP="${NON_FRAMEWORK_FILES_REGEXP:-^bin/|.env.*$|^snippets/|^profile.*.sh$|.framework-config|^install$|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^distro$|^install$|^src/_binaries/|^src/_includes/|^src/batsHeaders.sh$|^conf/|^src/installScripts/definitions}"
 # describe the files that are allowed to not have an associated bats file
-BATS_FILE_NOT_NEEDED_REGEXP="${BATS_FILE_NOT_NEEDED_REGEXP:-(^conf/|^bin/|^profile.*.sh$|.framework-config|^install$|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/batsHeaders.sh$|^src/_includes)}"
+BATS_FILE_NOT_NEEDED_REGEXP="${BATS_FILE_NOT_NEEDED_REGEXP:-.*}"
 # describe the files that are allowed to not have a function matching the filename
-FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP="${FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP:-^conf/|^bin/|^\.framework-config$|\.tpl$|testsData/binaryFile$}"
+FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP="${FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP:-^conf/|^bin/|^install$|^distro$|^installScripts/|^\.framework-config$|\.tpl$|testsData/binaryFile$|^src/_binaries/|^src/installScripts/definitions}"
 # Source directories
 if [[ ! -v FRAMEWORK_SRC_DIRS ]]; then
   FRAMEWORK_SRC_DIRS=(

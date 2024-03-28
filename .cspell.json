@@ -22,6 +22,57 @@
     ".env"
   ],
   "noConfigSearch": true,
+  "dictionaryDefinitions": [
+    {
+      "name": "bash",
+      "path": ".cspell/bash.txt"
+    },
+    {
+      "name": "config",
+      "path": ".cspell/config.txt"
+    },
+    {
+      "name": "softwares",
+      "path": ".cspell/softwares.txt"
+    },
+    {
+      "name": "readme",
+      "path": ".cspell/readme.txt"
+    },
+    {
+      "name": "dirColors",
+      "path": ".cspell/dirColors.txt"
+    }
+  ],
+  "dictionaries": ["bash", "config", "dirColors", "readme", "softwares"],
+  "languageSettings": [
+    {
+      "languageId": "dirColors",
+      "locale": "*",
+      "dictionaries": ["dirColors"]
+    },
+    {
+      "languageId": "bash",
+      "locale": "*",
+      "dictionaries": ["bash"]
+    },
+    {
+      "languageId": "config",
+      "locale": "*",
+      "dictionaries": ["config"]
+    },
+    {
+      "languageId": "softwares",
+      "locale": "*",
+      "dictionaries": ["softwares"]
+    },
+    {
+      "languageId": "readme",
+      "locale": "*",
+      "dictionaries": ["readme"]
+    }
+  ],
+
   "patterns": [
     {
       "name": "urls",
@@ -69,7 +120,6 @@
     "TRUFFLEHOG",
     "USERGROUP",
     "USERGROUPID",
-    "USERHOME",
     "USERID",
     "USERPROFILE",
     "Vcxsrv",
