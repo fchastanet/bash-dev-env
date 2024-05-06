@@ -47,5 +47,5 @@ localDockerRunArgs+=(-e BATS_FIX_TEST="${BATS_FIX_TEST:-0}")
 docker run \
   "${localDockerRunArgs[@]}" \
   "${imageRefUser}" \
-    /bash/vendor/bash-tools-framework/vendor/bats/bin/bats \
-    "$@"
+  /bash/vendor/bash-tools-framework/vendor/bats/bin/bats \
+  "$@"
