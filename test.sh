@@ -45,5 +45,5 @@ set -x
 docker run \
   "${localDockerRunArgs[@]}" \
   "${image}" \
-    /bash/vendor/bash-tools-framework/vendor/bats/bin/bats \
-    "$@"
+  /bash/vendor/bash-tools-framework/vendor/bats/bin/bats \
+  "$@"
