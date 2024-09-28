@@ -11,7 +11,6 @@ helpLongDescription() {
   echo "automatically installed in new repositories."
 }
 
-
 dependencies() {
   echo "installScripts/PreCommit"
   echo "installScripts/GitDefaultConfig"

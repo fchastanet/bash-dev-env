@@ -54,7 +54,6 @@ dependencies() {
   echo "installScripts/PreCommitDefaultConfig"
 }
 
-
 # jscpd:ignore-start
 listVariables() { :; }
 helpVariables() { :; }
