@@ -7,7 +7,6 @@ LOGS_DIR="${LOGS_DIR:-${PERSISTENT_TMPDIR}}"
 INSTALL_START="$(date +%s)"
 rm -f "${LOGS_DIR:-#}/${SCRIPT}-"* || true
 
-
 # trap errors
 err_report() {
   echo "$0 - Upgrade failure - Error on line $1"

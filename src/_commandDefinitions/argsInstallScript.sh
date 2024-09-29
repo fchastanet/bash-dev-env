@@ -85,13 +85,15 @@ argsInstallScriptCommandCallback() {
   if [[ -n "${command}" ]]; then
     case "${command}" in
       isInterfaceImplemented)
-        InstallScripts::isInterfaceMandatoryFunctionImplemented; exit $?
+        InstallScripts::isInterfaceMandatoryFunctionImplemented
+        exit $?
         ;;
-      install|testInstall|configure|testConfigure)
+      install | testInstall | configure | testConfigure)
         afterParseCallback
         ;;
-      *)
+      *) ;;
     esac
-    "${command}"; exit $?
+    "${command}"
+    exit $?
   fi
 }

@@ -30,7 +30,6 @@ isTestConfigureImplemented() { :; }
 isTestInstallImplemented() { :; }
 # jscpd:ignore-end
 
-
 install() {
   # shellcheck source=/dev/null
   source "${HOME}/.sdkman/bin/sdkman-init.sh"

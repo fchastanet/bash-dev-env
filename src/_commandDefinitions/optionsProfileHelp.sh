@@ -11,7 +11,7 @@ generateSoftwaresList() {
   )"
   local -i maxLineLength
   maxLineLength="$(wc -L <<<"${list}")"
-  (( maxLineLength += 1 + ${#relativeDir}))
+  ((maxLineLength += 1 + ${#relativeDir}))
   while read -r soft; do
     softName="${soft}"
     description="$(SKIP_REQUIRES=1 "${directory}/${soft}" helpDescription 2>/dev/null)"
@@ -36,10 +36,9 @@ generateSoftwaresListCache() {
   local softwaresListHelpTempFile="$3"
 
   if [[ ! -f "${softwaresListHelpTempFile}" ]] ||
-    (($(File::elapsedTimeSinceLastModification "${softwaresListHelpTempFile}") > help_cache_max_duration))
-  then
+    (($(File::elapsedTimeSinceLastModification "${softwaresListHelpTempFile}") > help_cache_max_duration)); then
     echo >&2 -n "Generating softwares list cache (directory ${relativeDir}) ..."
-    generateSoftwaresList "${directory}" "${relativeDir}" > "${softwaresListHelpTempFile}" || rm -f "${softwaresListHelpTempFile}"
+    generateSoftwaresList "${directory}" "${relativeDir}" >"${softwaresListHelpTempFile}" || rm -f "${softwaresListHelpTempFile}"
     echo >&2 -e "\033[2K" # erase line (Generating softwares list cache ...)
   fi
 }

@@ -20,8 +20,8 @@ helpLongDescription() {
 }
 
 # jscpd:ignore-start
-dependencies()  { :; }
-fortunes()  { :; }
+dependencies() { :; }
+fortunes() { :; }
 listVariables() { :; }
 helpVariables() { :; }
 defaultVariables() { :; }
