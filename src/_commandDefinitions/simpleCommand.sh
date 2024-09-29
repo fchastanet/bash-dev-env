@@ -34,7 +34,7 @@ beforeParseCallback() {
 }
 
 defaultAfterParseCallback() {
-  :;
+  :
 }
 
 afterParseCallback() {
