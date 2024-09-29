@@ -36,7 +36,7 @@ isTestInstallImplemented() { :; }
 isSupportedUbuntuVersion() {
   local versionCompare=0
   Version::compare "${VERSION_ID}" "24.04" || versionCompare=$?
-  if [[ "${versionCompare}" = "2" ]] ; then
+  if [[ "${versionCompare}" = "2" ]]; then
     Log::displaySkipped "Unsupported ubuntu version (please install ubuntu version 24.04 minimum)"
     return 1
   fi

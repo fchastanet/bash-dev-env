@@ -15,7 +15,6 @@ fortunes() {
   echo "%"
 }
 
-
 # jscpd:ignore-start
 dependencies() { :; }
 listVariables() { :; }

@@ -10,7 +10,7 @@ fortunes() {
 }
 
 # jscpd:ignore-start
-dependencies() { :;}
+dependencies() { :; }
 listVariables() { :; }
 helpVariables() { :; }
 defaultVariables() { :; }
@@ -51,8 +51,9 @@ configure() {
     Log::displayInfo "Retrieve list of go version available"
     # install latest version
     local latestVersion
-    latestVersion="$(curl 'https://go.dev/VERSION?m=text' |
-      grep -Eoh '[0-9]+\..*'
+    latestVersion="$(
+      curl 'https://go.dev/VERSION?m=text' |
+        grep -Eoh '[0-9]+\..*'
     )"
 
     Log::displayInfo "Installing go latest version is ${latestVersion}"

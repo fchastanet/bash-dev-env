@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/Php/Composer-conf" as conf_dir
 
-
 helpDescription() {
   echo "A Dependency Manager for PHP"
 }
