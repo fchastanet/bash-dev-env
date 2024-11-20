@@ -198,7 +198,7 @@ testInstall() {
     Assert::commandExists "kube-linter" || ((++errors))
     Assert::commandExists "lazydocker" || ((++errors))
     exit "${errors}"
-  ) || ((failures+=$?))
+  ) || ((failures += $?))
   Assert::commandExists kubectx || ((++failures))
   Assert::commandExists kubens || ((++failures))
   Assert::fileExists /opt/kubeps1/kube-ps1.sh root root || ((++failures))
