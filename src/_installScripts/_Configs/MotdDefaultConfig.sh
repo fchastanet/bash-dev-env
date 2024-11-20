@@ -39,7 +39,7 @@ cleanBeforeExport() {
 }
 
 testCleanBeforeExport() {
-  ((failures=0)) || true
+  ((failures = 0)) || true
   Assert::fileNotExists "${HOME}/.motd_shown" || ((++failures))
   return "${failures}"
 }

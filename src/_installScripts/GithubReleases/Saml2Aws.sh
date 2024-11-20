@@ -36,11 +36,10 @@ cleanBeforeExport() {
 }
 
 testCleanBeforeExport() {
-  ((failures=0)) || true
+  ((failures = 0)) || true
   Assert::fileNotExists "${HOME}/.saml2aws" || ((++failures))
   return "${failures}"
 }
-
 
 install() {
   SUDO=sudo INSTALL_CALLBACK=saml2awsInstallCallback Github::upgradeRelease \
