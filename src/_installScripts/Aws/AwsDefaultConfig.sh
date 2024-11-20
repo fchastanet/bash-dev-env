@@ -44,6 +44,18 @@ isTestConfigureImplemented() { :; }
 isTestInstallImplemented() { :; }
 # jscpd:ignore-end
 
+cleanBeforeExport() {
+  rm -f "${HOME}/.aws/credentials" || true
+  rm -f "${HOME}/.aws/config" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  Assert::fileNotExists "${HOME}/.aws/credentials" || ((++failures))
+  Assert::fileNotExists "${HOME}/.aws/config" || ((++failures))
+  return "${failures}"
+}
+
 configure() {
   local configDir
   # shellcheck disable=SC2154

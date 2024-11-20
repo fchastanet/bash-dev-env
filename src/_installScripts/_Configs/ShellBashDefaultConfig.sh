@@ -117,7 +117,6 @@ testConfigure() {
   Assert::fileExists "${HOME}/.inputrc" || ((++failures))
   Assert::fileExists "${HOME}/.profile" || ((++failures))
   Assert::fileExists "${HOME}/.vimrc" || ((++failures))
-  Assert::fileExists "${HOME}/.Xresources" || ((++failures))
 
   SUDO=sudo Assert::fileExists /root/.vimrc root root || ((++failures))
   SUDO=sudo Assert::fileExists /root/.inputrc root root || ((++failures))

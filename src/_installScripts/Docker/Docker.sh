@@ -29,6 +29,17 @@ isTestConfigureImplemented() { :; }
 isTestInstallImplemented() { :; }
 # jscpd:ignore-end
 
+cleanBeforeExport() {
+  if command -v docker; then
+    Log::displayInfo "Cleaning docker system"
+    docker system prune -a --volumes --force || true
+  fi
+}
+
+testCleanBeforeExport() {
+  :
+}
+
 # REQUIRE Linux::requireUbuntu
 # REQUIRE Linux::requireExecutedAsUser
 install() {

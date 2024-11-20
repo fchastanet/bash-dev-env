@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/BashUtils/Tig-conf" as conf_dir
 
 helpDescription() {
   echo "$(scriptName) - text-mode interface for Git"
@@ -27,9 +28,7 @@ breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
 isInstallImplemented() { :; }
 isTestInstallImplemented() { :; }
-configure() { :; }
 isConfigureImplemented() { :; }
-testConfigure() { :; }
 isTestConfigureImplemented() { :; }
 # jscpd:ignore-end
 
@@ -40,4 +39,20 @@ install() {
 
 testInstall() {
   Assert::commandExists tig
+}
+
+configure() {
+  # shellcheck disable=SC2154
+  Conf::copyStructure \
+    "${embed_dir_conf_dir}" \
+    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "home" \
+    "${HOME}"
+}
+
+testConfigure() {
+  local -i failures=0
+  Assert::fileExists "${HOME}/.config/tig/config" || ((++failures))
+  Assert::fileExists "${HOME}/.tigrc" || ((++failures))
+  return "${failures}"
 }

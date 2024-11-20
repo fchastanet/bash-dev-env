@@ -31,6 +31,17 @@ saml2awsInstallCallback() {
   sudo rm -f "$1"
 }
 
+cleanBeforeExport() {
+  rm -f "${HOME}/.saml2aws" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  Assert::fileNotExists "${HOME}/.saml2aws" || ((++failures))
+  return "${failures}"
+}
+
+
 install() {
   SUDO=sudo INSTALL_CALLBACK=saml2awsInstallCallback Github::upgradeRelease \
     /usr/local/bin/saml2aws \

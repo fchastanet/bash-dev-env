@@ -40,6 +40,28 @@ isConfigureImplemented() { :; }
 isTestConfigureImplemented() { :; }
 # jscpd:ignore-end
 
+cleanBeforeExport() {
+  git config --global --unset user.name || true
+  git config --global --unset user.email || true
+  rm -f "${HOME}/.gitconfig" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  if [[ -f "${HOME}/.gitconfig" ]]; then
+    if git config --global --get user.name &>/dev/null; then
+      Log::displayError "Export - .gitconfig user.name has not been removed"
+      ((++failures))
+    fi
+    if git config --global --get user.email &>/dev/null; then
+      Log::displayError "Export - .gitconfig user.email has not been removed"
+      ((++failures))
+    fi
+  fi
+
+  return "${failures}"
+}
+
 configure() {
   # shellcheck disable=SC2154
   Conf::copyStructure \
@@ -61,14 +83,20 @@ configure() {
     git config --global user.email "${GIT_USER_MAIL}"
   fi
 
-  if [[ -f "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ]]; then
-    Log::displayInfo "Configuring meld as default diff tool"
-    git config --global diff.tool meld
-    git config --global alias.dt 'difftool -d'
-    sudo ln -sf "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" /usr/local/bin/meld
-  else
-    Log::displayHelp "File ${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe does not exist - windows meld is not installed, it could have been linked into wsl as git diff"
-  fi
+  configureMeld() {
+    local meldBinaryPath="$1"
+    if [[ -f "${meldBinaryPath}" ]]; then
+      Log::displayInfo "Configuring meld as default diff tool"
+      git config --global diff.tool meld
+      git config --global alias.dt 'difftool -d'
+      sudo ln -sf "${meldBinaryPath}" /usr/local/bin/meld
+      return 0
+    fi
+    return 1
+  }
+  configureMeld "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ||
+    configureMeld "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe" ||
+      Log::displayHelp "File ${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe does not exist - windows meld is not installed, it could have been linked into wsl as git diff"
 
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
@@ -79,9 +107,12 @@ testConfigure() {
   Assert::fileExists "${HOME}/.gitconfig" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/GitDefaultConfig/gitignore" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/aliases.d/git.sh" || ((++failures))
-  Assert::fileExists "${HOME}/.config/tig/config" || ((++failures))
-  Assert::fileExists "${HOME}/.tigrc" || ((++failures))
-
+  if [[
+    -f "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ||
+    -f "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe"
+  ]]; then
+    Assert::symLinkValid /usr/local/bin/meld
+  fi
   # git config
   local gitUserName
   gitUserName="$(git config --global --get user.name)"

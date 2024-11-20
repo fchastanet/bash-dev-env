@@ -382,6 +382,32 @@ Assert::ldapLogin() {
 }
 
 
+# @description asserts that first argument is link to a file
+# that exists
+# @arg $1 link:String expected link
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 if missing link
+# @exitcode 2 if not a link
+# @exitcode 3 if broken link (missing linked file)
+# @stderr diagnostics information is displayed
+Assert::symLinkValid() {
+  local link="$1"
+  Log::displayInfo "Check ${link} is a valid symlink"
+  if ! ${SUDO:-} test -L "${link}" &>/dev/null; then
+    if ! ${SUDO:-} test -e "${link}" &>/dev/null; then
+      Log::displayError "${link} is not existing"
+      exit 1
+    fi
+    Log::displayError "${link} exists but is not a link"
+    return 2
+  fi
+  if ! ${SUDO:-} test -e "$(readlink "${link}")" &>/dev/null; then
+    Log::displayError "Broken link ${link}"
+    return 3
+  fi
+}
+
+
 # @description check if tty (interactive mode) is active
 # @noargs
 # @exitcode 1 if tty not active
@@ -3057,10 +3083,10 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/ad96a8ff5534cc5c8c715f446e926aa41d536d2a0ea756f13fc8e75e1306fb4c/conf_dir" \
-  "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"
+  "${PERSISTENT_TMPDIR:-/tmp}/b1ef5f9c9a6268d486db7e52c35bcd47f5d158c726868f6b06e7e4beadd3f69b/conf_dir" \
+  "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"
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/ad96a8ff5534cc5c8c715f446e926aa41d536d2a0ea756f13fc8e75e1306fb4c/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/b1ef5f9c9a6268d486db7e52c35bcd47f5d158c726868f6b06e7e4beadd3f69b/conf_dir"
 
 
 gitDefaultConfigBeforeParseCallback() {
@@ -3102,6 +3128,28 @@ isConfigureImplemented() { :; }
 isTestConfigureImplemented() { :; }
 # jscpd:ignore-end
 
+cleanBeforeExport() {
+  git config --global --unset user.name || true
+  git config --global --unset user.email || true
+  rm -f "${HOME}/.gitconfig" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  if [[ -f "${HOME}/.gitconfig" ]]; then
+    if git config --global --get user.name &>/dev/null; then
+      Log::displayError "Export - .gitconfig user.name has not been removed"
+      ((++failures))
+    fi
+    if git config --global --get user.email &>/dev/null; then
+      Log::displayError "Export - .gitconfig user.email has not been removed"
+      ((++failures))
+    fi
+  fi
+
+  return "${failures}"
+}
+
 configure() {
   # shellcheck disable=SC2154
   Conf::copyStructure \
@@ -3123,14 +3171,20 @@ configure() {
     git config --global user.email "${GIT_USER_MAIL}"
   fi
 
-  if [[ -f "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ]]; then
-    Log::displayInfo "Configuring meld as default diff tool"
-    git config --global diff.tool meld
-    git config --global alias.dt 'difftool -d'
-    sudo ln -sf "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" /usr/local/bin/meld
-  else
-    Log::displayHelp "File ${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe does not exist - windows meld is not installed, it could have been linked into wsl as git diff"
-  fi
+  configureMeld() {
+    local meldBinaryPath="$1"
+    if [[ -f "${meldBinaryPath}" ]]; then
+      Log::displayInfo "Configuring meld as default diff tool"
+      git config --global diff.tool meld
+      git config --global alias.dt 'difftool -d'
+      sudo ln -sf "${meldBinaryPath}" /usr/local/bin/meld
+      return 0
+    fi
+    return 1
+  }
+  configureMeld "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ||
+    configureMeld "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe" ||
+      Log::displayHelp "File ${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe does not exist - windows meld is not installed, it could have been linked into wsl as git diff"
 
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
@@ -3141,9 +3195,12 @@ testConfigure() {
   Assert::fileExists "${HOME}/.gitconfig" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/GitDefaultConfig/gitignore" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/aliases.d/git.sh" || ((++failures))
-  Assert::fileExists "${HOME}/.config/tig/config" || ((++failures))
-  Assert::fileExists "${HOME}/.tigrc" || ((++failures))
-
+  if [[
+    -f "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ||
+    -f "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe"
+  ]]; then
+    Assert::symLinkValid /usr/local/bin/meld
+  fi
   # git config
   local gitUserName
   gitUserName="$(git config --global --get user.name)"
