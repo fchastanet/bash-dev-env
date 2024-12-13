@@ -5,6 +5,7 @@
 
 # pam_motd does not carry the environment
 if [[ -f /etc/default/locale ]]; then
+  # shellcheck source=/dev/null
   source /etc/default/locale
 fi
 export LANG

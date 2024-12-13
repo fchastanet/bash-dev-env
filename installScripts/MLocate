@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ###############################################################################
-# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Docker/Docker-binary.yaml
+# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/BashUtils/MLocate-binary.yaml
 # DO NOT EDIT IT
 # @generated
 ###############################################################################
@@ -319,41 +319,6 @@ Assert::emailAddress() {
 }
 
 
-# @description asserts that first argument is file that exists with specified ownership
-# @arg $1 file:String
-# @arg $2 user:String expected owner user name of the file (default: USERNAME or id -un command)
-# @arg $3 group:String expected owner group name of the file (default: USERGROUP or id -gn command)
-# @env USERNAME String if arg $2 is not provided
-# @env USERGROUP String if arg $3 is not provided
-# @env SUDO String allows to use custom sudo prefix command
-# @exitcode 1 if missing file
-# @exitcode 2 if incorrect user ownership
-# @exitcode 3 if incorrect group ownership
-# @stderr diagnostics information is displayed
-Assert::fileExists() {
-  local file="$1"
-  local user="${2:-${USERNAME}}"
-  local group="${3:-${USERGROUP}}"
-  if [[ -n "${user}" ]]; then
-    Log::displayInfo "Check ${file} exists with user ${user}:${group}"
-  else
-    Log::displayInfo "Check ${file} exists"
-  fi
-  if ! ${SUDO:-} test -f "${file}" &>/dev/null; then
-    Log::displayError "missing file ${file}"
-    return 1
-  fi
-  if [[ -n "${user}" && "${user}" != "$(${SUDO:-} stat -c '%U' "${file}")" ]]; then
-    Log::displayError "incorrect user ownership on file ${file}"
-    return 2
-  fi
-  if [[ -n "${group}" && "${group}" != "$(${SUDO:-} stat -c '%G' "${file}")" ]]; then
-    Log::displayError "incorrect group ownership on file ${file}"
-    return 3
-  fi
-}
-
-
 # @description check if argument respects 2 or more words separated by a space
 # it supports accentuated characters and names with hyphen(-)
 # @arg $1 firstNameLastName:String
@@ -448,65 +413,6 @@ Assert::wsl() {
 }
 
 
-# @description Backup given file in the same directory or in BACKUP_DIR directory
-# backup file name is composed by following fields separated by -:
-#   - if BACKUP_DIR is not empty then escaped dir name separated by @
-#   - filename(without path)
-#   - date with format %Y%m%d_%H:%M:%S (Eg: 20240326_14:45:08)
-# @arg $1 file:String the file to backup
-# @stderr messages about backup file location
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_DIR if not set backup the file in the same directory as original file
-# @exitcode 1 on copy failure
-Backup::file() {
-  local file="$1"
-  if [[ -f "${file}" ]]; then
-    local backupFile fileDirname escapedDirname
-    fileDirname="${file%/*}"
-    escapedDirname=${fileDirname/\//}      # remove first slash
-    escapedDirname=${escapedDirname//\//@} # replace all slashes by @
-    if [[ -z "${BACKUP_DIR:-}" ]]; then
-      backupFile="${fileDirname}/${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
-    else
-      backupFile="${BACKUP_DIR}/${escapedDirname}@${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
-    fi
-    Log::displayInfo "Backup file '${file}' to ${backupFile}"
-    ${SUDO:-} cp "${file}" "${backupFile}"
-  fi
-}
-
-
-# @description ignore exit code 141 from simple command pipes
-# @example use with:
-#   local resultingStatus=0
-#   local -a originalPipeStatus=()
-#   cmd1 | cmd2 || Bash::handlePipelineFailure resultingStatus originalPipeStatus || true
-#   [[ "${resultingStatus}" = "0" ]]
-# @arg $1 resultingStatusCode:&int (passed by reference) (optional) resulting status code
-# @arg $2 originalStatus:int[] (passed by reference) (optional) copy of original PIPESTATUS array
-# @env PIPESTATUS assuming that this function is called like in the example provided
-# @see https://unix.stackexchange.com/a/709880/582856
-Bash::handlePipelineFailure() {
-  local -a pipeStatusBackup=("${PIPESTATUS[@]}")
-  local -n handlePipelineFailure_resultingStatusCode=$1
-  local -n handlePipelineFailure_originalStatus=$2
-  # shellcheck disable=SC2034
-  handlePipelineFailure_originalStatus=("${pipeStatusBackup[@]}")
-  handlePipelineFailure_resultingStatusCode=0
-  local statusCode
-  for statusCode in "${pipeStatusBackup[@]}"; do
-    if ((statusCode == 141)); then
-      return 0
-    elif ((statusCode > 0)); then
-      # shellcheck disable=SC2034
-      handlePipelineFailure_resultingStatusCode="${statusCode}"
-      break
-    fi
-  done
-  return "${handlePipelineFailure_resultingStatusCode}"
-}
-
-
 # @description get property value from file
 # if not present compute it using propertyNotFoundCallback (if provided) and store it in property file
 # @arg $1 propertyFile:String the file in which the property will be searched
@@ -547,35 +453,6 @@ Cache::getPropertyValue2() {
 }
 
 
-# @description convert base64 encoded back to target dir
-# it is advised to include the md5sum of the binFile in the path of the target dir
-#
-# @arg $1 targetDir:string the directory in which tar archive will be untarred
-# @arg $2 base64:string the base64 encoded tar czf archive
-# @stderr diagnostics information is displayed
-Compiler::Embed::extractDirFromBase64() {
-
-  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED:-0}" != 1 ]]; then
-    echo >&2 "Requirement Linux::requireTarCommand has not been loaded"
-    exit 1
-  fi
-
-  local targetDir="$1"
-  local base64="$2"
-
-  if [[ ! -d "${targetDir}" ]]; then
-    mkdir -p "${targetDir}"
-    (
-      cd "${targetDir}" || exit 1
-      base64 -d <<<"${base64}" | tar -xzf - 2>/dev/null || {
-        Log::displayError "untar failure, invalid base64 string"
-        exit 1
-      }
-    ) || return 1
-  fi
-}
-
-
 # @description convert base64 encoded back to target file
 # if target file is executable prepend dir of target
 # file to PATH to make binary available everywhere
@@ -606,40 +483,6 @@ Compiler::Embed::extractFileFromBase64() {
 }
 
 
-# @description copy folder structure to target directory
-# merge embedDir with overridden directory if provided and available
-# @arg $1 embedDir:String the path embedded
-# @arg $2 overrideDir:String the path overridden
-# @arg $3 subDir:String the sub-directory to copy from embedDir and/or overrideDir
-# @arg $4 targetDir:String the target directory (default: ${HOME}/${subDir})
-# @env SUDO String allows to use custom sudo prefix command
-# @env HOME used for default value of targetDir arg
-# @env OVERWRITE_CONFIG_FILES indicates if target directory should be overwritten if it exists
-# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env IGNORE_MISSING_SOURCE_DIR
-Conf::copyStructure() {
-  local embedDir="$1"
-  local overrideDir="$2"
-  local subDir="$3"
-  local targetDir="${4:-${HOME}/${subDir}}"
-
-  local configDir
-  # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embedDir}" "${overrideDir}")"
-  if [[ -d "${configDir}/${subDir}" ]]; then
-    # shellcheck disable=SC2154
-    OVERWRITE_CONFIG_FILES=${OVERWRITE_CONFIG_FILES:-1} \
-      PRETTY_ROOT_DIR="${embedDir%/*}" \
-      Install::structure "${configDir}/${subDir}" "${targetDir}"
-  elif [[ "${IGNORE_MISSING_SOURCE_DIR:-0}" = "1" ]]; then
-    return 0
-  else
-    Log::displayError "Directory ${subDir} does not exists in '${embedDir}' or '${overrideDir}'"
-    return 1
-  fi
-}
-
-
 # @description select right file to load depending if file exists in this order:
 # - from conf.override
 # - from embedded file if provided
@@ -661,45 +504,6 @@ Conf::dynamicConfFile() {
     Log::displayWarning "Conf::dynamicConfFile - ${file} does not exist in any config dirs declared"
     return 1
   fi
-}
-
-
-# @description generate temp directory where default
-# and overridden directories have been merged
-#   - if overridden dir exists, create a new temp folder
-#     - copy all files from default folder
-#     - overwrite with files from overridden folder
-#     - (Later) delete files listed in .remove$$ file
-#     - return the path of this temp folder
-#   - else just return the default folder path
-# Then it is easier to pick overridden or default files/folders
-#
-# @arg $1 defaultDir:String usually the embed directory
-# @arg $2 overriddenDirPath:String the path to the directory
-#   that could be overridden
-# @exitcode 1 if default dir does not exist
-# @exitcode 2 if error during copy
-Conf::getOverriddenDir() {
-  local defaultDir="$1"
-  local overriddenDirPath="$2"
-
-  if [[ ! -d "${defaultDir}" ]]; then
-    Log::displayError "Directory ${defaultDir} does not exists"
-    return 1
-  fi
-  if [[ ! -d "${overriddenDirPath}" || -z "$(ls -A "${overriddenDirPath}")" ]]; then
-    Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist, keep default one ${defaultDir}"
-    echo "${defaultDir}"
-    return 0
-  fi
-  local tempDir
-  tempDir="$(mktemp -d)"
-  (
-    shopt -s dotglob
-    cp -R "${defaultDir}/." "${tempDir}"
-    cp -R "${overriddenDirPath}/." "${tempDir}"
-  ) || return 2
-  echo "${tempDir}"
 }
 
 
@@ -1228,224 +1032,6 @@ Framework::createTempFile() {
 }
 
 
-# @description installs file to given directory
-#
-# callbacks parameters `${fromFile} ${targetFile} $@`
-# @arg $1 fromFile - original file to copy
-# @arg $2 targetFile - target file
-# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
-# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
-# @arg $5 successCallback:Function the callback to call when file is installed successfully, by default setUserRights callback is called
-# @arg $6 failureCallback:Function the callback to call when file installation has failed, by default unableToCopyCallback callback is called
-# @arg $@ callbacksParams:String[] additional parameters passed to callbacks
-# @exitcode 1 if fromFile is not readable
-# @exitcode 2 if backup file failure
-# @exitcode 3 if copy failure
-# @exitcode 0 on success or if OVERWRITE_CONFIG_FILES=0
-# @exitcode 0 on success or if CHANGE_WINDOWS_FILES=0 and target file is a windows file
-# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing directory
-# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target file is in windows file system, overwrite it
-# @env USERNAME (default: root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: root) the group name that will be used to set target files ownership
-# @env BASE_MNT_C String windows C drive base PATH
-# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_BEFORE_INSTALL Boolean (default: 1) backup file before installing the file
-Install::file() {
-  local fromFile="$1"
-  local targetFile="$2"
-  local userName="${3:-${USERNAME:-root}}"
-  local userGroup="${4:-${USERGROUP:-root}}"
-  local successCallback=${5:-Install::setUserRightsCallback}
-  local failureCallback=${6:-Install::unableToCopyCallback}
-  shift 6 || true
-
-  if [[ ! -f "${fromFile}" || ! -r "${fromFile}" ]]; then
-    Log::displayError "cannot read source file '${fromFile}'"
-    return 1
-  fi
-
-  # skip if OVERWRITE_CONFIG_FILES is 0 and target file exists
-  if [[ "${OVERWRITE_CONFIG_FILES}" = "0" && -f "${targetFile}" ]]; then
-    Log::displayWarning "File '${targetFile}' exists - Skip install (because OVERWRITE_CONFIG_FILES=0 in .env file)"
-    return 0
-  fi
-
-  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
-  if [[ "${CHANGE_WINDOWS_FILES}" = "0" && "${targetFile}" =~ ^${BASE_MNT_C} ]]; then
-    Log::displayWarning "File '${targetFile}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
-    return 0
-  fi
-
-  local targetDir="${targetFile%/*}"
-  if ! ${SUDO} test -d "${targetDir}"; then
-    ${SUDO:-} mkdir -p "${targetDir}"
-    ${SUDO:-} chown "${userName}":"${userGroup}" "${targetDir}"
-  fi
-  local fromDir="${fromFile%/*}"
-  local fromFilename="${fromFile##*/}"
-
-  local prettyFromDir
-  # shellcheck disable=SC2295
-  prettyFromDir="${fromDir#${PRETTY_ROOT_DIR:-${FRAMEWORK_ROOT_DIR}}/}"
-  if diff -q "${fromFile}" "${targetFile}" &>/dev/null; then
-    Log::displayStatus "No changes detected. No need to update '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
-    return 0
-  fi
-
-  if [[ "${BACKUP_BEFORE_INSTALL:-1}" = "1" ]]; then
-    Backup::file "${targetFile}" || return 2
-  fi
-
-  if ${SUDO:-} cp "${fromFile}" "${targetFile}"; then
-    # shellcheck disable=SC2295
-    Log::displaySuccess "Installed file '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
-    ${successCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
-  else
-    # shellcheck disable=SC2295
-    Log::displayError "unable to copy file '${targetFile}' from '${fromDir#${FRAMEWORK_ROOT_DIR}/}/${fromFilename}'"
-    ${failureCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
-    return 3
-  fi
-}
-
-
-# @description install callback
-#   set file with root ownership and execution bit
-# @arg $1 fromFile:String
-# @arg $2 targetFile:String
-# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
-# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
-# @env USERNAME (default: root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: root) the group name that will be used to set target files ownership
-# @env SUDO String allows to use custom sudo prefix command
-# @exitcode 1 on any failure
-# @see Install::file
-Install::setUserRightsCallback() {
-  # shellcheck disable=SC2034 # $1 not used
-  local fromFile="$1"
-  local targetFile="$2"
-  local userName="${3:-${USERNAME:-root}}"
-  local userGroup="${4:-${USERGROUP:-root}}"
-
-  ${SUDO:-} chown "${userName}":"${userGroup}" "${targetFile}"
-}
-
-
-# @description install dir to given directory but backup it before
-# @arg $1 fromDir:String the source base directory
-# @arg $2 toDir:String the target base directory
-# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing files
-# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target directory is in windows file system, overwrite it
-# @env USERNAME (default: ${USERNAME} if SUDO empty else root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: ${USERGROUP} if SUDO empty else root) the group name that will be used to set target files ownership
-# @env BASE_MNT_C String windows C drive base PATH
-# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_BEFORE_INSTALL Boolean (default:1) backup directory before installing the dir
-# @exitcode 1 if source directory is not readable
-# @exitcode 2 if error during structure replication
-# @exitcode 2 if error during file copy
-# @exitcode 0 if copy successful
-# @exitcode 0 with warning message if CHANGE_WINDOWS_FILES=0 and target directory in C drive
-# @stderr diagnostics information is displayed, skipped information if OVERWRITE_CONFIG_FILES or CHANGE_WINDOWS_FILES are set to 1
-Install::structure() {
-  local fromDir="$1"
-  local toDir="$2"
-  local userName="root"
-  local userGroup="root"
-  if [[ -z "${SUDO:-}" ]]; then
-    userName="${USERNAME:-root}"
-    userGroup="${USERGROUP:-root}"
-  fi
-
-  if [[ ! -d "${fromDir}" || ! -r "${fromDir}" ]]; then
-    Log::displayError "Install::structure - cannot read source directory '${fromDir}'"
-    return 1
-  fi
-
-  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
-  if [[ "${CHANGE_WINDOWS_FILES:-0}" = "0" && "${toDir}" =~ ^${BASE_MNT_C:-/mnt/c} ]]; then
-    Log::displayWarning "Install::structure - Directory '${fromDir}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
-    return 0
-  fi
-
-  # first replicate directory structure
-  # shellcheck disable=SC2317
-  createStructure() {
-    local dir="$1"
-    if ! ${SUDO} test -d "${dir}"; then
-      if ! ${SUDO:-} mkdir -p "${dir}"; then
-        Log::displayError "Install::structure - impossible to create directory '${dir}'"
-        exit 1
-      fi
-    fi
-
-    if ! ${SUDO:-} chown "${userName}":"${userGroup}" "${dir}"; then
-      Log::displayError "Install::structure - impossible to update directory owner '${dir}' with ${userName}:${userGroup}"
-      exit 1
-    fi
-  }
-  local dir
-
-  (
-    local dir
-    shopt -s lastpipe
-    # -links 2 allows to exclude empty directories
-    ${SUDO:-} find "${fromDir}" -depth -type d -links 2 -print0 |
-      while read -rd '' dir; do
-        if ! createStructure "${toDir}/${dir#"${fromDir}"}"; then
-          # error already reported by createStructure
-          exit 1
-        fi
-      done || {
-      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
-        Log::displayError "Install::structure - replicated directory structure - find directories on '${fromDir}' resulted in an error"
-        exit 2
-      fi
-    }
-  ) || return 2
-
-  # for each file, copy it
-  (
-    local file
-    shopt -s lastpipe
-    ${SUDO:-} find "${fromDir}" -depth -type f -print0 |
-      while read -rd '' file; do
-        local localFile="${file#"${fromDir}/"}"
-        if ! Install::file "${fromDir}/${localFile}" "${toDir}/${localFile}"; then
-          # error already reported by Install::file
-          exit 1
-        fi
-      done || {
-      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
-        Log::displayError "Install::structure - replicated file structure - find files on '${fromDir}' resulted in an error"
-        exit 2
-      fi
-    }
-  ) || return 3
-
-  # shellcheck disable=SC2295
-  Log::displaySuccess "Installed directory '${toDir#${PRETTY_ROOT_DIR}/}' from '${fromDir#${PRETTY_ROOT_DIR}/}'"
-}
-
-
-# @description install callback
-#   default callback used called when file copy has failed
-# @arg $1 fromFile:String
-# @arg $2 targetFile:String
-# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @exitcode 1 always fail
-# @stderr diagnostics information is displayed
-# @see Install::file
-Install::unableToCopyCallback() {
-  local fromDir="$1"
-  local fileName="$2"
-  local targetFile="$3"
-  Log::fatal "unable to copy file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fileName}' to '${targetFile}'"
-}
-
-
 # @description the command launch different actions(install, configure, test)
 # depending on the options selected
 # @env SKIP_INSTALL
@@ -1934,27 +1520,10 @@ Linux::getDistributorId() {
 }
 
 
-# @description checks if Systemd is running
-# @noargs
-# @exitcode 1 if systemd is not running
-# @stdout diagnostics information
-Linux::isSystemdRunning() {
-  if [[ "$(readlink -f /sbin/init)" = "/usr/lib/systemd/systemd" ]] &&
-    systemctl status --no-pager &>/dev/null; then
-    Log::displayInfo "SystemD is running"
-    return 0
-  fi
-  Log::displayInfo "SystemD is not running"
-  return 1
-}
-
-
 # @description ensure command tar is available
 # @exitcode 1 if tar command not available
 # @stderr diagnostics information is displayed
 Linux::requireTarCommand() {
-  export REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED=1
-
   Assert::commandExists tar
 }
 
@@ -2059,33 +1628,6 @@ Log::displaySkipped() {
     echo -e "${__SKIPPED_COLOR}SKIPPED - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
   fi
   Log::logSkipped "$1"
-}
-
-
-# @description Display message using info color (blue) but warning level
-# @arg $1 message:String the message to display
-# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
-# @env LOG_CONTEXT String allows to contextualize the log
-Log::displayStatus() {
-  local type="${2:-STATUS}"
-  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
-    Log::computeDuration
-    echo -e "${__INFO_COLOR}${type}  - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
-  fi
-  Log::logStatus "$1" "${type}"
-}
-
-
-# @description Display message using success color (bg green/fg white)
-# @arg $1 message:String the message to display
-# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
-# @env LOG_CONTEXT String allows to contextualize the log
-Log::displaySuccess() {
-  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
-    Log::computeDuration
-    echo -e "${__SUCCESS_COLOR}SUCCESS - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
-  fi
-  Log::logSuccess "$1"
 }
 
 
@@ -2206,24 +1748,6 @@ Log::logMessage() {
 Log::logSkipped() {
   if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
     Log::logMessage "${2:-SKIPPED}" "$1"
-  fi
-}
-
-
-# @description log message to file
-# @arg $1 message:String the message to display
-Log::logStatus() {
-  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
-    Log::logMessage "${2:-STATUS}" "$1"
-  fi
-}
-
-
-# @description log message to file
-# @arg $1 message:String the message to display
-Log::logSuccess() {
-  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
-    Log::logMessage "${2:-SUCCESS}" "$1"
   fi
 }
 
@@ -2685,101 +2209,6 @@ UI::theme() {
     __HELP_NORMAL=''
   fi
 }
-
-
-# @description Check that command version is greater than expected minimal version
-# display warning if command version greater than expected minimal version
-# display error if command version less than expected minimal version and exit 1
-# @arg $1 commandName:String command path
-# @arg $2 argVersion:String command line parameters to launch to get command version
-# @arg $3 minimalVersion:String expected minimal command version
-# @arg $4 parseVersionCallback:Function
-# @arg $5 help:String optional help message to display if command does not exist
-# @exitcode 0 if command version greater or equal to expected minimal version
-# @exitcode 1 if command version less than expected minimal version
-# @exitcode 2 if command does not exist
-Version::checkMinimal() {
-  local commandName="$1"
-  local argVersion="$2"
-  local minimalVersion="$3"
-  local parseVersionCallback=${4:-Version::parse}
-  local help="${5:-}"
-
-  Assert::commandExists "${commandName}" "${help}" || return 2
-
-  # shellcheck disable=SC2034
-  local status=0
-  # shellcheck disable=SC2034
-  local -a pipeStatus=()
-  local version
-  version="$("${commandName}" "${argVersion}" 2>&1 | ${parseVersionCallback} || Bash::handlePipelineFailure status pipeStatus)"
-
-  Log::displayDebug "check ${commandName} version ${version} against minimal ${minimalVersion}"
-
-  local result=0
-  Version::compare "${version}" "${minimalVersion}" || result=$?
-  case "${result}" in
-    1)
-      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
-      ;;
-    2)
-      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
-      return 1
-      ;;
-    *)
-      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
-      ;;
-  esac
-}
-
-
-# @description compare 2 version numbers
-# @arg $1 version1:String version 1
-# @arg $2 version2:String version 2
-# @exitcode 0 if equal
-# @exitcode 1 if version1 > version2
-# @exitcode 2 else
-Version::compare() {
-  if [[ "$1" = "$2" ]]; then
-    return 0
-  fi
-  local IFS=.
-  # shellcheck disable=2206
-  local i ver1=($1) ver2=($2)
-  # fill empty fields in ver1 with zeros
-  for ((i = ${#ver1[@]}; i < ${#ver2[@]}; i++)); do
-    ver1[i]=0
-  done
-  for ((i = 0; i < ${#ver1[@]}; i++)); do
-    if [[ -z "${ver2[i]+unset}" ]] || [[ -z ${ver2[i]} ]]; then
-      # fill empty fields in ver2 with zeros
-      ver2[i]=0
-    fi
-    if ((10#${ver1[i]} > 10#${ver2[i]})); then
-      return 1
-    fi
-    if ((10#${ver1[i]} < 10#${ver2[i]})); then
-      return 2
-    fi
-  done
-  return 0
-}
-
-
-# @description filter to keep only version number from a string
-# @arg $@ files:String[] the files to filter
-# @exitcode * if one of the filter command fails
-# @stdin you can use stdin as alternative to files argument
-# @stdout the filtered content
-# shellcheck disable=SC2120
-Version::parse() {
-  # match anything, print(p), exit on first match(Q)
-  sed -En \
-    -e 's/\x1b\[[0-9;]*[mGKHF]//g' \
-    -e 's/[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/' \
-    -e '//{p;Q}' \
-    "$@"
-}
 # FUNCTIONS
 
 # shellcheck disable=SC2034
@@ -2795,7 +2224,7 @@ defaultBeforeParseCallback() {
 }
 
 scriptName() {
-  echo "Docker"
+  echo "MLocate"
 }
 
 beforeParseCallback() {
@@ -3124,32 +2553,19 @@ commandOptionParseFinished() {
 }
 
 
-Linux::requireTarCommand
-Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/e37a5e19a6e2fa01a3643ac37cd2a1d691f6f004795e0fecea7d21820751880e/conf_dir" \
-  "H4sIAAAAAAAA/+yV4WvaQBTA+zl/xauO5cvSi+1ioSOD1mQztGuKRgZlIGfuuRwmdyF3STvH/vdhxEltmWOKWzd/Hzw5n+8peb/3jkZUJRbDykJREZpyqlAdMcJkPMHiSCUHm2Pbtn3qOPVp2/bqaTsny/f1fcs5brUOwN5C7bWUStPiwN641uqfeyY0D8mICzLrAqO5XYwmeCFchxH4XhC9gqgb9OFdcOVD5/waLnwY3Hjnke/BxyDqhoNoFhp0/K3/DIOPIZZZRgUDq4J5Z1uxzHKpEF6+JQwrIso0fQM6QWEA1BqsBFpM3glLCrQUFhWP0TVXMhUZWGOwlGmMufGnn+uv8tB/LjQWNNa8wuUMmG46BNb5/7rdXvG/fWKf7v3fBc1DUqqingEoKpiqpPZFf8lRoZ419JQLruEJS7IJ4wVYOTRefL3td4ed807XH3pB7xuZKZGi5lKohgGgZRknPw8jw3m3zcLnFe8o15CWMWfAMNeJ24JUUgYp/5xoK5MMYSwL+GQAAGR0guZc2/rVNYGqxjJ/A8IPtzdnZ/Miv/WlhefPye71PPQ/L+SYp7jj/d8+dh7t/xNn7/8u+F/3/5N7H+9zWWjwws6l3xt2w37kmqXg92eEkKIUP6SQ8cQ0AJqAgo5SXKQclTxlMOH6UaqLQXDlXQaR21p+tLgb3vTC9z2/33fzlHLxb42XPXv2/MV8DwAA///F/2YUABAAAA=="
-
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e37a5e19a6e2fa01a3643ac37cd2a1d691f6f004795e0fecea7d21820751880e/conf_dir"
-
 
 helpDescription() {
-  echo "Installs docker inside wsl."
-}
-
-fortunes() {
-  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- You can now use ${__HELP_EXAMPLE}docker compose${__RESET_COLOR} or ${__HELP_EXAMPLE}docker-compose${__RESET_COLOR} indifferently thanks to installed docker compose plugin."
-  echo "%"
+  echo "this is an example that can be used to debug or as a template for other install scripts"
 }
 
 dependencies() {
   echo "installScripts/MandatorySoftwares"
-  echo "installScripts/WslDefaultConfig"
-  echo "installScripts/DockerCompose"
 }
 
 # jscpd:ignore-start
-helpVariables() { :; }
+fortunes() { :; }
 listVariables() { :; }
+helpVariables() { :; }
 defaultVariables() { :; }
 checkVariables() { :; }
 breakOnConfigFailure() { :; }
@@ -3160,190 +2576,64 @@ isTestConfigureImplemented() { :; }
 isTestInstallImplemented() { :; }
 # jscpd:ignore-end
 
-cleanBeforeExport() {
-  if command -v docker; then
-    Log::displayInfo "Cleaning docker system"
-    docker system prune -a --volumes --force || true
-  fi
-}
-
-testCleanBeforeExport() {
-  :
-}
-
-# REQUIRE Linux::requireUbuntu
-# REQUIRE Linux::requireExecutedAsUser
 install() {
-  if isUbuntuMinimum24; then
-    installFromUbuntu24
-  else
-    installFromUbuntu20
+  # download mlocate package
+  if ! dpkg -s mlocate &>/dev/null; then
+    (
+      mkdir -p /tmp/mlocate true
+      cd /tmp/mlocate || exit 1
+      # download mlocate package
+      apt-get download mlocate
+      # extract it
+      dpkg-deb -R mlocate_*_amd64.deb /tmp/mlocate/deb
+      rm ./*.deb
+      # shellcheck disable=SC1003
+      BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
+      # update configuration in order to remove /mnt/c, docker and other cache directories
+      PRUNEPATHS="${BASE_MNT_C} /var/cache /var/www /var/lib/docker ${USERHOME}/.npm ${USERHOME}/.cache"
+      sed -i -r \
+        "s#^PRUNEPATHS=\"(.*)\"\$#PRUNEPATHS=\"\1 ${PRUNEPATHS} \"#" \
+        deb/etc/updatedb.conf
+      sed -i -r 's/^# PRUNENAMES=/PRUNENAMES=/' deb/etc/updatedb.conf
+      # recompress package
+      dpkg-deb -b deb mlocate.deb
+      rm -Rf deb
+      # install the new package
+      dpkg -i mlocate.deb
+    )
   fi
-}
-
-isUbuntuMinimum24() {
-  Version::compare "${VERSION_ID}" "24.04"
-}
-
-installFromUbuntu24() {
-  Log::displayInfo "install docker required packages"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    ca-certificates \
-    curl
-
-  sudo sh -c 'install -m 0755 -d /etc/apt/keyrings'
-  Retry::default sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-  Log::displayInfo "install docker apt source list"
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-    https://download.docker.com/linux/ubuntu \
-    ${VERSION_CODENAME} stable" |
-    sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-
-  Log::displayInfo "install docker"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    containerd.io \
-    docker-buildx-plugin \
-    docker-ce \
-    docker-ce-cli \
-    docker-compose-plugin
-}
-
-installFromUbuntu20() {
-  Log::displayInfo "install docker required packages"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg2
-
-  # Docker utilizes iptables to implement network isolation.
-  # For good reason, Debian uses the more modern nftables, but this means
-  # that Docker cannot automatically tweak the Linux firewall.
-  # Given this, you probably want to configure Debian to use the legacy
-  # iptables by default
-  sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
-  sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
-
-  Log::displayInfo "install docker apt source list"
-  Retry::default curl -fsSL "https://download.docker.com/linux/${ID}/gpg" | sudo apt-key add --no-tty --batch -
-  local dockerSource="deb [arch=amd64] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable"
-  if ! grep -Fq "${dockerSource}" "/etc/apt/sources.list.d/docker.list"; then
-    echo "deb [arch=amd64] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" | sudo tee /etc/apt/sources.list.d/docker.list
-    Linux::Apt::update
-  fi
-
-  Log::displayInfo "install docker"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    containerd.io \
-    docker-ce \
-    docker-ce-cli
 }
 
 testInstall() {
   local -i failures=0
-
-  if ! Linux::isSystemdRunning; then
-    if grep -q -E '^systemd=true' /etc/wsl.conf; then
-      Log::fatal "You need to restart wsl by running 'wsl --shutdown' from powershell and re-run this script, in order to start with systemd"
-    else
-      Log::fatal "/etc/wsl.conf has not been updated with systemd=true instruction, please check this install logs"
-    fi
-  fi
-
-  Version::checkMinimal "docker" --version "25.0.3" || ((++failures))
-
-  Log::displayInfo "docker executable path $(command -v docker || true)"
-  Log::displayInfo "docker version $(docker --version || true)"
-  Log::displayInfo "docker-compose version $(docker-compose --version || true)"
-
-  dockerIsStarted() {
-    DOCKER_PS="$(docker ps 2>&1 || true)"
-    [[ ! "${DOCKER_PS}" =~ "Cannot connect to the Docker daemon" ]]
-  }
-  Log::displayInfo "Checking if docker is started ..."
-  if dockerIsStarted; then
-    Log::displaySuccess "Docker connection success"
-  else
-    Log::displayError "Docker is not started"
+  dpkg -s mlocate &>/dev/null || {
+    Log::displayError "missing mlocate binary"
     ((++failures))
-  fi
+  }
+  Assert::commandExists "locate" || ((++failures))
   return "${failures}"
 }
 
-configureDockerPlugin() {
-  Log::displayInfo "Configuring docker-compose as docker plugin"
-  # create the docker plugins directory if it doesn't exist yet
-  # shellcheck disable=SC2153
-  mkdir -p "${HOME}/.docker/cli-plugins"
-  rm -f "${HOME}/.docker/cli-plugins/docker-compose" || true
-  sudo ln -sf /usr/local/bin/docker-compose "${HOME}/.docker/cli-plugins/docker-compose"
-}
-
 configure() {
-  Log::displayInfo "allowing user '${USERNAME}' to use docker"
-  sudo getent group docker >/dev/null || sudo groupadd docker || true
-  sudo usermod -aG docker "${USERNAME}" || true
+  # update database
+  export MYPRUNEPATHS="/tmp /var/spool /media /var/lib/os-prober /var/lib/ceph /home/.ecryptfs /var/lib/schroot /var/cache /var/www /var/lib/docker"
+  dpkg --configure -a
 
-  if ! isUbuntuMinimum24; then
-    configureDockerPlugin
-  fi
-
-  sudo systemctl enable docker.service
-  sudo systemctl enable containerd.service
-
-  # shellcheck disable=SC2154
-  Conf::copyStructure \
-    "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
-    ".bash-dev-env"
+  Log::displayInfo "Update completion database, can take a while ..."
+  time updatedb
 }
 
 testConfigure() {
   local -i failures=0
-  Assert::fileExists "${HOME}/.bash-dev-env/aliases.d/docker.sh" || ((++failures))
-  Assert::fileExists "${HOME}/.bash-dev-env/profile.d/docker.sh" || ((++failures))
-  Log::displayInfo "check if docker-compose binary is working"
-  if ! docker-compose version &>/dev/null; then
-    Log::displayError "docker-compose failure"
-    ((++failures))
-  fi
-
-  Log::displayInfo "check if docker compose plugin is working"
-  if ! docker compose version &>/dev/null; then
-    Log::displayError "docker compose plugin failure"
-    ((++failures))
-  fi
-
-  asUserToAvoidWslRestart() {
-    sudo -u "${USERNAME}" -i "$@"
-  }
-  Log::displayInfo "check if docker dns is working"
-  asUserToAvoidWslRestart docker run busybox ping google.com -c 1 &>/dev/null || {
-    ((++failures))
-    Log::displayError "google.com is not reachable from docker, dns issue ?"
-    ping google.com -c 1 &>/dev/null || {
-      Log::displayError "google.com is not reachable from host neither"
-      ((++failures))
-    }
-  }
-
-  Log::displayInfo "check if docker container can be launched"
-  if ! asUserToAvoidWslRestart docker run --rm hello-world | grep -q "Hello from Docker!"; then
-    Log::displayError "docker container cannot be launched"
-    ((++failures))
-  fi
-  asUserToAvoidWslRestart docker image rm hello-world || true
-
+  grep -E '^PRUNEPATHS=".*( /mnt/c){1}.*"$' /etc/updatedb.conf || ((++failures))
+  grep -E '^PRUNEPATHS=".*( /c){1}.*"$' /etc/updatedb.conf || ((++failures))
   return "${failures}"
 }
 
 
 
 optionHelpCallback() {
-  "DockerCommandHelp"
+  "MLocateCommandHelp"
   exit 0
 }
 
@@ -3369,7 +2659,7 @@ afterParseCallback() {
 
 
 # ------------------------------------------
-# Command DockerCommand
+# Command MLocateCommand
 # ------------------------------------------
 
 # options variables initialization
@@ -3394,8 +2684,8 @@ declare optionVersion="0"
 declare optionQuiet="0"
 # arguments variables initialization
 declare command="install"
-# @description parse command options and arguments for DockerCommand
-DockerCommandParse() {
+# @description parse command options and arguments for MLocateCommand
+MLocateCommandParse() {
   Log::displayDebug "Command ${SCRIPT_NAME} - parse arguments: ${BASH_FRAMEWORK_ARGV[*]}"
   Log::displayDebug "Command ${SCRIPT_NAME} - parse filtered arguments: ${BASH_FRAMEWORK_ARGV_FILTERED[*]}"
   SKIP_CONFIGURE="0"
@@ -3881,8 +3171,8 @@ DockerCommandParse() {
 
 }
 
-# @description display command options and arguments help for DockerCommand
-DockerCommandHelp() {
+# @description display command options and arguments help for MLocateCommand
+MLocateCommandHelp() {
   echo -e "${__HELP_TITLE_COLOR}SYNOPSIS:${__RESET_COLOR}"
   helpDescriptionFunction
 
@@ -3890,7 +3180,7 @@ DockerCommandHelp() {
   # ------------------------------------------
   # usage section
   # ------------------------------------------
-  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "Docker [OPTIONS] [ARGUMENTS]"
+  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "MLocate [OPTIONS] [ARGUMENTS]"
   echo
   # ------------------------------------------
   # usage/options section
@@ -3898,7 +3188,7 @@ DockerCommandHelp() {
   optionsAltList=("[--skip-config|--skip-configure|--skip-configuration|-sc]" "[--skip-install|--skip-installation|-si]" "[--skip-test|--skip-tests|-st]" "[--skip-deps|--skip-dependencies|-sd]" "[--prepare-export|-e]" "[--profile|-p <profile>]" "[--help|-h]" "[--config]" "[--bash-framework-config <bash-framework-config>]" "[--verbose|-v]" "[-vv]" "[-vvv]" "[--log-level <log-level>]" "[--log-file <log-file>]" "[--display-level <display-level>]" "[--no-color]" "[--theme <theme>]" "[--version]" "[--quiet|-q]"
   )
   Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" \
-    "Docker" "${optionsAltList[@]}"
+    "MLocate" "${optionsAltList[@]}"
   echo
 
   # ------------------------------------------
@@ -4093,7 +3383,7 @@ DockerCommandHelp() {
   # ------------------------------------------
   echo
   echo -n -e "${__HELP_TITLE_COLOR}SOURCE FILE: ${__RESET_COLOR}"
-  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Docker/Docker-binary.yaml"
+  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/BashUtils/MLocate-binary.yaml"
   # ------------------------------------------
   # license section
   # ------------------------------------------
@@ -4109,7 +3399,7 @@ DockerCommandHelp() {
 
 beforeParseCallback
 
-DockerCommandParse "$@"
+MLocateCommandParse "$@"
 MAIN_FUNCTION_NAME="main"
 main() {
 

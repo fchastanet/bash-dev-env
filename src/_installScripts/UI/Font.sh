@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/UI/Font.ps1" as fontScript
+# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/UI/.Xresources" as xResources
 
 fontBeforeParseCallback() {
   Git::requireGitCommand
@@ -27,9 +28,7 @@ checkVariables() { :; }
 breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
 isInstallImplemented() { :; }
-configure() { :; }
 isConfigureImplemented() { :; }
-testConfigure() { :; }
 isTestConfigureImplemented() { :; }
 isTestInstallImplemented() { :; }
 # jscpd:ignore-end
@@ -74,4 +73,15 @@ testInstall() {
     Log::displayError "Font mesloLGS_NF_regular.ttf not installed in windows folder: ${localAppData}/Microsoft/Windows/Fonts"
   }
   return "${failures}"
+}
+
+configure() {
+  # shellcheck disable=SC2154
+  Install::file \
+    "${embed_file_xResources}" \
+    "${HOME}/.Xresources"
+}
+
+testConfigure() {
+  Assert::fileExists "${HOME}/.Xresources" || ((++failures))
 }

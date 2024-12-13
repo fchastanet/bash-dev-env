@@ -34,6 +34,16 @@ isConfigureImplemented() { :; }
 isTestConfigureImplemented() { :; }
 # jscpd:ignore-end
 
+cleanBeforeExport() {
+  rm -f "${HOME}/.motd_shown" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  Assert::fileNotExists "${HOME}/.motd_shown" || ((++failures))
+  return "${failures}"
+}
+
 configure() {
   # shellcheck disable=SC2154
   Conf::copyStructure \

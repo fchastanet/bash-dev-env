@@ -2600,8 +2600,12 @@ helpLongDescription() {
 }
 
 fortunes() {
-  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}anacron${__RESET_COLOR} is the daemon that completes cron for computers that are not on at all times, check out some examples:"
-  echo -e "${__HELP_EXAMPLE}ls -al /etc/cron.{hourly,daily,weekly,monthly,yearly}${__RESET_COLOR}"
+  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}anacron${__RESET_COLOR}"
+  echo -e "is the daemon that completes cron for computers that are not on at all times, check out"
+  echo -e "some examples:${__HELP_EXAMPLE}"
+  find /etc/cron.{hourly,daily,weekly,monthly,yearly} -type f 2>/dev/null |
+    grep -v 0anacron | grep -v '.placeholder' | sed -E -e 's/^/  - /'
+  echo -e "${__RESET_COLOR}"
   echo "%"
 }
 

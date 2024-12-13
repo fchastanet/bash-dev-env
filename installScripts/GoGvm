@@ -2763,11 +2763,6 @@ configure() {
 
     touch "${HOME}/.gvm/latestVersionInitialized"
   fi
-  # install useful dependencies
-  GOBIN="${HOME}/.gvm/go/bin" go install mvdan.cc/gofumpt@latest
-  GOBIN="${HOME}/.gvm/go/bin" go install github.com/bwplotka/bingo@latest
-  GOBIN="${HOME}/.gvm/go/bin" go install golang.org/x/tools/cmd/goimports@latest
-  GOBIN="${HOME}/.gvm/go/bin" go install github.com/mgechev/revive@latest
 }
 
 testConfigure() {

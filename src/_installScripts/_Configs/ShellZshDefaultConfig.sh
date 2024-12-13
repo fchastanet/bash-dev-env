@@ -48,6 +48,16 @@ isConfigureImplemented() { :; }
 isTestConfigureImplemented() { :; }
 # jscpd:ignore-end
 
+cleanBeforeExport() {
+  rm -f "${HOME}/.zcompdump" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  Assert::fileNotExists "${HOME}/.zcompdump" || ((++failures))
+  return "${failures}"
+}
+
 install() {
   local -a packages=(
     zsh

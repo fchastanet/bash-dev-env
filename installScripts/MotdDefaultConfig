@@ -401,6 +401,22 @@ Assert::fileNotExecutable() {
 }
 
 
+# @description asserts that file does not exist
+# @arg $1 file:String
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 existing file
+# @env SUDO String allows to use custom sudo prefix command
+# @stderr diagnostics information is displayed
+Assert::fileNotExists() {
+  local file="$1"
+  Log::displayInfo "Checking file ${file} does not exist"
+  if ${SUDO:-} test -f "${file}" &>/dev/null; then
+    Log::displayError "file ${file} still exists"
+    return 1
+  fi
+}
+
+
 # @description check if argument respects 2 or more words separated by a space
 # it supports accentuated characters and names with hyphen(-)
 # @arg $1 firstNameLastName:String
@@ -3032,10 +3048,10 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/dd3696c152fdfe6d3c145c4e8d10aa6ff85f2eddc776f531be73f287d6ea7c94/conf_dir" \
-  "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"
+  "${PERSISTENT_TMPDIR:-/tmp}/c3f94016d9a464390650dc7f82a3af348d8739dd2b02286a522cc126b90a21eb/conf_dir" \
+  "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"
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/dd3696c152fdfe6d3c145c4e8d10aa6ff85f2eddc776f531be73f287d6ea7c94/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/c3f94016d9a464390650dc7f82a3af348d8739dd2b02286a522cc126b90a21eb/conf_dir"
 
 
 helpDescription() {
@@ -3070,6 +3086,16 @@ isTestInstallImplemented() { :; }
 isConfigureImplemented() { :; }
 isTestConfigureImplemented() { :; }
 # jscpd:ignore-end
+
+cleanBeforeExport() {
+  rm -f "${HOME}/.motd_shown" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  Assert::fileNotExists "${HOME}/.motd_shown" || ((++failures))
+  return "${failures}"
+}
 
 configure() {
   # shellcheck disable=SC2154

@@ -11,7 +11,7 @@ compilerConfig: &defaultFrameworkConfig
     - ${FRAMEWORK_ROOT_DIR}/src
   binDir: ${BASH_DEV_ENV_ROOT_DIR}/bin
   templateDirs:
-    - ${COMPILER_ROOT_DIR}/examples/templates
+    - ${TEMPLATES_ROOT_DIR}
     - ${BASH_DEV_ENV_ROOT_DIR}/src
   templateFile: binFile.gtpl
 
