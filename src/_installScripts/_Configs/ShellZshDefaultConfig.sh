@@ -53,7 +53,7 @@ cleanBeforeExport() {
 }
 
 testCleanBeforeExport() {
-  ((failures=0)) || true
+  ((failures = 0)) || true
   Assert::fileNotExists "${HOME}/.zcompdump" || ((++failures))
   return "${failures}"
 }

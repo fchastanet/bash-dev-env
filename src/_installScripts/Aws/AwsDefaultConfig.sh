@@ -50,7 +50,7 @@ cleanBeforeExport() {
 }
 
 testCleanBeforeExport() {
-  ((failures=0)) || true
+  ((failures = 0)) || true
   Assert::fileNotExists "${HOME}/.aws/credentials" || ((++failures))
   Assert::fileNotExists "${HOME}/.aws/config" || ((++failures))
   return "${failures}"

@@ -47,7 +47,7 @@ cleanBeforeExport() {
 }
 
 testCleanBeforeExport() {
-  ((failures=0)) || true
+  ((failures = 0)) || true
   if [[ -f "${HOME}/.gitconfig" ]]; then
     if git config --global --get user.name &>/dev/null; then
       Log::displayError "Export - .gitconfig user.name has not been removed"
@@ -96,7 +96,7 @@ configure() {
   }
   configureMeld "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ||
     configureMeld "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe" ||
-      Log::displayHelp "File ${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe does not exist - windows meld is not installed, it could have been linked into wsl as git diff"
+    Log::displayHelp "File ${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe does not exist - windows meld is not installed, it could have been linked into wsl as git diff"
 
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
@@ -107,10 +107,10 @@ testConfigure() {
   Assert::fileExists "${HOME}/.gitconfig" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/GitDefaultConfig/gitignore" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/aliases.d/git.sh" || ((++failures))
-  if [[
+  if [[ 
     -f "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ||
-    -f "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe"
-  ]]; then
+    -f "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe" ]] \
+    ; then
     Assert::symLinkValid /usr/local/bin/meld
   fi
   # git config
