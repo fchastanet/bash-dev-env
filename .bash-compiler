@@ -1,2 +1,4 @@
 FRAMEWORK_ROOT_DIR=${ROOT_DIR}/vendor/bash-tools-framework
 BASH_DEV_ENV_ROOT_DIR=${ROOT_DIR}
+TEMPLATES_ROOT_DIR=${HOME}/fchastanet/bash-compiler/examples/templates
+FILTER_REGEX_EXCLUDE=^vendor/

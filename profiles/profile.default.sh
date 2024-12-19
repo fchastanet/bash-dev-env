@@ -21,6 +21,7 @@ CONFIG_LIST+=(
 
 # optional packages
 CONFIG_LIST+=(
+  "installScripts/MLocate"
   "installScripts/Docker"
   "installScripts/FortunesForProfile"
   "installScripts/Saml2Aws"
@@ -34,7 +35,7 @@ CONFIG_LIST+=(
   "installScripts/JavaSdkManagerDependencies"
   "installScripts/ComposerDependencies"
   "installScripts/NodeDependencies"
-  "installScripts/GoGvm"
+  "installScripts/GoDependencies"
 )
 
 # default configuration

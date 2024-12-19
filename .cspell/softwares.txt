@@ -49,8 +49,11 @@ github
 GITHUB
 gnupg
 gofmt
+gofumpt
 gogvm
 goimports
+golangci
+golint
 goserver
 gpgsign
 graphviz
@@ -63,6 +66,7 @@ htmlhintrc
 Hyperv
 hyphens
 iconify
+jenkins
 jetbrains
 Jetbrains
 keygen
@@ -120,6 +124,7 @@ phpcs
 phpmd
 phpstan
 phpstorm
+phpunit
 picoweb
 pixbuf
 plantuml
@@ -140,6 +145,7 @@ Shellcheck
 shellcheck
 smetana
 SpacesAftertabs
+staticcheck
 stylelint
 substr
 Sume

@@ -105,7 +105,7 @@ getDistroImageDir() {
 
 getDistroFile() {
   local distroVersion
-  distroVersion="$(Version::parse "${DISTRO_VERSION}")"
+  distroVersion="$(Version::parse <<<"${DISTRO_VERSION}")"
   echo "$(getDistroImageDir)-${DISTRO_NAME}-export-${distroVersion}.tar.gz"
 }
 
@@ -258,7 +258,7 @@ else
     Log::displayInfo "Installing ... using ${installCmd[*]}"
     REMOTE_USER=${USERNAME} \
       REMOTE_PWD="${DISTRO_BASH_DEV_ENV_TARGET_DIR}" \
-      runWslCmd bash --noprofile -c "SSH_PRIVATE_KEY='$(getSshPrivateKey)' ${installCmd[*]}" || exit 1
+      runWslCmd bash --noprofile -c "SSH_PRIVATE_KEY='$(getSshPrivateKey)' DISTRO_MODE=1 ${installCmd[*]}" || exit 1
   ) || exit 1
   Log::displayInfo "Restarting wsl distribution ${DISTRO_NAME}"
   wsl.exe --terminate "${DISTRO_NAME}"
@@ -273,7 +273,7 @@ fi
 if [[ "${optionUpload}" = "1" ]]; then
   declare distroFile
   distroFile="$(getDistroFile)"
-  if [[ ! -f "" ]]; then
+  if [[ ! -f "${distroFile}" ]]; then
     Log::fatal "missing ${distroFile}, have you forgot --export option ?"
   fi
   Log::displaySkipped "Not implemented yet"

@@ -354,6 +354,22 @@ Assert::fileExists() {
 }
 
 
+# @description asserts that file does not exist
+# @arg $1 file:String
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 existing file
+# @env SUDO String allows to use custom sudo prefix command
+# @stderr diagnostics information is displayed
+Assert::fileNotExists() {
+  local file="$1"
+  Log::displayInfo "Checking file ${file} does not exist"
+  if ${SUDO:-} test -f "${file}" &>/dev/null; then
+    Log::displayError "file ${file} still exists"
+    return 1
+  fi
+}
+
+
 # @description check if argument respects 2 or more words separated by a space
 # it supports accentuated characters and names with hyphen(-)
 # @arg $1 firstNameLastName:String
@@ -3066,6 +3082,18 @@ isConfigureImplemented() { :; }
 isTestConfigureImplemented() { :; }
 isTestInstallImplemented() { :; }
 # jscpd:ignore-end
+
+cleanBeforeExport() {
+  rm -f "${HOME}/.aws/credentials" || true
+  rm -f "${HOME}/.aws/config" || true
+}
+
+testCleanBeforeExport() {
+  ((failures=0)) || true
+  Assert::fileNotExists "${HOME}/.aws/credentials" || ((++failures))
+  Assert::fileNotExists "${HOME}/.aws/config" || ((++failures))
+  return "${failures}"
+}
 
 configure() {
   local configDir

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ###############################################################################
-# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Docker/Docker-binary.yaml
+# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/_Configs/VsCodeConfig-binary.yaml
 # DO NOT EDIT IT
 # @generated
 ###############################################################################
@@ -319,41 +319,6 @@ Assert::emailAddress() {
 }
 
 
-# @description asserts that first argument is file that exists with specified ownership
-# @arg $1 file:String
-# @arg $2 user:String expected owner user name of the file (default: USERNAME or id -un command)
-# @arg $3 group:String expected owner group name of the file (default: USERGROUP or id -gn command)
-# @env USERNAME String if arg $2 is not provided
-# @env USERGROUP String if arg $3 is not provided
-# @env SUDO String allows to use custom sudo prefix command
-# @exitcode 1 if missing file
-# @exitcode 2 if incorrect user ownership
-# @exitcode 3 if incorrect group ownership
-# @stderr diagnostics information is displayed
-Assert::fileExists() {
-  local file="$1"
-  local user="${2:-${USERNAME}}"
-  local group="${3:-${USERGROUP}}"
-  if [[ -n "${user}" ]]; then
-    Log::displayInfo "Check ${file} exists with user ${user}:${group}"
-  else
-    Log::displayInfo "Check ${file} exists"
-  fi
-  if ! ${SUDO:-} test -f "${file}" &>/dev/null; then
-    Log::displayError "missing file ${file}"
-    return 1
-  fi
-  if [[ -n "${user}" && "${user}" != "$(${SUDO:-} stat -c '%U' "${file}")" ]]; then
-    Log::displayError "incorrect user ownership on file ${file}"
-    return 2
-  fi
-  if [[ -n "${group}" && "${group}" != "$(${SUDO:-} stat -c '%G' "${file}")" ]]; then
-    Log::displayError "incorrect group ownership on file ${file}"
-    return 3
-  fi
-}
-
-
 # @description check if argument respects 2 or more words separated by a space
 # it supports accentuated characters and names with hyphen(-)
 # @arg $1 firstNameLastName:String
@@ -445,65 +410,6 @@ Assert::varExistsAndNotEmpty() {
 # @exitcode 1 on error
 Assert::wsl() {
   [[ "$(uname -o)" = "GNU/Linux" ]]
-}
-
-
-# @description Backup given file in the same directory or in BACKUP_DIR directory
-# backup file name is composed by following fields separated by -:
-#   - if BACKUP_DIR is not empty then escaped dir name separated by @
-#   - filename(without path)
-#   - date with format %Y%m%d_%H:%M:%S (Eg: 20240326_14:45:08)
-# @arg $1 file:String the file to backup
-# @stderr messages about backup file location
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_DIR if not set backup the file in the same directory as original file
-# @exitcode 1 on copy failure
-Backup::file() {
-  local file="$1"
-  if [[ -f "${file}" ]]; then
-    local backupFile fileDirname escapedDirname
-    fileDirname="${file%/*}"
-    escapedDirname=${fileDirname/\//}      # remove first slash
-    escapedDirname=${escapedDirname//\//@} # replace all slashes by @
-    if [[ -z "${BACKUP_DIR:-}" ]]; then
-      backupFile="${fileDirname}/${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
-    else
-      backupFile="${BACKUP_DIR}/${escapedDirname}@${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
-    fi
-    Log::displayInfo "Backup file '${file}' to ${backupFile}"
-    ${SUDO:-} cp "${file}" "${backupFile}"
-  fi
-}
-
-
-# @description ignore exit code 141 from simple command pipes
-# @example use with:
-#   local resultingStatus=0
-#   local -a originalPipeStatus=()
-#   cmd1 | cmd2 || Bash::handlePipelineFailure resultingStatus originalPipeStatus || true
-#   [[ "${resultingStatus}" = "0" ]]
-# @arg $1 resultingStatusCode:&int (passed by reference) (optional) resulting status code
-# @arg $2 originalStatus:int[] (passed by reference) (optional) copy of original PIPESTATUS array
-# @env PIPESTATUS assuming that this function is called like in the example provided
-# @see https://unix.stackexchange.com/a/709880/582856
-Bash::handlePipelineFailure() {
-  local -a pipeStatusBackup=("${PIPESTATUS[@]}")
-  local -n handlePipelineFailure_resultingStatusCode=$1
-  local -n handlePipelineFailure_originalStatus=$2
-  # shellcheck disable=SC2034
-  handlePipelineFailure_originalStatus=("${pipeStatusBackup[@]}")
-  handlePipelineFailure_resultingStatusCode=0
-  local statusCode
-  for statusCode in "${pipeStatusBackup[@]}"; do
-    if ((statusCode == 141)); then
-      return 0
-    elif ((statusCode > 0)); then
-      # shellcheck disable=SC2034
-      handlePipelineFailure_resultingStatusCode="${statusCode}"
-      break
-    fi
-  done
-  return "${handlePipelineFailure_resultingStatusCode}"
 }
 
 
@@ -606,40 +512,6 @@ Compiler::Embed::extractFileFromBase64() {
 }
 
 
-# @description copy folder structure to target directory
-# merge embedDir with overridden directory if provided and available
-# @arg $1 embedDir:String the path embedded
-# @arg $2 overrideDir:String the path overridden
-# @arg $3 subDir:String the sub-directory to copy from embedDir and/or overrideDir
-# @arg $4 targetDir:String the target directory (default: ${HOME}/${subDir})
-# @env SUDO String allows to use custom sudo prefix command
-# @env HOME used for default value of targetDir arg
-# @env OVERWRITE_CONFIG_FILES indicates if target directory should be overwritten if it exists
-# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env IGNORE_MISSING_SOURCE_DIR
-Conf::copyStructure() {
-  local embedDir="$1"
-  local overrideDir="$2"
-  local subDir="$3"
-  local targetDir="${4:-${HOME}/${subDir}}"
-
-  local configDir
-  # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embedDir}" "${overrideDir}")"
-  if [[ -d "${configDir}/${subDir}" ]]; then
-    # shellcheck disable=SC2154
-    OVERWRITE_CONFIG_FILES=${OVERWRITE_CONFIG_FILES:-1} \
-      PRETTY_ROOT_DIR="${embedDir%/*}" \
-      Install::structure "${configDir}/${subDir}" "${targetDir}"
-  elif [[ "${IGNORE_MISSING_SOURCE_DIR:-0}" = "1" ]]; then
-    return 0
-  else
-    Log::displayError "Directory ${subDir} does not exists in '${embedDir}' or '${overrideDir}'"
-    return 1
-  fi
-}
-
-
 # @description select right file to load depending if file exists in this order:
 # - from conf.override
 # - from embedded file if provided
@@ -661,45 +533,6 @@ Conf::dynamicConfFile() {
     Log::displayWarning "Conf::dynamicConfFile - ${file} does not exist in any config dirs declared"
     return 1
   fi
-}
-
-
-# @description generate temp directory where default
-# and overridden directories have been merged
-#   - if overridden dir exists, create a new temp folder
-#     - copy all files from default folder
-#     - overwrite with files from overridden folder
-#     - (Later) delete files listed in .remove$$ file
-#     - return the path of this temp folder
-#   - else just return the default folder path
-# Then it is easier to pick overridden or default files/folders
-#
-# @arg $1 defaultDir:String usually the embed directory
-# @arg $2 overriddenDirPath:String the path to the directory
-#   that could be overridden
-# @exitcode 1 if default dir does not exist
-# @exitcode 2 if error during copy
-Conf::getOverriddenDir() {
-  local defaultDir="$1"
-  local overriddenDirPath="$2"
-
-  if [[ ! -d "${defaultDir}" ]]; then
-    Log::displayError "Directory ${defaultDir} does not exists"
-    return 1
-  fi
-  if [[ ! -d "${overriddenDirPath}" || -z "$(ls -A "${overriddenDirPath}")" ]]; then
-    Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist, keep default one ${defaultDir}"
-    echo "${defaultDir}"
-    return 0
-  fi
-  local tempDir
-  tempDir="$(mktemp -d)"
-  (
-    shopt -s dotglob
-    cp -R "${defaultDir}/." "${tempDir}"
-    cp -R "${overriddenDirPath}/." "${tempDir}"
-  ) || return 2
-  echo "${tempDir}"
 }
 
 
@@ -1228,224 +1061,6 @@ Framework::createTempFile() {
 }
 
 
-# @description installs file to given directory
-#
-# callbacks parameters `${fromFile} ${targetFile} $@`
-# @arg $1 fromFile - original file to copy
-# @arg $2 targetFile - target file
-# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
-# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
-# @arg $5 successCallback:Function the callback to call when file is installed successfully, by default setUserRights callback is called
-# @arg $6 failureCallback:Function the callback to call when file installation has failed, by default unableToCopyCallback callback is called
-# @arg $@ callbacksParams:String[] additional parameters passed to callbacks
-# @exitcode 1 if fromFile is not readable
-# @exitcode 2 if backup file failure
-# @exitcode 3 if copy failure
-# @exitcode 0 on success or if OVERWRITE_CONFIG_FILES=0
-# @exitcode 0 on success or if CHANGE_WINDOWS_FILES=0 and target file is a windows file
-# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing directory
-# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target file is in windows file system, overwrite it
-# @env USERNAME (default: root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: root) the group name that will be used to set target files ownership
-# @env BASE_MNT_C String windows C drive base PATH
-# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_BEFORE_INSTALL Boolean (default: 1) backup file before installing the file
-Install::file() {
-  local fromFile="$1"
-  local targetFile="$2"
-  local userName="${3:-${USERNAME:-root}}"
-  local userGroup="${4:-${USERGROUP:-root}}"
-  local successCallback=${5:-Install::setUserRightsCallback}
-  local failureCallback=${6:-Install::unableToCopyCallback}
-  shift 6 || true
-
-  if [[ ! -f "${fromFile}" || ! -r "${fromFile}" ]]; then
-    Log::displayError "cannot read source file '${fromFile}'"
-    return 1
-  fi
-
-  # skip if OVERWRITE_CONFIG_FILES is 0 and target file exists
-  if [[ "${OVERWRITE_CONFIG_FILES}" = "0" && -f "${targetFile}" ]]; then
-    Log::displayWarning "File '${targetFile}' exists - Skip install (because OVERWRITE_CONFIG_FILES=0 in .env file)"
-    return 0
-  fi
-
-  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
-  if [[ "${CHANGE_WINDOWS_FILES}" = "0" && "${targetFile}" =~ ^${BASE_MNT_C} ]]; then
-    Log::displayWarning "File '${targetFile}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
-    return 0
-  fi
-
-  local targetDir="${targetFile%/*}"
-  if ! ${SUDO} test -d "${targetDir}"; then
-    ${SUDO:-} mkdir -p "${targetDir}"
-    ${SUDO:-} chown "${userName}":"${userGroup}" "${targetDir}"
-  fi
-  local fromDir="${fromFile%/*}"
-  local fromFilename="${fromFile##*/}"
-
-  local prettyFromDir
-  # shellcheck disable=SC2295
-  prettyFromDir="${fromDir#${PRETTY_ROOT_DIR:-${FRAMEWORK_ROOT_DIR}}/}"
-  if diff -q "${fromFile}" "${targetFile}" &>/dev/null; then
-    Log::displayStatus "No changes detected. No need to update '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
-    return 0
-  fi
-
-  if [[ "${BACKUP_BEFORE_INSTALL:-1}" = "1" ]]; then
-    Backup::file "${targetFile}" || return 2
-  fi
-
-  if ${SUDO:-} cp "${fromFile}" "${targetFile}"; then
-    # shellcheck disable=SC2295
-    Log::displaySuccess "Installed file '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
-    ${successCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
-  else
-    # shellcheck disable=SC2295
-    Log::displayError "unable to copy file '${targetFile}' from '${fromDir#${FRAMEWORK_ROOT_DIR}/}/${fromFilename}'"
-    ${failureCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
-    return 3
-  fi
-}
-
-
-# @description install callback
-#   set file with root ownership and execution bit
-# @arg $1 fromFile:String
-# @arg $2 targetFile:String
-# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
-# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
-# @env USERNAME (default: root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: root) the group name that will be used to set target files ownership
-# @env SUDO String allows to use custom sudo prefix command
-# @exitcode 1 on any failure
-# @see Install::file
-Install::setUserRightsCallback() {
-  # shellcheck disable=SC2034 # $1 not used
-  local fromFile="$1"
-  local targetFile="$2"
-  local userName="${3:-${USERNAME:-root}}"
-  local userGroup="${4:-${USERGROUP:-root}}"
-
-  ${SUDO:-} chown "${userName}":"${userGroup}" "${targetFile}"
-}
-
-
-# @description install dir to given directory but backup it before
-# @arg $1 fromDir:String the source base directory
-# @arg $2 toDir:String the target base directory
-# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing files
-# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target directory is in windows file system, overwrite it
-# @env USERNAME (default: ${USERNAME} if SUDO empty else root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: ${USERGROUP} if SUDO empty else root) the group name that will be used to set target files ownership
-# @env BASE_MNT_C String windows C drive base PATH
-# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_BEFORE_INSTALL Boolean (default:1) backup directory before installing the dir
-# @exitcode 1 if source directory is not readable
-# @exitcode 2 if error during structure replication
-# @exitcode 2 if error during file copy
-# @exitcode 0 if copy successful
-# @exitcode 0 with warning message if CHANGE_WINDOWS_FILES=0 and target directory in C drive
-# @stderr diagnostics information is displayed, skipped information if OVERWRITE_CONFIG_FILES or CHANGE_WINDOWS_FILES are set to 1
-Install::structure() {
-  local fromDir="$1"
-  local toDir="$2"
-  local userName="root"
-  local userGroup="root"
-  if [[ -z "${SUDO:-}" ]]; then
-    userName="${USERNAME:-root}"
-    userGroup="${USERGROUP:-root}"
-  fi
-
-  if [[ ! -d "${fromDir}" || ! -r "${fromDir}" ]]; then
-    Log::displayError "Install::structure - cannot read source directory '${fromDir}'"
-    return 1
-  fi
-
-  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
-  if [[ "${CHANGE_WINDOWS_FILES:-0}" = "0" && "${toDir}" =~ ^${BASE_MNT_C:-/mnt/c} ]]; then
-    Log::displayWarning "Install::structure - Directory '${fromDir}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
-    return 0
-  fi
-
-  # first replicate directory structure
-  # shellcheck disable=SC2317
-  createStructure() {
-    local dir="$1"
-    if ! ${SUDO} test -d "${dir}"; then
-      if ! ${SUDO:-} mkdir -p "${dir}"; then
-        Log::displayError "Install::structure - impossible to create directory '${dir}'"
-        exit 1
-      fi
-    fi
-
-    if ! ${SUDO:-} chown "${userName}":"${userGroup}" "${dir}"; then
-      Log::displayError "Install::structure - impossible to update directory owner '${dir}' with ${userName}:${userGroup}"
-      exit 1
-    fi
-  }
-  local dir
-
-  (
-    local dir
-    shopt -s lastpipe
-    # -links 2 allows to exclude empty directories
-    ${SUDO:-} find "${fromDir}" -depth -type d -links 2 -print0 |
-      while read -rd '' dir; do
-        if ! createStructure "${toDir}/${dir#"${fromDir}"}"; then
-          # error already reported by createStructure
-          exit 1
-        fi
-      done || {
-      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
-        Log::displayError "Install::structure - replicated directory structure - find directories on '${fromDir}' resulted in an error"
-        exit 2
-      fi
-    }
-  ) || return 2
-
-  # for each file, copy it
-  (
-    local file
-    shopt -s lastpipe
-    ${SUDO:-} find "${fromDir}" -depth -type f -print0 |
-      while read -rd '' file; do
-        local localFile="${file#"${fromDir}/"}"
-        if ! Install::file "${fromDir}/${localFile}" "${toDir}/${localFile}"; then
-          # error already reported by Install::file
-          exit 1
-        fi
-      done || {
-      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
-        Log::displayError "Install::structure - replicated file structure - find files on '${fromDir}' resulted in an error"
-        exit 2
-      fi
-    }
-  ) || return 3
-
-  # shellcheck disable=SC2295
-  Log::displaySuccess "Installed directory '${toDir#${PRETTY_ROOT_DIR}/}' from '${fromDir#${PRETTY_ROOT_DIR}/}'"
-}
-
-
-# @description install callback
-#   default callback used called when file copy has failed
-# @arg $1 fromFile:String
-# @arg $2 targetFile:String
-# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @exitcode 1 always fail
-# @stderr diagnostics information is displayed
-# @see Install::file
-Install::unableToCopyCallback() {
-  local fromDir="$1"
-  local fileName="$2"
-  local targetFile="$3"
-  Log::fatal "unable to copy file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fileName}' to '${targetFile}'"
-}
-
-
 # @description the command launch different actions(install, configure, test)
 # depending on the options selected
 # @env SKIP_INSTALL
@@ -1934,21 +1549,6 @@ Linux::getDistributorId() {
 }
 
 
-# @description checks if Systemd is running
-# @noargs
-# @exitcode 1 if systemd is not running
-# @stdout diagnostics information
-Linux::isSystemdRunning() {
-  if [[ "$(readlink -f /sbin/init)" = "/usr/lib/systemd/systemd" ]] &&
-    systemctl status --no-pager &>/dev/null; then
-    Log::displayInfo "SystemD is running"
-    return 0
-  fi
-  Log::displayInfo "SystemD is not running"
-  return 1
-}
-
-
 # @description ensure command tar is available
 # @exitcode 1 if tar command not available
 # @stderr diagnostics information is displayed
@@ -2059,20 +1659,6 @@ Log::displaySkipped() {
     echo -e "${__SKIPPED_COLOR}SKIPPED - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
   fi
   Log::logSkipped "$1"
-}
-
-
-# @description Display message using info color (blue) but warning level
-# @arg $1 message:String the message to display
-# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
-# @env LOG_CONTEXT String allows to contextualize the log
-Log::displayStatus() {
-  local type="${2:-STATUS}"
-  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
-    Log::computeDuration
-    echo -e "${__INFO_COLOR}${type}  - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
-  fi
-  Log::logStatus "$1" "${type}"
 }
 
 
@@ -2206,15 +1792,6 @@ Log::logMessage() {
 Log::logSkipped() {
   if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
     Log::logMessage "${2:-SKIPPED}" "$1"
-  fi
-}
-
-
-# @description log message to file
-# @arg $1 message:String the message to display
-Log::logStatus() {
-  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
-    Log::logMessage "${2:-STATUS}" "$1"
   fi
 }
 
@@ -2685,101 +2262,6 @@ UI::theme() {
     __HELP_NORMAL=''
   fi
 }
-
-
-# @description Check that command version is greater than expected minimal version
-# display warning if command version greater than expected minimal version
-# display error if command version less than expected minimal version and exit 1
-# @arg $1 commandName:String command path
-# @arg $2 argVersion:String command line parameters to launch to get command version
-# @arg $3 minimalVersion:String expected minimal command version
-# @arg $4 parseVersionCallback:Function
-# @arg $5 help:String optional help message to display if command does not exist
-# @exitcode 0 if command version greater or equal to expected minimal version
-# @exitcode 1 if command version less than expected minimal version
-# @exitcode 2 if command does not exist
-Version::checkMinimal() {
-  local commandName="$1"
-  local argVersion="$2"
-  local minimalVersion="$3"
-  local parseVersionCallback=${4:-Version::parse}
-  local help="${5:-}"
-
-  Assert::commandExists "${commandName}" "${help}" || return 2
-
-  # shellcheck disable=SC2034
-  local status=0
-  # shellcheck disable=SC2034
-  local -a pipeStatus=()
-  local version
-  version="$("${commandName}" "${argVersion}" 2>&1 | ${parseVersionCallback} || Bash::handlePipelineFailure status pipeStatus)"
-
-  Log::displayDebug "check ${commandName} version ${version} against minimal ${minimalVersion}"
-
-  local result=0
-  Version::compare "${version}" "${minimalVersion}" || result=$?
-  case "${result}" in
-    1)
-      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
-      ;;
-    2)
-      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
-      return 1
-      ;;
-    *)
-      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
-      ;;
-  esac
-}
-
-
-# @description compare 2 version numbers
-# @arg $1 version1:String version 1
-# @arg $2 version2:String version 2
-# @exitcode 0 if equal
-# @exitcode 1 if version1 > version2
-# @exitcode 2 else
-Version::compare() {
-  if [[ "$1" = "$2" ]]; then
-    return 0
-  fi
-  local IFS=.
-  # shellcheck disable=2206
-  local i ver1=($1) ver2=($2)
-  # fill empty fields in ver1 with zeros
-  for ((i = ${#ver1[@]}; i < ${#ver2[@]}; i++)); do
-    ver1[i]=0
-  done
-  for ((i = 0; i < ${#ver1[@]}; i++)); do
-    if [[ -z "${ver2[i]+unset}" ]] || [[ -z ${ver2[i]} ]]; then
-      # fill empty fields in ver2 with zeros
-      ver2[i]=0
-    fi
-    if ((10#${ver1[i]} > 10#${ver2[i]})); then
-      return 1
-    fi
-    if ((10#${ver1[i]} < 10#${ver2[i]})); then
-      return 2
-    fi
-  done
-  return 0
-}
-
-
-# @description filter to keep only version number from a string
-# @arg $@ files:String[] the files to filter
-# @exitcode * if one of the filter command fails
-# @stdin you can use stdin as alternative to files argument
-# @stdout the filtered content
-# shellcheck disable=SC2120
-Version::parse() {
-  # match anything, print(p), exit on first match(Q)
-  sed -En \
-    -e 's/\x1b\[[0-9;]*[mGKHF]//g' \
-    -e 's/[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/' \
-    -e '//{p;Q}' \
-    "$@"
-}
 # FUNCTIONS
 
 # shellcheck disable=SC2034
@@ -2795,7 +2277,7 @@ defaultBeforeParseCallback() {
 }
 
 scriptName() {
-  echo "Docker"
+  echo "VsCodeConfig"
 }
 
 beforeParseCallback() {
@@ -3126,224 +2608,154 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/e37a5e19a6e2fa01a3643ac37cd2a1d691f6f004795e0fecea7d21820751880e/conf_dir" \
-  "H4sIAAAAAAAA/+yV4WvaQBTA+zl/xauO5cvSi+1ioSOD1mQztGuKRgZlIGfuuRwmdyF3STvH/vdhxEltmWOKWzd/Hzw5n+8peb/3jkZUJRbDykJREZpyqlAdMcJkPMHiSCUHm2Pbtn3qOPVp2/bqaTsny/f1fcs5brUOwN5C7bWUStPiwN641uqfeyY0D8mICzLrAqO5XYwmeCFchxH4XhC9gqgb9OFdcOVD5/waLnwY3Hjnke/BxyDqhoNoFhp0/K3/DIOPIZZZRgUDq4J5Z1uxzHKpEF6+JQwrIso0fQM6QWEA1BqsBFpM3glLCrQUFhWP0TVXMhUZWGOwlGmMufGnn+uv8tB/LjQWNNa8wuUMmG46BNb5/7rdXvG/fWKf7v3fBc1DUqqingEoKpiqpPZFf8lRoZ419JQLruEJS7IJ4wVYOTRefL3td4ed807XH3pB7xuZKZGi5lKohgGgZRknPw8jw3m3zcLnFe8o15CWMWfAMNeJ24JUUgYp/5xoK5MMYSwL+GQAAGR0guZc2/rVNYGqxjJ/A8IPtzdnZ/Miv/WlhefPye71PPQ/L+SYp7jj/d8+dh7t/xNn7/8u+F/3/5N7H+9zWWjwws6l3xt2w37kmqXg92eEkKIUP6SQ8cQ0AJqAgo5SXKQclTxlMOH6UaqLQXDlXQaR21p+tLgb3vTC9z2/33fzlHLxb42XPXv2/MV8DwAA///F/2YUABAAAA=="
+  "${PERSISTENT_TMPDIR:-/tmp}/3e0c3977b656d0db6dc827cb494958b0ab905fffbcf588efc8b17a791ce76888/conf_dir" \
+  "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"
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e37a5e19a6e2fa01a3643ac37cd2a1d691f6f004795e0fecea7d21820751880e/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/3e0c3977b656d0db6dc827cb494958b0ab905fffbcf588efc8b17a791ce76888/conf_dir"
 
 
 helpDescription() {
-  echo "Installs docker inside wsl."
-}
-
-fortunes() {
-  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- You can now use ${__HELP_EXAMPLE}docker compose${__RESET_COLOR} or ${__HELP_EXAMPLE}docker-compose${__RESET_COLOR} indifferently thanks to installed docker compose plugin."
-  echo "%"
+  echo "VsCode default configuration"
 }
 
 dependencies() {
-  echo "installScripts/MandatorySoftwares"
-  echo "installScripts/WslDefaultConfig"
-  echo "installScripts/DockerCompose"
+  # needs nodes with hjson package
+  echo "installScripts/NodeDependencies"
+}
+
+fortunes() {
+  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- code -- will launch visual studio code."
+  echo "%"
 }
 
 # jscpd:ignore-start
-helpVariables() { :; }
 listVariables() { :; }
+helpVariables() { :; }
 defaultVariables() { :; }
 checkVariables() { :; }
 breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
 isInstallImplemented() { :; }
+isTestInstallImplemented() { :; }
 isConfigureImplemented() { :; }
 isTestConfigureImplemented() { :; }
-isTestInstallImplemented() { :; }
 # jscpd:ignore-end
 
-cleanBeforeExport() {
-  if command -v docker; then
-    Log::displayInfo "Cleaning docker system"
-    docker system prune -a --volumes --force || true
-  fi
-}
-
-testCleanBeforeExport() {
-  :
-}
-
-# REQUIRE Linux::requireUbuntu
-# REQUIRE Linux::requireExecutedAsUser
 install() {
-  if isUbuntuMinimum24; then
-    installFromUbuntu24
-  else
-    installFromUbuntu20
+  if ! command -v code &>/dev/null; then
+    Log::displaySkipped "You must install vscode in windows before running that script"
+    return 0
   fi
-}
-
-isUbuntuMinimum24() {
-  Version::compare "${VERSION_ID}" "24.04"
-}
-
-installFromUbuntu24() {
-  Log::displayInfo "install docker required packages"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    ca-certificates \
-    curl
-
-  sudo sh -c 'install -m 0755 -d /etc/apt/keyrings'
-  Retry::default sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-  Log::displayInfo "install docker apt source list"
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-    https://download.docker.com/linux/ubuntu \
-    ${VERSION_CODENAME} stable" |
-    sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-
-  Log::displayInfo "install docker"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    containerd.io \
-    docker-buildx-plugin \
-    docker-ce \
-    docker-ce-cli \
-    docker-compose-plugin
-}
-
-installFromUbuntu20() {
-  Log::displayInfo "install docker required packages"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg2
-
-  # Docker utilizes iptables to implement network isolation.
-  # For good reason, Debian uses the more modern nftables, but this means
-  # that Docker cannot automatically tweak the Linux firewall.
-  # Given this, you probably want to configure Debian to use the legacy
-  # iptables by default
-  sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
-  sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
-
-  Log::displayInfo "install docker apt source list"
-  Retry::default curl -fsSL "https://download.docker.com/linux/${ID}/gpg" | sudo apt-key add --no-tty --batch -
-  local dockerSource="deb [arch=amd64] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable"
-  if ! grep -Fq "${dockerSource}" "/etc/apt/sources.list.d/docker.list"; then
-    echo "deb [arch=amd64] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" | sudo tee /etc/apt/sources.list.d/docker.list
-    Linux::Apt::update
-  fi
-
-  Log::displayInfo "install docker"
-  Linux::Apt::installIfNecessary --no-install-recommends \
-    containerd.io \
-    docker-ce \
-    docker-ce-cli
+  # vscode is preinstalled
+  Log::displayInfo "Make vscode download vscode server"
+  code --help
 }
 
 testInstall() {
-  local -i failures=0
-
-  if ! Linux::isSystemdRunning; then
-    if grep -q -E '^systemd=true' /etc/wsl.conf; then
-      Log::fatal "You need to restart wsl by running 'wsl --shutdown' from powershell and re-run this script, in order to start with systemd"
-    else
-      Log::fatal "/etc/wsl.conf has not been updated with systemd=true instruction, please check this install logs"
-    fi
+  if ! command -v code &>/dev/null; then
+    Log::displaySkipped "You must install vscode in windows before running that script"
+    return 0
   fi
-
-  Version::checkMinimal "docker" --version "25.0.3" || ((++failures))
-
-  Log::displayInfo "docker executable path $(command -v docker || true)"
-  Log::displayInfo "docker version $(docker --version || true)"
-  Log::displayInfo "docker-compose version $(docker-compose --version || true)"
-
-  dockerIsStarted() {
-    DOCKER_PS="$(docker ps 2>&1 || true)"
-    [[ ! "${DOCKER_PS}" =~ "Cannot connect to the Docker daemon" ]]
-  }
-  Log::displayInfo "Checking if docker is started ..."
-  if dockerIsStarted; then
-    Log::displaySuccess "Docker connection success"
-  else
-    Log::displayError "Docker is not started"
-    ((++failures))
-  fi
-  return "${failures}"
+  Assert::commandExists code
 }
 
-configureDockerPlugin() {
-  Log::displayInfo "Configuring docker-compose as docker plugin"
-  # create the docker plugins directory if it doesn't exist yet
-  # shellcheck disable=SC2153
-  mkdir -p "${HOME}/.docker/cli-plugins"
-  rm -f "${HOME}/.docker/cli-plugins/docker-compose" || true
-  sudo ln -sf /usr/local/bin/docker-compose "${HOME}/.docker/cli-plugins/docker-compose"
+installVsCodeExtension() {
+  local extension="$1"
+  local help="${2:-}"
+  if code --list-extensions | grep -iq "${extension}"; then
+    Log::displayInfo "VSCode extension ${help}'${extension}' already installed"
+  else
+    # install given extension
+    if code --install-extension "${extension}" --verysilent; then
+      Log::displaySuccess "VSCode extension ${help}'${extension}' successfully installed"
+    else
+      Log::displayError "Something went wrong while installing ${help}'${extension}' VS code extension"
+    fi
+  fi
 }
 
 configure() {
-  Log::displayInfo "allowing user '${USERNAME}' to use docker"
-  sudo getent group docker >/dev/null || sudo groupadd docker || true
-  sudo usermod -aG docker "${USERNAME}" || true
-
-  if ! isUbuntuMinimum24; then
-    configureDockerPlugin
+  if ! command -v code &>/dev/null; then
+    Log::displaySkipped "You must install vscode in windows before running that script"
+    return 0
+  fi
+  if Assert::wsl; then
+    # ability to mount wsl folder inside windows visual studio code
+    Retry::default installVsCodeExtension "ms-vscode-remote.remote-wsl"
+    VS_CODE_SETTINGS_DIR="${USERHOME}/.vscode-server/data/Machine"
+  else
+    VS_CODE_SETTINGS_DIR="${USERHOME}/.config/Code/User"
   fi
 
-  sudo systemctl enable docker.service
-  sudo systemctl enable containerd.service
+  installFile "${CONF_DIR}/.vscode" "${VS_CODE_SETTINGS_DIR}" "settings.json"
 
-  # shellcheck disable=SC2154
-  Conf::copyStructure \
-    "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
-    ".bash-dev-env"
+  sed -i -E \
+    "s/\"jenkins.pipeline.linter.connector.user\": \"[^\"]*\",/\"jenkins.pipeline.linter.connector.user\": \"${LDAP_LOGIN}\",/g" \
+    "${VS_CODE_SETTINGS_DIR}/settings.json"
+
+  EXTENSIONS="$(node "${CURRENT_DIR}/js/listVsCodeSettingsPlugins.js" \
+    "${CONF_DIR}/.vscode/settings.json" \
+    'extension-profiles.profiles' | tr '[:upper:]' '[:lower:]' | sort)" || {
+    exitCode="$?"
+    Log::displaySkipped "No extension to install found"
+    exit "${exitCode}"
+  }
+
+  INSTALLED_EXTENSIONS="$(code --list-extensions | tr '[:upper:]' '[:lower:]' | sort)"
+  EXTENSIONS_COUNT="$(echo "${EXTENSIONS}" | grep -c -v -e '^$')" || true
+
+  DIFF_NOT_INSTALLED_EXTENSIONS="$(comm -13 <(echo "${INSTALLED_EXTENSIONS}") <(echo "${EXTENSIONS}"))"
+
+  DIFF_INSTALLED_EXTENSIONS="$(comm -12 <(echo "${INSTALLED_EXTENSIONS}") <(echo "${EXTENSIONS}"))"
+  DIFF_INSTALLED_EXTENSIONS_COUNT="$(echo "${DIFF_INSTALLED_EXTENSIONS}" | grep -c -v -e '^$')" || true
+
+  Log::displayInfo "${DIFF_INSTALLED_EXTENSIONS_COUNT}/${EXTENSIONS_COUNT} Extensions already installed:"
+  echo "${DIFF_INSTALLED_EXTENSIONS}" | paste -s -d, -
+
+  EXTENSIONS_COUNT="$(echo "${DIFF_NOT_INSTALLED_EXTENSIONS}" | grep -c -v -e '^$')" || true
+  if ((EXTENSIONS_COUNT > 0)); then
+    Log::displayInfo "Installing ${EXTENSIONS_COUNT} VsCode extensions ..."
+    ((i = 1))
+    while IFS= read -r extension; do
+      [[ -n "${extension}" ]] || break
+      Retry::default installVsCodeExtension "${extension}" "(${i}/${EXTENSIONS_COUNT}) "
+      ((i++))
+    done <<<"${DIFF_NOT_INSTALLED_EXTENSIONS}"
+  fi
 }
 
 testConfigure() {
+  if ! command -v code &>/dev/null; then
+    Log::displaySkipped "You must install vscode in windows before running that script"
+    return 0
+  fi
   local -i failures=0
-  Assert::fileExists "${HOME}/.bash-dev-env/aliases.d/docker.sh" || ((++failures))
-  Assert::fileExists "${HOME}/.bash-dev-env/profile.d/docker.sh" || ((++failures))
-  Log::displayInfo "check if docker-compose binary is working"
-  if ! docker-compose version &>/dev/null; then
-    Log::displayError "docker-compose failure"
-    ((++failures))
+
+  if Assert::wsl; then
+    VS_CODE_SETTINGS_DIR="${USERHOME}/.vscode-server/data/Machine"
+  else
+    VS_CODE_SETTINGS_DIR="${USERHOME}/.config/Code/User"
   fi
 
-  Log::displayInfo "check if docker compose plugin is working"
-  if ! docker compose version &>/dev/null; then
-    Log::displayError "docker compose plugin failure"
-    ((++failures))
-  fi
-
-  asUserToAvoidWslRestart() {
-    sudo -u "${USERNAME}" -i "$@"
-  }
-  Log::displayInfo "check if docker dns is working"
-  asUserToAvoidWslRestart docker run busybox ping google.com -c 1 &>/dev/null || {
-    ((++failures))
-    Log::displayError "google.com is not reachable from docker, dns issue ?"
-    ping google.com -c 1 &>/dev/null || {
-      Log::displayError "google.com is not reachable from host neither"
+  if [[ -f "${VS_CODE_SETTINGS_DIR}/settings.json" ]]; then
+    if ! node "${CURRENT_DIR}/js/checkVsCodeSettings.js" \
+      "${VS_CODE_SETTINGS_DIR}/settings.json" \
+      'extension-profiles.profiles'; then
+      Log::displayError "VS Code settings has not been updated correctly"
       ((++failures))
-    }
-  }
-
-  Log::displayInfo "check if docker container can be launched"
-  if ! asUserToAvoidWslRestart docker run --rm hello-world | grep -q "Hello from Docker!"; then
-    Log::displayError "docker container cannot be launched"
+    fi
+  else
+    Log::displayError "File ${VS_CODE_SETTINGS_DIR}/settings.json does not exist"
     ((++failures))
   fi
-  asUserToAvoidWslRestart docker image rm hello-world || true
 
-  return "${failures}"
+  exit "${failures}"
 }
 
 
 
 optionHelpCallback() {
-  "DockerCommandHelp"
+  "VsCodeConfigCommandHelp"
   exit 0
 }
 
@@ -3369,7 +2781,7 @@ afterParseCallback() {
 
 
 # ------------------------------------------
-# Command DockerCommand
+# Command VsCodeConfigCommand
 # ------------------------------------------
 
 # options variables initialization
@@ -3394,8 +2806,8 @@ declare optionVersion="0"
 declare optionQuiet="0"
 # arguments variables initialization
 declare command="install"
-# @description parse command options and arguments for DockerCommand
-DockerCommandParse() {
+# @description parse command options and arguments for VsCodeConfigCommand
+VsCodeConfigCommandParse() {
   Log::displayDebug "Command ${SCRIPT_NAME} - parse arguments: ${BASH_FRAMEWORK_ARGV[*]}"
   Log::displayDebug "Command ${SCRIPT_NAME} - parse filtered arguments: ${BASH_FRAMEWORK_ARGV_FILTERED[*]}"
   SKIP_CONFIGURE="0"
@@ -3881,8 +3293,8 @@ DockerCommandParse() {
 
 }
 
-# @description display command options and arguments help for DockerCommand
-DockerCommandHelp() {
+# @description display command options and arguments help for VsCodeConfigCommand
+VsCodeConfigCommandHelp() {
   echo -e "${__HELP_TITLE_COLOR}SYNOPSIS:${__RESET_COLOR}"
   helpDescriptionFunction
 
@@ -3890,7 +3302,7 @@ DockerCommandHelp() {
   # ------------------------------------------
   # usage section
   # ------------------------------------------
-  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "Docker [OPTIONS] [ARGUMENTS]"
+  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "VsCodeConfig [OPTIONS] [ARGUMENTS]"
   echo
   # ------------------------------------------
   # usage/options section
@@ -3898,7 +3310,7 @@ DockerCommandHelp() {
   optionsAltList=("[--skip-config|--skip-configure|--skip-configuration|-sc]" "[--skip-install|--skip-installation|-si]" "[--skip-test|--skip-tests|-st]" "[--skip-deps|--skip-dependencies|-sd]" "[--prepare-export|-e]" "[--profile|-p <profile>]" "[--help|-h]" "[--config]" "[--bash-framework-config <bash-framework-config>]" "[--verbose|-v]" "[-vv]" "[-vvv]" "[--log-level <log-level>]" "[--log-file <log-file>]" "[--display-level <display-level>]" "[--no-color]" "[--theme <theme>]" "[--version]" "[--quiet|-q]"
   )
   Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" \
-    "Docker" "${optionsAltList[@]}"
+    "VsCodeConfig" "${optionsAltList[@]}"
   echo
 
   # ------------------------------------------
@@ -4093,7 +3505,7 @@ DockerCommandHelp() {
   # ------------------------------------------
   echo
   echo -n -e "${__HELP_TITLE_COLOR}SOURCE FILE: ${__RESET_COLOR}"
-  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Docker/Docker-binary.yaml"
+  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/_Configs/VsCodeConfig-binary.yaml"
   # ------------------------------------------
   # license section
   # ------------------------------------------
@@ -4109,7 +3521,7 @@ DockerCommandHelp() {
 
 beforeParseCallback
 
-DockerCommandParse "$@"
+VsCodeConfigCommandParse "$@"
 MAIN_FUNCTION_NAME="main"
 main() {
 

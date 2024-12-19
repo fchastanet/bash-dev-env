@@ -61,6 +61,9 @@ dictionaryDefinitions:
   - name: p10kZsh
     path: ".cspell/p10kZsh.txt"
     addWords: true
+  - name: python
+    path: ".cspell/python.txt"
+    addWords: true
 
 # https://github.com/streetsidesoftware/cspell/blob/main/packages/cspell/README.md#languagesettings
 languageSettings:
@@ -76,6 +79,11 @@ languageSettings:
       - myBash
       - mySoftwares
       - software
+
+  - languageId: javascript
+    locale: "*"
+    dictionaries:
+      - mySoftwares
 
   - languageId: zshScript
     locale: "*"
@@ -133,6 +141,12 @@ overrides:
     languageId: shellscript
     dictionaries:
       - config
+
+  - filename:
+      - src/_installScripts/_Configs/VsCodeConfig-conf/vsCode-conf/Python.code-profile
+    dictionaries:
+      - python
+      - mySoftwares
 
   - filename: "**/*.awk"
     dictionaries:
