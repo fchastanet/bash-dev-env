@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/Go/GoGvm-conf" as conf_dir
 
 helpDescription() {
   echo "gvm tool allows to switch from one go version to another."
@@ -24,8 +25,11 @@ isTestInstallImplemented() { :; }
 # jscpd:ignore-end
 
 install() {
-  # shellcheck source=/dev/null
-  source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+  # shellcheck disable=SC2154
+  Conf::copyStructure \
+    "${embed_dir_conf_dir}" \
+    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    ".bash-dev-env"
 
   mkdir -p "${HOME}/.local/bin"
   curl -o "${HOME}/.local/bin/gvm" \
@@ -37,6 +41,9 @@ install() {
 
 testInstall() {
   local -i failures=0
+  # shellcheck source=/dev/null
+  source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+
   # shellcheck source=/dev/null
   Assert::commandExists gvm || ((++failures))
 
@@ -56,20 +63,21 @@ configure() {
         grep -Eoh '[0-9]+\..*'
     )"
 
+    # shellcheck source=/dev/null
+    source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+
     Log::displayInfo "Installing go latest version is ${latestVersion}"
     gvm "${latestVersion}" -s
 
     touch "${HOME}/.gvm/latestVersionInitialized"
   fi
-  # install useful dependencies
-  GOBIN="${HOME}/.gvm/go/bin" go install mvdan.cc/gofumpt@latest
-  GOBIN="${HOME}/.gvm/go/bin" go install github.com/bwplotka/bingo@latest
-  GOBIN="${HOME}/.gvm/go/bin" go install golang.org/x/tools/cmd/goimports@latest
-  GOBIN="${HOME}/.gvm/go/bin" go install github.com/mgechev/revive@latest
 }
 
 testConfigure() {
   local failures=0
+  # shellcheck source=/dev/null
+  source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+
   Version::checkMinimal "go" "version" "1.22.1" || ((++failures))
   return "${failures}"
 }

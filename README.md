@@ -253,7 +253,7 @@ site.
 It is recommended to install docsify-cli globally, which helps initializing and
 previewing the website locally.
 
-`npm i docsify-cli -g`
+`yarn i docsify-cli -g`
 
 Run the local server with docsify serve.
 

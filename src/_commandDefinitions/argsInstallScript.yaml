@@ -4,6 +4,8 @@ binData:
     default:
       definitionFiles:
         5: ${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/argsInstallScript.sh
+        20: ${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/optionsProfile.sh
+        21: ${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/optionsProfileHelp.sh
 
       args:
         - variableName: command

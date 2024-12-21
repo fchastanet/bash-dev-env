@@ -21,6 +21,10 @@ fortunes() {
   echo "%"
   echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- You can disable git hooks template using ${__HELP_EXAMPLE}git config --global --unset init.templatedir${__RESET_COLOR}."
   echo "%"
+  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- if .pre-commit-config.yaml file is present, pre-commit will run automatically the tools specified before the commit"
+  echo "%"
+  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- hooks source code is stored in '${ROOT_DIR}/gitHooks' directory, check ~/.gitconfig templatedir property"
+  echo "%"
 }
 
 # jscpd:ignore-start
@@ -59,7 +63,7 @@ configure() {
     "${embed_dir_conf_dir}" \
     "${CONF_OVERRIDE_DIR}/$(scriptName)" \
     "info" \
-    "${HOME}/.bash-dev-env/GitDefaultConfig/pre-commit-template"
+    "${HOME}/.bash-dev-env/GitDefaultConfig/pre-commit-template/info"
 
   if ! git config --global init.templatedir \
     "${HOME}/.bash-dev-env/GitDefaultConfig/pre-commit-template"; then

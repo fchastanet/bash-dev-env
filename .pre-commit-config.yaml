@@ -20,7 +20,7 @@ repos:
 
   - repo: https://github.com/executablebooks/mdformat
     # Do this before other tools "fixing" the line endings
-    rev: 0.7.19
+    rev: 0.7.21
     hooks:
       - id: mdformat
         name: Format Markdown
@@ -104,10 +104,11 @@ repos:
               ^.cspell/codespellrc-.*.txt$
           )
 
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
+  - repo: https://github.com/ComPWA/prettier-pre-commit
+    rev: v3.4.2
     hooks:
       - id: prettier
+        args: [--cache]
         exclude: |
           (?x)(
             \.md$|
@@ -138,7 +139,7 @@ repos:
         exclude: /testsData/
 
   - repo: https://github.com/fchastanet/bash-tools-framework
-    rev: 6.0.0
+    rev: 6.1.0
     hooks:
       - id: fixShebangExecutionBit
       - id: awkLint
@@ -148,7 +149,7 @@ repos:
         args:
           [
             --expected-warnings-count,
-            "3",
+            "0",
             --format,
             plain,
             --theme,
@@ -160,7 +161,7 @@ repos:
         args:
           [
             --expected-warnings-count,
-            "3",
+            "0",
             --format,
             checkstyle,
             --theme,

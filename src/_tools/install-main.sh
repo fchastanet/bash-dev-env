@@ -93,7 +93,9 @@ executeScript() {
   if [[ "${SKIP_TEST}" = "1" ]]; then
     installCmd+=(--skip-test)
   fi
-
+  if [[ -n "${PROFILE}" ]]; then
+    installCmd+=(--profile "${PROFILE}")
+  fi
   LOG_CONTEXT="${configName} - " "${installCmd[@]}"
 }
 

@@ -46,7 +46,7 @@ loadConfigFiles() {
   local -a extensions=(sh "${script_shell}")
   local file
   while IFS= read -r file; do
-    # shellcheck source=src/_binaries/MandatorySoftwares/conf/.bash-dev-env/aliases.d/bash-dev-env.sh
+    # shellcheck source=src/_installScripts/_Defaults/MandatorySoftwares-conf/.bash-dev-env/aliases.d/bash-dev-env.sh
     source "${file}"
   done < <(
     "${HOME}/.bash-dev-env/findConfigFiles" \
@@ -57,6 +57,6 @@ loadConfigFiles "${HOME}/.bash-dev-env/profile.d"
 
 # include .bashrc if it exists and if running bash
 if [[ -n "${BASH_VERSION}" && -f "${HOME}/.bashrc" ]]; then
-  #shellcheck source=src/_binaries/ShellBash/conf/home/.bashrc
+  #shellcheck source=src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.bashrc
   source "${HOME}/.bashrc"
 fi

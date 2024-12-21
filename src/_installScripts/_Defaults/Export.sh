@@ -29,18 +29,8 @@ configure() {
   if [[ "${PREPARE_EXPORT}" = "1" ]]; then
     (
       Log::displayInfo "==> Clean up before export"
-      git config --global --unset user.name || true
-      git config --global --unset user.email || true
       rm -Rf "${BACKUP_DIR:?}/"* || true
       rm -Rf "${HOME}/.vscode-server" || true
-      rm -f "${HOME}/.ssh/id_rsa" || true
-      rm -f "${HOME}/.ssh/config" || true
-      rm -f "${HOME}/.ssh/known_hosts.old" || true
-      rm -f "${HOME}/.saml2aws" || true
-      rm -f "${HOME}/.aws/credentials" || true
-      rm -f "${HOME}/.aws/config" || true
-      rm -f "${HOME}/.zcompdump" || true
-      rm -f "${HOME}/.motd_shown" || true
       find "${HOME}" -name id_rsa -delete || true
 
       deleteFolderExcept() {
@@ -61,18 +51,14 @@ configure() {
       rm -f "${BASH_DEV_ENV_ROOT_DIR}/.env.distro" || true
 
       SUDO=sudo deleteFolderExcept "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/megalinter-reports/"
-      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/.history"
-      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/vendor"
-      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/pages/doc"
-      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/pages/bashDoc"
-      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/pages/tests"
-      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/node_modules"
-      rm -f "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/commit-msg.md"
+      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/.history" || true
+      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/vendor" || true
+      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/pages/doc" || true
+      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/pages/bashDoc" || true
+      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/pages/tests" || true
+      rm -Rf "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/node_modules" || true
+      rm -f "${BASH_DEV_ENV_ROOT_DIR}/vendor/bash-tools-framework/commit-msg.md" || true
     )
-    if command -v docker; then
-      Log::displayInfo "Cleaning docker system"
-      docker system prune -a --volumes --force || true
-    fi
   else
     Log::displaySkipped "--export option has not been selected"
   fi
@@ -81,23 +67,8 @@ configure() {
 testConfigure() {
   local -i failures=0
   if [[ "${PREPARE_EXPORT}" = "1" ]]; then
-    if [[ -f "${HOME}/.gitconfig" ]]; then
-      if git config --global --get user.name &>/dev/null; then
-        Log::displayError "Export - .gitconfig user.name has not been removed"
-        ((++failures))
-      fi
-      if git config --global --get user.email &>/dev/null; then
-        Log::displayError "Export - .gitconfig user.email has not been removed"
-        ((++failures))
-      fi
-    fi
     Assert::fileNotExists "${HOME}/.vscode-server" || ((++failures))
     Assert::fileNotExists "${HOME}/.ssh/id_rsa" || ((++failures))
-    Assert::fileNotExists "${HOME}/.ssh/config" || ((++failures))
-    Assert::fileNotExists "${HOME}/.ssh/known_hosts.old" || ((++failures))
-    Assert::fileNotExists "${HOME}/.saml2aws" || ((++failures))
-    Assert::fileNotExists "${HOME}/.aws/credentials" || ((++failures))
-    Assert::fileNotExists "${HOME}/.aws/config" || ((++failures))
 
     SUDO=sudo Assert::dirEmpty \
       "${BASH_DEV_ENV_ROOT_DIR}/megalinter-reports/" \

@@ -18,7 +18,7 @@ if [[ "$-" =~ .*i.* ]]; then
   # execute bash logout when bash window is closed
   if [[ -f "${HOME}/.bash_logout" ]]; then
     exitSession() {
-      #shellcheck source=src/_binaries/ShellBash/conf/home/.bash_logout
+      #shellcheck source=src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.bash_logout
       source "${HOME}/.bash_logout"
     }
     trap exitSession HUP
@@ -82,10 +82,12 @@ if [[ "$-" =~ .*i.* ]]; then
   if ! shopt -oq posix; then
     completion_loaded=0
     if [[ -f /usr/share/bash-completion/bash_completion ]]; then
+      # shellcheck source=/dev/null
       source /usr/share/bash-completion/bash_completion
       completion_loaded=1
     elif [[ -f /etc/bash_completion ]]; then
       # sudo apt install bash-completion
+      # shellcheck source=/dev/null
       source /etc/bash_completion
       completion_loaded=1
     fi
