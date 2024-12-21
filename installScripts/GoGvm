@@ -413,6 +413,34 @@ Assert::wsl() {
 }
 
 
+# @description Backup given file in the same directory or in BACKUP_DIR directory
+# backup file name is composed by following fields separated by -:
+#   - if BACKUP_DIR is not empty then escaped dir name separated by @
+#   - filename(without path)
+#   - date with format %Y%m%d_%H:%M:%S (Eg: 20240326_14:45:08)
+# @arg $1 file:String the file to backup
+# @stderr messages about backup file location
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_DIR if not set backup the file in the same directory as original file
+# @exitcode 1 on copy failure
+Backup::file() {
+  local file="$1"
+  if [[ -f "${file}" ]]; then
+    local backupFile fileDirname escapedDirname
+    fileDirname="${file%/*}"
+    escapedDirname=${fileDirname/\//}      # remove first slash
+    escapedDirname=${escapedDirname//\//@} # replace all slashes by @
+    if [[ -z "${BACKUP_DIR:-}" ]]; then
+      backupFile="${fileDirname}/${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
+    else
+      backupFile="${BACKUP_DIR}/${escapedDirname}@${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
+    fi
+    Log::displayInfo "Backup file '${file}' to ${backupFile}"
+    ${SUDO:-} cp "${file}" "${backupFile}"
+  fi
+}
+
+
 # @description ignore exit code 141 from simple command pipes
 # @example use with:
 #   local resultingStatus=0
@@ -484,6 +512,35 @@ Cache::getPropertyValue2() {
 }
 
 
+# @description convert base64 encoded back to target dir
+# it is advised to include the md5sum of the binFile in the path of the target dir
+#
+# @arg $1 targetDir:string the directory in which tar archive will be untarred
+# @arg $2 base64:string the base64 encoded tar czf archive
+# @stderr diagnostics information is displayed
+Compiler::Embed::extractDirFromBase64() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireTarCommand has not been loaded"
+    exit 1
+  fi
+
+  local targetDir="$1"
+  local base64="$2"
+
+  if [[ ! -d "${targetDir}" ]]; then
+    mkdir -p "${targetDir}"
+    (
+      cd "${targetDir}" || exit 1
+      base64 -d <<<"${base64}" | tar -xzf - 2>/dev/null || {
+        Log::displayError "untar failure, invalid base64 string"
+        exit 1
+      }
+    ) || return 1
+  fi
+}
+
+
 # @description convert base64 encoded back to target file
 # if target file is executable prepend dir of target
 # file to PATH to make binary available everywhere
@@ -514,6 +571,40 @@ Compiler::Embed::extractFileFromBase64() {
 }
 
 
+# @description copy folder structure to target directory
+# merge embedDir with overridden directory if provided and available
+# @arg $1 embedDir:String the path embedded
+# @arg $2 overrideDir:String the path overridden
+# @arg $3 subDir:String the sub-directory to copy from embedDir and/or overrideDir
+# @arg $4 targetDir:String the target directory (default: ${HOME}/${subDir})
+# @env SUDO String allows to use custom sudo prefix command
+# @env HOME used for default value of targetDir arg
+# @env OVERWRITE_CONFIG_FILES indicates if target directory should be overwritten if it exists
+# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env IGNORE_MISSING_SOURCE_DIR
+Conf::copyStructure() {
+  local embedDir="$1"
+  local overrideDir="$2"
+  local subDir="$3"
+  local targetDir="${4:-${HOME}/${subDir}}"
+
+  local configDir
+  # shellcheck disable=SC2154
+  configDir="$(Conf::getOverriddenDir "${embedDir}" "${overrideDir}")"
+  if [[ -d "${configDir}/${subDir}" ]]; then
+    # shellcheck disable=SC2154
+    OVERWRITE_CONFIG_FILES=${OVERWRITE_CONFIG_FILES:-1} \
+      PRETTY_ROOT_DIR="${embedDir%/*}" \
+      Install::structure "${configDir}/${subDir}" "${targetDir}"
+  elif [[ "${IGNORE_MISSING_SOURCE_DIR:-0}" = "1" ]]; then
+    return 0
+  else
+    Log::displayError "Directory ${subDir} does not exists in '${embedDir}' or '${overrideDir}'"
+    return 1
+  fi
+}
+
+
 # @description select right file to load depending if file exists in this order:
 # - from conf.override
 # - from embedded file if provided
@@ -535,6 +626,81 @@ Conf::dynamicConfFile() {
     Log::displayWarning "Conf::dynamicConfFile - ${file} does not exist in any config dirs declared"
     return 1
   fi
+}
+
+
+# @description generate temp directory where default
+# and overridden directories have been merged
+#   - if overridden dir exists, create a new temp folder
+#     - copy all files from default folder
+#     - overwrite with files from overridden folder
+#     - (Later) delete files listed in .remove$$ file
+#     - return the path of this temp folder
+#   - else just return the default folder path
+# Then it is easier to pick overridden or default files/folders
+#
+# @arg $1 defaultDir:String usually the embed directory
+# @arg $2 overriddenDirPath:String the path to the directory
+#   that could be overridden
+# @exitcode 1 if default dir does not exist
+# @exitcode 2 if error during copy
+Conf::getOverriddenDir() {
+  local defaultDir="$1"
+  local overriddenDirPath="$2"
+
+  if [[ ! -d "${defaultDir}" ]]; then
+    Log::displayError "Directory ${defaultDir} does not exists"
+    return 1
+  fi
+  if [[ ! -d "${overriddenDirPath}" || -z "$(ls -A "${overriddenDirPath}")" ]]; then
+    Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist, keep default one ${defaultDir}"
+    echo "${defaultDir}"
+    return 0
+  fi
+  local tempDir
+  tempDir="$(mktemp -d)"
+  (
+    shopt -s dotglob
+    cp -R "${defaultDir}/." "${tempDir}"
+    cp -R "${overriddenDirPath}/." "${tempDir}"
+  ) || return 2
+  echo "${tempDir}"
+}
+
+
+# @description list files of dir with given extension and display it as a list one by line
+#
+# @arg $1 dir:String the directory to list
+# @arg $2 prefix:String the profile file prefix (default: "")
+# @arg $3 ext:String the extension
+# @arg $4 findOptions:String find options, eg: -type d (Default value: '-type f')
+# @arg $5 indentStr:String the indentation can be any string compatible with sed not containing any / (Default value: '       - ')
+# @stdout list of files without extension/directory
+# @example text
+#       - default.local
+#       - default.remote
+#       - localhost-root
+# @exitcode 1 if directory does not exists
+Conf::list() {
+  local dir="$1"
+  local prefix="${2:-}"
+  local ext="${3}"
+  local findOptions="${4--type f}"
+  local indentStr="${5-       - }"
+
+  if [[ ! -d "${dir}" ]]; then
+    Log::displayError "Directory ${dir} does not exist"
+  fi
+  if [[ -n "${ext}" && "${ext:0:1}" != "." ]]; then
+    ext=".${ext}"
+  fi
+  (
+    # shellcheck disable=SC2086
+    cd "${dir}" &&
+      find . -maxdepth 1 ${findOptions} -name "${prefix}*${ext}" |
+      sed -E "s#^\./${prefix}##g" |
+        sed -E "s#${ext}\$##g" | sort | sed -E "s#^#${indentStr}#"
+  )
 }
 
 
@@ -1014,6 +1180,22 @@ Env::requireLoad() {
 }
 
 
+# @description get number of seconds since last modification of the file
+# @arg $1 file:String file path
+# @exitcode 1 if file does not exist
+# @stdout number of seconds since last modification of the file
+File::elapsedTimeSinceLastModification() {
+  local file="$1"
+  if [[ ! -f "${file}" ]]; then
+    return 1
+  fi
+  local lastModificationTimeSeconds diff
+  lastModificationTimeSeconds="$(stat -c %Y "${file}")"
+  ((diff = $(date +%s) - lastModificationTimeSeconds))
+  echo -n "${diff}"
+}
+
+
 # @description delete files older than n days in given path
 # @warning use this function with caution as it will delete all files in given path without any prompt
 # @arg $1 path:String the directory in which files will be deleted or the file to delete
@@ -1054,12 +1236,246 @@ File::relativeToDir() {
   realpath -m --relative-to="${relativeTo}" "${srcFile}"
 }
 
+# shellcheck disable=SC2120
+
+# @description uniq command need input file to be sorted
+# here We are using awk that do not need file to be sorted
+# to get uniq values
+# iterates over each file and prints (default awk behavior)
+# each unique line; only takes first value and ignores duplicates
+# Note ! be careful of memory usage as each unique $0 is stored in an array
+# @exitcode * if one of the filter command fails
+# @stdin you can use stdin as alternative to str argument
+# @stdout the filtered content
+# shellcheck disable=SC2120
+Filters::uniqUnsorted() {
+  awk '!seen[$0]++' "$@"
+}
+
 
 # @description create a temp file using default TMPDIR variable
 # @env TMPDIR String (default value /tmp)
 # @arg $1 templateName:String template name to use(optional)
 Framework::createTempFile() {
   mktemp -p "${TMPDIR:-/tmp}" -t "${1:-}.XXXXXXXXXXXX"
+}
+
+
+# @description installs file to given directory
+#
+# callbacks parameters `${fromFile} ${targetFile} $@`
+# @arg $1 fromFile - original file to copy
+# @arg $2 targetFile - target file
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @arg $5 successCallback:Function the callback to call when file is installed successfully, by default setUserRights callback is called
+# @arg $6 failureCallback:Function the callback to call when file installation has failed, by default unableToCopyCallback callback is called
+# @arg $@ callbacksParams:String[] additional parameters passed to callbacks
+# @exitcode 1 if fromFile is not readable
+# @exitcode 2 if backup file failure
+# @exitcode 3 if copy failure
+# @exitcode 0 on success or if OVERWRITE_CONFIG_FILES=0
+# @exitcode 0 on success or if CHANGE_WINDOWS_FILES=0 and target file is a windows file
+# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing directory
+# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target file is in windows file system, overwrite it
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env BASE_MNT_C String windows C drive base PATH
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_BEFORE_INSTALL Boolean (default: 1) backup file before installing the file
+Install::file() {
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+  local successCallback=${5:-Install::setUserRightsCallback}
+  local failureCallback=${6:-Install::unableToCopyCallback}
+  shift 6 || true
+
+  if [[ ! -f "${fromFile}" || ! -r "${fromFile}" ]]; then
+    Log::displayError "cannot read source file '${fromFile}'"
+    return 1
+  fi
+
+  # skip if OVERWRITE_CONFIG_FILES is 0 and target file exists
+  if [[ "${OVERWRITE_CONFIG_FILES}" = "0" && -f "${targetFile}" ]]; then
+    Log::displayWarning "File '${targetFile}' exists - Skip install (because OVERWRITE_CONFIG_FILES=0 in .env file)"
+    return 0
+  fi
+
+  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
+  if [[ "${CHANGE_WINDOWS_FILES}" = "0" && "${targetFile}" =~ ^${BASE_MNT_C} ]]; then
+    Log::displayWarning "File '${targetFile}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
+    return 0
+  fi
+
+  local targetDir="${targetFile%/*}"
+  if ! ${SUDO} test -d "${targetDir}"; then
+    ${SUDO:-} mkdir -p "${targetDir}"
+    ${SUDO:-} chown "${userName}":"${userGroup}" "${targetDir}"
+  fi
+  local fromDir="${fromFile%/*}"
+  local fromFilename="${fromFile##*/}"
+
+  local prettyFromDir
+  # shellcheck disable=SC2295
+  prettyFromDir="${fromDir#${PRETTY_ROOT_DIR:-${FRAMEWORK_ROOT_DIR}}/}"
+  if diff -q "${fromFile}" "${targetFile}" &>/dev/null; then
+    Log::displayStatus "No changes detected. No need to update '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
+    return 0
+  fi
+
+  if [[ "${BACKUP_BEFORE_INSTALL:-1}" = "1" ]]; then
+    Backup::file "${targetFile}" || return 2
+  fi
+
+  if ${SUDO:-} cp "${fromFile}" "${targetFile}"; then
+    # shellcheck disable=SC2295
+    Log::displaySuccess "Installed file '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
+    ${successCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
+  else
+    # shellcheck disable=SC2295
+    Log::displayError "unable to copy file '${targetFile}' from '${fromDir#${FRAMEWORK_ROOT_DIR}/}/${fromFilename}'"
+    ${failureCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
+    return 3
+  fi
+}
+
+
+# @description install callback
+#   set file with root ownership and execution bit
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 on any failure
+# @see Install::file
+Install::setUserRightsCallback() {
+  # shellcheck disable=SC2034 # $1 not used
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+
+  ${SUDO:-} chown "${userName}":"${userGroup}" "${targetFile}"
+}
+
+
+# @description install dir to given directory but backup it before
+# @arg $1 fromDir:String the source base directory
+# @arg $2 toDir:String the target base directory
+# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing files
+# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target directory is in windows file system, overwrite it
+# @env USERNAME (default: ${USERNAME} if SUDO empty else root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: ${USERGROUP} if SUDO empty else root) the group name that will be used to set target files ownership
+# @env BASE_MNT_C String windows C drive base PATH
+# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_BEFORE_INSTALL Boolean (default:1) backup directory before installing the dir
+# @exitcode 1 if source directory is not readable
+# @exitcode 2 if error during structure replication
+# @exitcode 2 if error during file copy
+# @exitcode 0 if copy successful
+# @exitcode 0 with warning message if CHANGE_WINDOWS_FILES=0 and target directory in C drive
+# @stderr diagnostics information is displayed, skipped information if OVERWRITE_CONFIG_FILES or CHANGE_WINDOWS_FILES are set to 1
+Install::structure() {
+  local fromDir="$1"
+  local toDir="$2"
+  local userName="root"
+  local userGroup="root"
+  if [[ -z "${SUDO:-}" ]]; then
+    userName="${USERNAME:-root}"
+    userGroup="${USERGROUP:-root}"
+  fi
+
+  if [[ ! -d "${fromDir}" || ! -r "${fromDir}" ]]; then
+    Log::displayError "Install::structure - cannot read source directory '${fromDir}'"
+    return 1
+  fi
+
+  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
+  if [[ "${CHANGE_WINDOWS_FILES:-0}" = "0" && "${toDir}" =~ ^${BASE_MNT_C:-/mnt/c} ]]; then
+    Log::displayWarning "Install::structure - Directory '${fromDir}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
+    return 0
+  fi
+
+  # first replicate directory structure
+  # shellcheck disable=SC2317
+  createStructure() {
+    local dir="$1"
+    if ! ${SUDO} test -d "${dir}"; then
+      if ! ${SUDO:-} mkdir -p "${dir}"; then
+        Log::displayError "Install::structure - impossible to create directory '${dir}'"
+        exit 1
+      fi
+    fi
+
+    if ! ${SUDO:-} chown "${userName}":"${userGroup}" "${dir}"; then
+      Log::displayError "Install::structure - impossible to update directory owner '${dir}' with ${userName}:${userGroup}"
+      exit 1
+    fi
+  }
+  local dir
+
+  (
+    local dir
+    shopt -s lastpipe
+    # -links 2 allows to exclude empty directories
+    ${SUDO:-} find "${fromDir}" -depth -type d -links 2 -print0 |
+      while read -rd '' dir; do
+        if ! createStructure "${toDir}/${dir#"${fromDir}"}"; then
+          # error already reported by createStructure
+          exit 1
+        fi
+      done || {
+      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
+        Log::displayError "Install::structure - replicated directory structure - find directories on '${fromDir}' resulted in an error"
+        exit 2
+      fi
+    }
+  ) || return 2
+
+  # for each file, copy it
+  (
+    local file
+    shopt -s lastpipe
+    ${SUDO:-} find "${fromDir}" -depth -type f -print0 |
+      while read -rd '' file; do
+        local localFile="${file#"${fromDir}/"}"
+        if ! Install::file "${fromDir}/${localFile}" "${toDir}/${localFile}"; then
+          # error already reported by Install::file
+          exit 1
+        fi
+      done || {
+      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
+        Log::displayError "Install::structure - replicated file structure - find files on '${fromDir}' resulted in an error"
+        exit 2
+      fi
+    }
+  ) || return 3
+
+  # shellcheck disable=SC2295
+  Log::displaySuccess "Installed directory '${toDir#${PRETTY_ROOT_DIR}/}' from '${fromDir#${PRETTY_ROOT_DIR}/}'"
+}
+
+
+# @description install callback
+#   default callback used called when file copy has failed
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @exitcode 1 always fail
+# @stderr diagnostics information is displayed
+# @see Install::file
+Install::unableToCopyCallback() {
+  local fromDir="$1"
+  local fileName="$2"
+  local targetFile="$3"
+  Log::fatal "unable to copy file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fileName}' to '${targetFile}'"
 }
 
 
@@ -1303,7 +1719,7 @@ Linux::Apt::installIfNecessary() {
   local package
   local -i installNeeded=0
   for package in "${packages[@]}"; do
-    if [[ "${package}" =~ ^-- ]]; then
+    if [[ "${package}" =~ ^[-]{1,2} ]]; then
       continue
     fi
     if ! Linux::Apt::isPackageInstalled "${package}"; then
@@ -1555,6 +1971,8 @@ Linux::getDistributorId() {
 # @exitcode 1 if tar command not available
 # @stderr diagnostics information is displayed
 Linux::requireTarCommand() {
+  export REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED=1
+
   Assert::commandExists tar
 }
 
@@ -1659,6 +2077,20 @@ Log::displaySkipped() {
     echo -e "${__SKIPPED_COLOR}SKIPPED - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
   fi
   Log::logSkipped "$1"
+}
+
+
+# @description Display message using info color (blue) but warning level
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displayStatus() {
+  local type="${2:-STATUS}"
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
+    Log::computeDuration
+    echo -e "${__INFO_COLOR}${type}  - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logStatus "$1" "${type}"
 }
 
 
@@ -1798,6 +2230,15 @@ Log::logSkipped() {
 
 # @description log message to file
 # @arg $1 message:String the message to display
+Log::logStatus() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
+    Log::logMessage "${2:-STATUS}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
 Log::logSuccess() {
   if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
     Log::logMessage "${2:-SUCCESS}" "$1"
@@ -1892,6 +2333,153 @@ Log::rotate() {
     echo >"${file}" # reset log file
     Log::displayInfo "Log rotation ${file} to ${file}.1"
   fi
+}
+
+
+declare -Ag allDepsResultSeen=()
+declare -ag allDepsResult=()
+
+# @description get recursively all the dependencies of each config from configs arg
+#
+# The parent argument must be set to "your software selection" when you call it,
+# then the value will change when this function will be called recursively with the
+# parent dependency
+#
+# Algorithm
+#   For each config in configs
+#     - load config definition
+#     - mark this config as seen to avoid to recompute it later, in the case where another
+#       definition depends on it
+#     - call installScripts_${config}_dependencies function if exists (skipped if not)
+#     - add these new dependencies if any to current dependencies list
+#     - call recursively Profiles::allDepsRecursive with these dependencies
+#     - add in allDepsResult the current config if it was not seen yet
+#   This has constructed a tree with the most deep dependency present in the first items
+#
+# @warning allDepsResultSeen and allDepsResult global variables have to reset to empty array every time you call this function
+#
+# @arg $1 scriptsDir:String base directory where dependencies can be retrieved
+# @arg $2 parent:String set to "your software selection" when you call it
+# @arg $@ configs:String[] list of configurations to load, each config can depend on an other one
+# @exitcode 1 if one of the dependency cannot be found
+# @exitcode 2 if error while loading one of the dependency definition
+# @exitcode 3 if error while calling dependencies function of the dependency's definition
+# @set allDepsResultSeen String[] list of dependencies already seen
+# @set allDepsResult String[] the final list of dependencies sorted by the most to less dependent
+# @stderr diagnostics information is displayed
+Profiles::allDepsRecursive() {
+  local scriptsDir="$1"
+  local parent="$2"
+  shift 2 || true
+  local i
+  local addDep=0
+  local -a deps=()
+  local -a newDeps
+
+  for i in "$@"; do
+    if [[ "${allDepsResultSeen["${i}"]}" = 'stored' ]]; then
+      continue
+    fi
+    if [[ ! -f "${scriptsDir}/${i}" ]]; then
+      Log::displayError "Dependency ${i} doesn't exist"
+      return 1
+    fi
+
+    if ! readarray -t newDeps < <(SKIP_REQUIRES=1 "${scriptsDir}/${i}" dependencies); then
+      Log::displayError "Dependency ${i} - ${scriptsDir}/${i} dependencies failure"
+      return 3
+    fi
+    if [[ -z "${allDepsResultSeen[${i}]+exists}" ]]; then
+      addDep=1
+      allDepsResultSeen["${i}"]='stored'
+    fi
+    # remove duplicates from deps preserving order
+    mapfile -t deps < <(
+      IFS=$'\n'
+      printf "%s\n" "${deps[@]}" | awk '!x[$0]++'
+    )
+    if ((${#newDeps} > 0)); then
+      Log::displayInfo "${i} depends on ${newDeps[*]}"
+      Profiles::allDepsRecursive "${scriptsDir}" "${i}" "${newDeps[@]}" || return $?
+    fi
+    if [[ "${addDep}" = "1" ]]; then
+      Log::displayInfo "${i} is a dependency of ${parent}"
+      allDepsResult+=("${i}")
+    fi
+    addDep=0
+  done
+}
+
+
+# @description deduce profile path from given profile name
+# if 2 profiles are named identically the first existing profile
+# will be used beginning with srcAlt profiles
+# @arg $1 profileName:String
+# @stdout the path of the profile, no output if profile not found
+# @exitcode 1 if profile not found
+Profiles::getProfilePath() {
+  local profileName="$1"
+  local dir
+  for dir in "${BASH_DEV_ENV_ROOT_DIR}/srcAlt/"*; do
+    profilePath="${dir}/profiles/profile.${profileName}.sh"
+    if [[ -f "${profilePath}" ]]; then
+      echo "${profilePath}"
+      return 0
+    fi
+  done
+  local profilePath="${BASH_DEV_ENV_ROOT_DIR}/profiles/profile.${profileName}.sh"
+  if [[ -f "${profilePath}" ]]; then
+    echo "${profilePath}"
+    return 0
+  fi
+
+  return 1
+}
+
+
+# @description load profile file based on profileFile argument
+# The profile file is profileDir/profile.profile.sh
+# This file should define the variable CONFIG_LIST with array type
+# @arg $1 profileFile:String full profile path
+# @exitcode 1 if argument is not provided
+# @exitcode 2 if profile not found
+# @exitcode 3 if profile found but CONFIG_LIST variable unset
+# @exitcode 4 if profile found but CONFIG_LIST variable empty
+# @exitcode 5 if error occurs during profile loading
+# @stderr diagnostics information is displayed
+# @see Profiles::allDepsRecursive in order to load all the dependencies recursively based on this list
+# @set CONFIG_LIST
+Profiles::loadProfile() {
+  local profileFile="$1"
+
+  if [[ -z "${profileFile}" ]]; then
+    Log::displayError "This method needs exactly 1 parameter"
+    return 1
+  fi
+
+  # load the profile
+  Log::displayInfo "Loading profile '${profileFile}'"
+  if [[ ! -f "${profileFile}" ]]; then
+    Log::displayError "profile ${profileFile} not found"
+    return 2
+  fi
+
+  # shellcheck source=src/Profiles/testsData/profile.test1.sh
+  source "${profileFile}" || return 5
+
+  if [[ ! -v CONFIG_LIST ]]; then
+    Log::displayError "Profile ${profileFile} missing variable CONFIG_LIST"
+    return 3
+  fi
+  if [[ ${#CONFIG_LIST[@]} -eq 0 ]]; then
+    Log::displayError "Profile ${profileFile} variable CONFIG_LIST cannot be empty"
+    return 4
+  fi
+
+  # remove duplicates from profile preserving order
+  mapfile -t CONFIG_LIST < <(
+    IFS=$'\n' printf '%s\n' "${CONFIG_LIST[@]}" | Filters::uniqUnsorted
+  )
 }
 
 
@@ -2701,6 +3289,13 @@ commandOptionParseFinished() {
 }
 
 
+Linux::requireTarCommand
+Compiler::Embed::extractDirFromBase64 \
+  "${PERSISTENT_TMPDIR:-/tmp}/b054c56a7680f20167db4f64c5926d46fa913eff2708cb0f8c41a02e66819de0/conf_dir" \
+  "H4sIAAAAAAAA/+yTUWvyMBSGve6vOJ96ofDZZEMnFHqhNlsD08iMbEMc1NlVoTalaYvDut8+KpsdbswLCzLoc3NK+/CeJpyjziy5aMztuGF7MfID8bJ0bXWOHOFanqPKRel0MMa43WrtKsb4sOJ2+2r/vHt/0bpsNkuAc+h9lEiGVlDCJ/c6PNwfofIPRTJAs6WHbC+GdBqUSr4oFTAYDBgHYlD+H7hJR3BNbwn0OgPoEhgPjQ4nBtxTbrIxT1XaI7n/hjKZgFbdDDvc3Gqgv0HtKdHq1Y3J+mSLVFc8W256ETUtqdZhOoUkgVTWvyufMUcinXiFHPF7ZubsQxV77YsghBvWpQO9/INazpThHXt41Bdh6EsNpQu8flU/llcETuaNxn2jq8to9fXruaevoKDgnLwHAAD//6/nSKUACAAA"
+
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/b054c56a7680f20167db4f64c5926d46fa913eff2708cb0f8c41a02e66819de0/conf_dir"
+
 
 helpDescription() {
   echo "gvm tool allows to switch from one go version to another."
@@ -2726,8 +3321,11 @@ isTestInstallImplemented() { :; }
 # jscpd:ignore-end
 
 install() {
-  # shellcheck source=/dev/null
-  source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+  # shellcheck disable=SC2154
+  Conf::copyStructure \
+    "${embed_dir_conf_dir}" \
+    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    ".bash-dev-env"
 
   mkdir -p "${HOME}/.local/bin"
   curl -o "${HOME}/.local/bin/gvm" \
@@ -2739,6 +3337,9 @@ install() {
 
 testInstall() {
   local -i failures=0
+  # shellcheck source=/dev/null
+  source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+
   # shellcheck source=/dev/null
   Assert::commandExists gvm || ((++failures))
 
@@ -2758,6 +3359,9 @@ configure() {
         grep -Eoh '[0-9]+\..*'
     )"
 
+    # shellcheck source=/dev/null
+    source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+
     Log::displayInfo "Installing go latest version is ${latestVersion}"
     gvm "${latestVersion}" -s
 
@@ -2767,9 +3371,147 @@ configure() {
 
 testConfigure() {
   local failures=0
+  # shellcheck source=/dev/null
+  source "${HOME}/.bash-dev-env/profile.d/golang.sh" || ((++failures))
+
   Version::checkMinimal "go" "version" "1.22.1" || ((++failures))
   return "${failures}"
 }
+
+
+
+softwareArgHelpFunction() {
+  echo "    List of softwares to install (--profile option cannot be used in this case)"
+  echo "    See below for complete list of softwares available"
+}
+
+profileHelpFunction() {
+  echo "    Profile name to use that contains all the softwares to install"
+}
+
+profilesHelpList() {
+  echo -e "  ${__HELP_TITLE_COLOR}Available profiles:${__RESET_COLOR}"
+  (
+    Conf::list "${BASH_DEV_ENV_ROOT_DIR}/profiles" "profile." ".sh" "-type f" "    - "
+    local dir
+    for dir in "${BASH_DEV_ENV_ROOT_DIR}/srcAlt/"*; do
+      if [[ -d "${dir}/profiles" ]]; then
+        Conf::list "${dir}/profiles" "profile." ".sh" "-type f" "    - "
+      fi
+    done
+  ) | sort | uniq
+}
+
+validateProfile() {
+  local profileName="$2"
+  if ! Profiles::getProfilePath "${profileName}" &>/dev/null; then
+    Log::fatal "Profile file profile.${profileName}.sh doesn't exist in any profiles directory"
+  fi
+}
+
+commandCallback() {
+  if ((${#CONFIG_LIST} > 0)); then
+    if [[ -n "${PROFILE}" ]]; then
+      Log::fatal "You cannot combine profile and softwares"
+    fi
+    # check if each Softwares exists
+    local software
+    for software in "${CONFIG_LIST[@]}"; do
+      if [[ ! -f "${BASH_DEV_ENV_ROOT_DIR}/${software}" ]]; then
+        Log::fatal "Software ${software} configuration does not exists"
+      fi
+    done
+  elif [[ -z "${PROFILE}" ]]; then
+    Log::fatal "You must specify either a list of softwares, either a profile name"
+  else
+    # get profile path
+    local profilePath
+    profilePath="$(Profiles::getProfilePath "${PROFILE}")" # should succeed as it was tested by option
+    # load selected profile
+    Profiles::loadProfile "${profilePath}"
+  fi
+  if [[ "${SKIP_DEPENDENCIES:-0}" = "0" ]]; then
+    CONFIG_LIST=("${CONFIG_LIST[@]}")
+
+    declare rootDependency="your software selection"
+    if [[ -n "${PROFILE}" ]]; then
+      rootDependency="profile ${PROFILE}"
+    fi
+    # deduce dependencies
+    declare -ag allDepsResult=()
+    # shellcheck disable=SC2034
+    declare -Ag allDepsResultSeen=()
+    Profiles::allDepsRecursive \
+      "${BASH_DEV_ENV_ROOT_DIR}" "${rootDependency}" "${CONFIG_LIST[@]}"
+
+    CONFIG_LIST=("${allDepsResult[@]}")
+  fi
+  if ((${#CONFIG_LIST} == 0)); then
+    Log::fatal "Softwares list is empty"
+  fi
+}
+
+export CONFIG_LIST
+export PROFILE
+
+
+
+generateSoftwaresList() {
+  local directory="$1"
+  local relativeDir="$2"
+  local description list softName
+
+  list="$(
+    Conf::list "${directory}" "" "" "-type f" "" |
+      grep -v -E '^(_.*|MandatorySoftwares)$' || true
+  )"
+  local -i maxLineLength
+  maxLineLength="$(wc -L <<<"${list}")"
+  ((maxLineLength += 1 + ${#relativeDir}))
+  while read -r soft; do
+    softName="${soft}"
+    description="$(SKIP_REQUIRES=1 "${directory}/${soft}" helpDescription 2>/dev/null)"
+    if [[ -z "${description}" ]]; then
+      description="<No description available>"
+    fi
+    description="$(printf -- '_%.0s' $(seq "$((maxLineLength - ${#softName} - 1 - ${#relativeDir} + 1))")) ${description}"
+    description="  - ${__HELP_TITLE_COLOR}${relativeDir}/${softName} ${__HELP_EXAMPLE}${description}${__RESET_COLOR}"
+    echo -e " ${description}" | sed '2,$s/^/      /'
+  done <<<"${list}"
+}
+
+softwaresListCacheFile() {
+  local relativeDir="$1"
+  directoryName="$(sed -E 's#/#_#g' <<<"${relativeDir}")"
+  echo "${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_dev_env_${directoryName}_arg_help_cache"
+}
+
+generateSoftwaresListCache() {
+  local directory="$1"
+  local relativeDir="$2"
+  local softwaresListHelpTempFile="$3"
+
+  if [[ ! -f "${softwaresListHelpTempFile}" ]] ||
+    (($(File::elapsedTimeSinceLastModification "${softwaresListHelpTempFile}") > help_cache_max_duration)); then
+    echo >&2 -n "Generating softwares list cache (directory ${relativeDir}) ..."
+    generateSoftwaresList "${directory}" "${relativeDir}" >"${softwaresListHelpTempFile}" || rm -f "${softwaresListHelpTempFile}"
+    echo >&2 -e "\033[2K" # erase line (Generating softwares list cache ...)
+  fi
+}
+
+displayAvailableSoftwares() {
+  local directory="$1"
+
+  local relativeDir
+  relativeDir="$(File::relativeToDir "${directory}" "${BASH_DEV_ENV_ROOT_DIR}")"
+  local softwaresListHelpTempFile
+  softwaresListHelpTempFile="$(softwaresListCacheFile "${relativeDir}")"
+  generateSoftwaresListCache "${directory}" "${relativeDir}" "${softwaresListHelpTempFile}"
+  echo -e "  ${__HELP_TITLE_COLOR}Available Softwares (directory ${relativeDir}):${__RESET_COLOR}"
+  cat "${softwaresListHelpTempFile}"
+}
+
+declare -i help_cache_max_duration=86400
 
 
 

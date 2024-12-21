@@ -1102,7 +1102,7 @@ Linux::Apt::installIfNecessary() {
   local package
   local -i installNeeded=0
   for package in "${packages[@]}"; do
-    if [[ "${package}" =~ ^-- ]]; then
+    if [[ "${package}" =~ ^[-]{1,2} ]]; then
       continue
     fi
     if ! Linux::Apt::isPackageInstalled "${package}"; then
@@ -3555,7 +3555,9 @@ executeScript() {
   if [[ "${SKIP_TEST}" = "1" ]]; then
     installCmd+=(--skip-test)
   fi
-
+  if [[ -n "${PROFILE}" ]]; then
+    installCmd+=(--profile "${PROFILE}")
+  fi
   LOG_CONTEXT="${configName} - " "${installCmd[@]}"
 }
 

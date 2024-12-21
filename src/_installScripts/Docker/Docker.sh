@@ -43,15 +43,11 @@ testCleanBeforeExport() {
 # REQUIRE Linux::requireUbuntu
 # REQUIRE Linux::requireExecutedAsUser
 install() {
-  if isUbuntuMinimum24; then
+  if Version::isUbuntuMinimum "24.04"; then
     installFromUbuntu24
   else
     installFromUbuntu20
   fi
-}
-
-isUbuntuMinimum24() {
-  Version::compare "${VERSION_ID}" "24.04"
 }
 
 installFromUbuntu24() {
@@ -156,7 +152,7 @@ configure() {
   sudo getent group docker >/dev/null || sudo groupadd docker || true
   sudo usermod -aG docker "${USERNAME}" || true
 
-  if ! isUbuntuMinimum24; then
+  if ! Version::isUbuntuMinimum "24.04"; then
     configureDockerPlugin
   fi
 

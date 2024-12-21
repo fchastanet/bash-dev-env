@@ -63,7 +63,7 @@ configure() {
     "${embed_dir_conf_dir}" \
     "${CONF_OVERRIDE_DIR}/$(scriptName)" \
     "info" \
-    "${HOME}/.bash-dev-env/GitDefaultConfig/pre-commit-template"
+    "${HOME}/.bash-dev-env/GitDefaultConfig/pre-commit-template/info"
 
   if ! git config --global init.templatedir \
     "${HOME}/.bash-dev-env/GitDefaultConfig/pre-commit-template"; then

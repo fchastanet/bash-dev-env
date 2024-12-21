@@ -733,6 +733,42 @@ Conf::getOverriddenDir() {
 }
 
 
+# @description list files of dir with given extension and display it as a list one by line
+#
+# @arg $1 dir:String the directory to list
+# @arg $2 prefix:String the profile file prefix (default: "")
+# @arg $3 ext:String the extension
+# @arg $4 findOptions:String find options, eg: -type d (Default value: '-type f')
+# @arg $5 indentStr:String the indentation can be any string compatible with sed not containing any / (Default value: '       - ')
+# @stdout list of files without extension/directory
+# @example text
+#       - default.local
+#       - default.remote
+#       - localhost-root
+# @exitcode 1 if directory does not exists
+Conf::list() {
+  local dir="$1"
+  local prefix="${2:-}"
+  local ext="${3}"
+  local findOptions="${4--type f}"
+  local indentStr="${5-       - }"
+
+  if [[ ! -d "${dir}" ]]; then
+    Log::displayError "Directory ${dir} does not exist"
+  fi
+  if [[ -n "${ext}" && "${ext:0:1}" != "." ]]; then
+    ext=".${ext}"
+  fi
+  (
+    # shellcheck disable=SC2086
+    cd "${dir}" &&
+      find . -maxdepth 1 ${findOptions} -name "${prefix}*${ext}" |
+      sed -E "s#^\./${prefix}##g" |
+        sed -E "s#${ext}\$##g" | sort | sed -E "s#^#${indentStr}#"
+  )
+}
+
+
 # @description check validity of .env variables
 # @env CHECK_ENV int 0 to avoid checking environment
 # @noargs
@@ -1209,6 +1245,22 @@ Env::requireLoad() {
 }
 
 
+# @description get number of seconds since last modification of the file
+# @arg $1 file:String file path
+# @exitcode 1 if file does not exist
+# @stdout number of seconds since last modification of the file
+File::elapsedTimeSinceLastModification() {
+  local file="$1"
+  if [[ ! -f "${file}" ]]; then
+    return 1
+  fi
+  local lastModificationTimeSeconds diff
+  lastModificationTimeSeconds="$(stat -c %Y "${file}")"
+  ((diff = $(date +%s) - lastModificationTimeSeconds))
+  echo -n "${diff}"
+}
+
+
 # @description delete files older than n days in given path
 # @warning use this function with caution as it will delete all files in given path without any prompt
 # @arg $1 path:String the directory in which files will be deleted or the file to delete
@@ -1247,6 +1299,22 @@ File::relativeToDir() {
   local relativeTo="$2"
 
   realpath -m --relative-to="${relativeTo}" "${srcFile}"
+}
+
+# shellcheck disable=SC2120
+
+# @description uniq command need input file to be sorted
+# here We are using awk that do not need file to be sorted
+# to get uniq values
+# iterates over each file and prints (default awk behavior)
+# each unique line; only takes first value and ignores duplicates
+# Note ! be careful of memory usage as each unique $0 is stored in an array
+# @exitcode * if one of the filter command fails
+# @stdin you can use stdin as alternative to str argument
+# @stdout the filtered content
+# shellcheck disable=SC2120
+Filters::uniqUnsorted() {
+  awk '!seen[$0]++' "$@"
 }
 
 
@@ -1716,7 +1784,7 @@ Linux::Apt::installIfNecessary() {
   local package
   local -i installNeeded=0
   for package in "${packages[@]}"; do
-    if [[ "${package}" =~ ^-- ]]; then
+    if [[ "${package}" =~ ^[-]{1,2} ]]; then
       continue
     fi
     if ! Linux::Apt::isPackageInstalled "${package}"; then
@@ -2330,6 +2398,153 @@ Log::rotate() {
     echo >"${file}" # reset log file
     Log::displayInfo "Log rotation ${file} to ${file}.1"
   fi
+}
+
+
+declare -Ag allDepsResultSeen=()
+declare -ag allDepsResult=()
+
+# @description get recursively all the dependencies of each config from configs arg
+#
+# The parent argument must be set to "your software selection" when you call it,
+# then the value will change when this function will be called recursively with the
+# parent dependency
+#
+# Algorithm
+#   For each config in configs
+#     - load config definition
+#     - mark this config as seen to avoid to recompute it later, in the case where another
+#       definition depends on it
+#     - call installScripts_${config}_dependencies function if exists (skipped if not)
+#     - add these new dependencies if any to current dependencies list
+#     - call recursively Profiles::allDepsRecursive with these dependencies
+#     - add in allDepsResult the current config if it was not seen yet
+#   This has constructed a tree with the most deep dependency present in the first items
+#
+# @warning allDepsResultSeen and allDepsResult global variables have to reset to empty array every time you call this function
+#
+# @arg $1 scriptsDir:String base directory where dependencies can be retrieved
+# @arg $2 parent:String set to "your software selection" when you call it
+# @arg $@ configs:String[] list of configurations to load, each config can depend on an other one
+# @exitcode 1 if one of the dependency cannot be found
+# @exitcode 2 if error while loading one of the dependency definition
+# @exitcode 3 if error while calling dependencies function of the dependency's definition
+# @set allDepsResultSeen String[] list of dependencies already seen
+# @set allDepsResult String[] the final list of dependencies sorted by the most to less dependent
+# @stderr diagnostics information is displayed
+Profiles::allDepsRecursive() {
+  local scriptsDir="$1"
+  local parent="$2"
+  shift 2 || true
+  local i
+  local addDep=0
+  local -a deps=()
+  local -a newDeps
+
+  for i in "$@"; do
+    if [[ "${allDepsResultSeen["${i}"]}" = 'stored' ]]; then
+      continue
+    fi
+    if [[ ! -f "${scriptsDir}/${i}" ]]; then
+      Log::displayError "Dependency ${i} doesn't exist"
+      return 1
+    fi
+
+    if ! readarray -t newDeps < <(SKIP_REQUIRES=1 "${scriptsDir}/${i}" dependencies); then
+      Log::displayError "Dependency ${i} - ${scriptsDir}/${i} dependencies failure"
+      return 3
+    fi
+    if [[ -z "${allDepsResultSeen[${i}]+exists}" ]]; then
+      addDep=1
+      allDepsResultSeen["${i}"]='stored'
+    fi
+    # remove duplicates from deps preserving order
+    mapfile -t deps < <(
+      IFS=$'\n'
+      printf "%s\n" "${deps[@]}" | awk '!x[$0]++'
+    )
+    if ((${#newDeps} > 0)); then
+      Log::displayInfo "${i} depends on ${newDeps[*]}"
+      Profiles::allDepsRecursive "${scriptsDir}" "${i}" "${newDeps[@]}" || return $?
+    fi
+    if [[ "${addDep}" = "1" ]]; then
+      Log::displayInfo "${i} is a dependency of ${parent}"
+      allDepsResult+=("${i}")
+    fi
+    addDep=0
+  done
+}
+
+
+# @description deduce profile path from given profile name
+# if 2 profiles are named identically the first existing profile
+# will be used beginning with srcAlt profiles
+# @arg $1 profileName:String
+# @stdout the path of the profile, no output if profile not found
+# @exitcode 1 if profile not found
+Profiles::getProfilePath() {
+  local profileName="$1"
+  local dir
+  for dir in "${BASH_DEV_ENV_ROOT_DIR}/srcAlt/"*; do
+    profilePath="${dir}/profiles/profile.${profileName}.sh"
+    if [[ -f "${profilePath}" ]]; then
+      echo "${profilePath}"
+      return 0
+    fi
+  done
+  local profilePath="${BASH_DEV_ENV_ROOT_DIR}/profiles/profile.${profileName}.sh"
+  if [[ -f "${profilePath}" ]]; then
+    echo "${profilePath}"
+    return 0
+  fi
+
+  return 1
+}
+
+
+# @description load profile file based on profileFile argument
+# The profile file is profileDir/profile.profile.sh
+# This file should define the variable CONFIG_LIST with array type
+# @arg $1 profileFile:String full profile path
+# @exitcode 1 if argument is not provided
+# @exitcode 2 if profile not found
+# @exitcode 3 if profile found but CONFIG_LIST variable unset
+# @exitcode 4 if profile found but CONFIG_LIST variable empty
+# @exitcode 5 if error occurs during profile loading
+# @stderr diagnostics information is displayed
+# @see Profiles::allDepsRecursive in order to load all the dependencies recursively based on this list
+# @set CONFIG_LIST
+Profiles::loadProfile() {
+  local profileFile="$1"
+
+  if [[ -z "${profileFile}" ]]; then
+    Log::displayError "This method needs exactly 1 parameter"
+    return 1
+  fi
+
+  # load the profile
+  Log::displayInfo "Loading profile '${profileFile}'"
+  if [[ ! -f "${profileFile}" ]]; then
+    Log::displayError "profile ${profileFile} not found"
+    return 2
+  fi
+
+  # shellcheck source=src/Profiles/testsData/profile.test1.sh
+  source "${profileFile}" || return 5
+
+  if [[ ! -v CONFIG_LIST ]]; then
+    Log::displayError "Profile ${profileFile} missing variable CONFIG_LIST"
+    return 3
+  fi
+  if [[ ${#CONFIG_LIST[@]} -eq 0 ]]; then
+    Log::displayError "Profile ${profileFile} variable CONFIG_LIST cannot be empty"
+    return 4
+  fi
+
+  # remove duplicates from profile preserving order
+  mapfile -t CONFIG_LIST < <(
+    IFS=$'\n' printf '%s\n' "${CONFIG_LIST[@]}" | Filters::uniqUnsorted
+  )
 }
 
 
@@ -3221,6 +3436,141 @@ testConfigure() {
   Assert::fileExists "${HOME}/.bash-dev-env/profile.d/composer_path.sh" || ((++failures))
   exit "${failures}"
 }
+
+
+
+softwareArgHelpFunction() {
+  echo "    List of softwares to install (--profile option cannot be used in this case)"
+  echo "    See below for complete list of softwares available"
+}
+
+profileHelpFunction() {
+  echo "    Profile name to use that contains all the softwares to install"
+}
+
+profilesHelpList() {
+  echo -e "  ${__HELP_TITLE_COLOR}Available profiles:${__RESET_COLOR}"
+  (
+    Conf::list "${BASH_DEV_ENV_ROOT_DIR}/profiles" "profile." ".sh" "-type f" "    - "
+    local dir
+    for dir in "${BASH_DEV_ENV_ROOT_DIR}/srcAlt/"*; do
+      if [[ -d "${dir}/profiles" ]]; then
+        Conf::list "${dir}/profiles" "profile." ".sh" "-type f" "    - "
+      fi
+    done
+  ) | sort | uniq
+}
+
+validateProfile() {
+  local profileName="$2"
+  if ! Profiles::getProfilePath "${profileName}" &>/dev/null; then
+    Log::fatal "Profile file profile.${profileName}.sh doesn't exist in any profiles directory"
+  fi
+}
+
+commandCallback() {
+  if ((${#CONFIG_LIST} > 0)); then
+    if [[ -n "${PROFILE}" ]]; then
+      Log::fatal "You cannot combine profile and softwares"
+    fi
+    # check if each Softwares exists
+    local software
+    for software in "${CONFIG_LIST[@]}"; do
+      if [[ ! -f "${BASH_DEV_ENV_ROOT_DIR}/${software}" ]]; then
+        Log::fatal "Software ${software} configuration does not exists"
+      fi
+    done
+  elif [[ -z "${PROFILE}" ]]; then
+    Log::fatal "You must specify either a list of softwares, either a profile name"
+  else
+    # get profile path
+    local profilePath
+    profilePath="$(Profiles::getProfilePath "${PROFILE}")" # should succeed as it was tested by option
+    # load selected profile
+    Profiles::loadProfile "${profilePath}"
+  fi
+  if [[ "${SKIP_DEPENDENCIES:-0}" = "0" ]]; then
+    CONFIG_LIST=("${CONFIG_LIST[@]}")
+
+    declare rootDependency="your software selection"
+    if [[ -n "${PROFILE}" ]]; then
+      rootDependency="profile ${PROFILE}"
+    fi
+    # deduce dependencies
+    declare -ag allDepsResult=()
+    # shellcheck disable=SC2034
+    declare -Ag allDepsResultSeen=()
+    Profiles::allDepsRecursive \
+      "${BASH_DEV_ENV_ROOT_DIR}" "${rootDependency}" "${CONFIG_LIST[@]}"
+
+    CONFIG_LIST=("${allDepsResult[@]}")
+  fi
+  if ((${#CONFIG_LIST} == 0)); then
+    Log::fatal "Softwares list is empty"
+  fi
+}
+
+export CONFIG_LIST
+export PROFILE
+
+
+
+generateSoftwaresList() {
+  local directory="$1"
+  local relativeDir="$2"
+  local description list softName
+
+  list="$(
+    Conf::list "${directory}" "" "" "-type f" "" |
+      grep -v -E '^(_.*|MandatorySoftwares)$' || true
+  )"
+  local -i maxLineLength
+  maxLineLength="$(wc -L <<<"${list}")"
+  ((maxLineLength += 1 + ${#relativeDir}))
+  while read -r soft; do
+    softName="${soft}"
+    description="$(SKIP_REQUIRES=1 "${directory}/${soft}" helpDescription 2>/dev/null)"
+    if [[ -z "${description}" ]]; then
+      description="<No description available>"
+    fi
+    description="$(printf -- '_%.0s' $(seq "$((maxLineLength - ${#softName} - 1 - ${#relativeDir} + 1))")) ${description}"
+    description="  - ${__HELP_TITLE_COLOR}${relativeDir}/${softName} ${__HELP_EXAMPLE}${description}${__RESET_COLOR}"
+    echo -e " ${description}" | sed '2,$s/^/      /'
+  done <<<"${list}"
+}
+
+softwaresListCacheFile() {
+  local relativeDir="$1"
+  directoryName="$(sed -E 's#/#_#g' <<<"${relativeDir}")"
+  echo "${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_dev_env_${directoryName}_arg_help_cache"
+}
+
+generateSoftwaresListCache() {
+  local directory="$1"
+  local relativeDir="$2"
+  local softwaresListHelpTempFile="$3"
+
+  if [[ ! -f "${softwaresListHelpTempFile}" ]] ||
+    (($(File::elapsedTimeSinceLastModification "${softwaresListHelpTempFile}") > help_cache_max_duration)); then
+    echo >&2 -n "Generating softwares list cache (directory ${relativeDir}) ..."
+    generateSoftwaresList "${directory}" "${relativeDir}" >"${softwaresListHelpTempFile}" || rm -f "${softwaresListHelpTempFile}"
+    echo >&2 -e "\033[2K" # erase line (Generating softwares list cache ...)
+  fi
+}
+
+displayAvailableSoftwares() {
+  local directory="$1"
+
+  local relativeDir
+  relativeDir="$(File::relativeToDir "${directory}" "${BASH_DEV_ENV_ROOT_DIR}")"
+  local softwaresListHelpTempFile
+  softwaresListHelpTempFile="$(softwaresListCacheFile "${relativeDir}")"
+  generateSoftwaresListCache "${directory}" "${relativeDir}" "${softwaresListHelpTempFile}"
+  echo -e "  ${__HELP_TITLE_COLOR}Available Softwares (directory ${relativeDir}):${__RESET_COLOR}"
+  cat "${softwaresListHelpTempFile}"
+}
+
+declare -i help_cache_max_duration=86400
 
 
 

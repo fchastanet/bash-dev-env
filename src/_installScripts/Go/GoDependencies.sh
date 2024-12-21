@@ -63,7 +63,10 @@ install() {
   Log::displayInfo "Installing go dependencies"
   # install useful dependencies
   (
-    export GOBIN="${HOME}/.gvm/go/bin"
+    set -o errexit -o nounset
+    # shellcheck source=/dev/null
+    source "${HOME}/.bash-dev-env/profile.d/golang.sh" || exit 1
+
     go install mvdan.cc/gofumpt@latest
     go install github.com/bwplotka/bingo@latest
     go install github.com/mgechev/revive@latest
@@ -73,10 +76,10 @@ install() {
     go install kcl-lang.io/cli/cmd/kcl@latest
     go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
     go install golang.org/x/tools/cmd/goimports@latest
-  )
 
-  Log::displayInfo "Upgrading go dependencies"
-  go-global-update
+    Log::displayInfo "Upgrading go dependencies"
+    go-global-update
+  )
 }
 
 testInstall() {
@@ -85,14 +88,15 @@ testInstall() {
     local -i failures=0
     # shellcheck source=/dev/null
     source "${HOME}/.bash-dev-env/profile.d/golang.sh" || exit 1
+
     Version::checkMinimal "gofumpt" --version "0.7.0" || ((++failures))
     Version::checkMinimal "bingo" version "0.9" || ((++failures))
-    Version::checkMinimal "revive" --version "1.3.9" || ((++failures))
-    Version::checkMinimal "staticcheck" --version "0.5.1" || ((++failures))
-    Version::checkMinimal "dlv" version "1.23.1" || ((++failures))
-    Version::checkMinimal "go-global-update" version "0.2.5" || ((++failures))
-    Version::checkMinimal "kcl" version "0.10.3" || ((++failures))
-    Version::checkMinimal "golangci-lint" version "1.61.0" || ((++failures))
+    Version::checkMinimal "revive" --version "1.5.1" || ((++failures))
+    Version::checkMinimal "staticcheck" --version "2024.1.1" || ((++failures))
+    Version::checkMinimal "dlv" version "1.24.0" || ((++failures))
+    Version::checkMinimal "go-global-update" version "1" || ((++failures))
+    Version::checkMinimal "kcl" version "0.11" || ((++failures))
+    Version::checkMinimal "golangci-lint" version "1.62.2" || ((++failures))
     Assert::commandExists "goimports" || ((++failures))
     exit "${failures}"
   ) || failures="$?"

@@ -53,7 +53,13 @@ install() {
     local tempFolder
     tempFolder="$(mktemp -p "${TMPDIR:-/tmp}" -d)"
     chmod 777 "${tempFolder}"
-    cp "/opt/IlanCosman-tide-fonts/fonts/mesloLGS_NF"*.ttf "${tempFolder}"
+    # Copy and rename files in one step
+    local file
+    for file in "/opt/IlanCosman-tide-fonts/fonts/mesloLGS_NF"*.ttf; do
+      local filename="${file##*/}"     # Remove path
+      local newName="${filename//_/ }" # Replace underscores with spaces
+      cp "${file}" "${tempFolder}/${newName}"
+    done
     cd "${tempFolder}" || exit 1
     powershell.exe -ExecutionPolicy Bypass -NoProfile \
       -Command "${fontDir}" \
@@ -68,9 +74,10 @@ testInstall() {
 
   local localAppData
   Linux::Wsl::cachedWslpathFromWslVar2 localAppData LOCALAPPDATA
-  USERNAME="" USERGROUP="" Assert::fileExists "${localAppData}/Microsoft/Windows/Fonts/mesloLGS_NF_regular.ttf" || {
+  local fontPath="${localAppData}/Microsoft/Windows/Fonts"
+  USERNAME="" USERGROUP="" Assert::fileExists "${fontPath}/mesloLGS NF regular.ttf" || {
     ((++failures))
-    Log::displayError "Font mesloLGS_NF_regular.ttf not installed in windows folder: ${localAppData}/Microsoft/Windows/Fonts"
+    Log::displayError "Font 'mesloLGS NF regular.ttf' not installed in windows folder: ${fontPath}"
   }
   return "${failures}"
 }
