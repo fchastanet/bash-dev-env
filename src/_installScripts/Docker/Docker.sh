@@ -123,17 +123,7 @@ testInstall() {
   Log::displayInfo "docker version $(docker --version || true)"
   Log::displayInfo "docker-compose version $(docker-compose --version || true)"
 
-  dockerIsStarted() {
-    DOCKER_PS="$(docker ps 2>&1 || true)"
-    [[ ! "${DOCKER_PS}" =~ "Cannot connect to the Docker daemon" ]]
-  }
-  Log::displayInfo "Checking if docker is started ..."
-  if dockerIsStarted; then
-    Log::displaySuccess "Docker connection success"
-  else
-    Log::displayError "Docker is not started"
-    ((++failures))
-  fi
+  Docker::isRunning || ((++failures))
   return "${failures}"
 }
 

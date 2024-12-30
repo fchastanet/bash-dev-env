@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/BashUtils/Mlocate-conf" as conf_dir
 
 helpDescription() {
   echo "installs mlocate(before 22.04) or plocate package (since 22.04)"
@@ -20,7 +21,40 @@ breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
 # jscpd:ignore-end
 
+configureMlocate() {
+  # shellcheck disable=SC1003
+  local -r BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
+  local -r prunePaths=(
+    "${BASE_MNT_C}"
+    "/var/cache"
+    "/var/www"
+    "/var/lib/docker"
+    "${HOME}/.npm"
+    "${HOME}/.cache"
+    "${HOME}/.venvs"
+  )
+  # shellcheck disable=SC1003
+  sudo sed -i -E \
+    -e "s#^PRUNEPATHS=\"(.*)\"\$#PRUNEPATHS=\"\1 ${prunePaths[*]} \"#" \
+    -e '$a\' \
+    -e "# updated by bash-dev-env" \
+    /etc/updatedb.conf
+}
+
+installMlocateConfigFile() {
+  local configDir
+  # shellcheck disable=SC2154
+  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "${CONF_OVERRIDE_DIR}/${scriptName}")"
+  SUDO=sudo OVERWRITE_CONFIG_FILES=0 Install::file \
+    "${configDir}/etc/updatedb.conf" \
+    "/etc/updatedb.conf" \
+    "root" "root" configureMlocate
+}
+
 install() {
+  Log::displayInfo "Configure locate updatedb.conf to exclude some directories"
+  installMlocateConfigFile
+
   if Version::isUbuntuMinimum "22.04"; then
     # since 22.04 mlocate has been replaced by plocate
     installFromUbuntu22
@@ -34,44 +68,25 @@ installFromUbuntu22() {
     Log::displayInfo "install plocate required packages"
     Linux::Apt::update
     Linux::Apt::install --no-install-recommends \
-      -o APT::Update::Exclude=updatedb plocate
+      plocate -o Dpkg::Options::="--force-confold"
   fi
 }
 
 installFromUbuntu20() {
-  # download mlocate package
-  if ! dpkg -s mlocate &>/dev/null; then
-    (
-      mkdir -p /tmp/mlocate true
-      cd /tmp/mlocate || exit 1
-      # download mlocate package
-      sudo apt-get download mlocate
-      # extract it
-      dpkg-deb -R mlocate_*_amd64.deb /tmp/mlocate/deb
-      rm ./*.deb
-      # shellcheck disable=SC1003
-      BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
-      # update configuration in order to remove /mnt/c, docker and other cache directories
-      PRUNEPATHS="${BASE_MNT_C} /var/cache /var/www /var/lib/docker ${HOME}/.npm ${HOME}/.cache"
-      sudo sed -i -r \
-        "s#^PRUNEPATHS=\"(.*)\"\$#PRUNEPATHS=\"\1 ${PRUNEPATHS} \"#" \
-        deb/etc/updatedb.conf
-      sudo sed -i -r 's/^# PRUNENAMES=/PRUNENAMES=/' deb/etc/updatedb.conf
-      # recompress package
-      sudo dpkg-deb -b deb mlocate.deb
-      rm -Rf deb
-      # install the new package
-      sudo dpkg -i mlocate.deb
-    )
+  if ! Linux::Apt::isPackageInstalled mlocate; then
+    Log::displayInfo "install mlocate required packages"
+    Linux::Apt::update
+    Linux::Apt::install --no-install-recommends \
+      mlocate -o Dpkg::Options::="--force-confold"
   fi
 }
 
 testInstall() {
   if Version::isUbuntuMinimum "22.04"; then
     # since 22.04 mlocate has been replaced by plocate
-    testInstallFromUbuntu22
+    testInstallFromUbuntu22 || return 1
   else
-    testInstallFromUbuntu20
+    testInstallFromUbuntu20 || return 1
   fi
 }
 
@@ -93,26 +108,6 @@ testInstallFromUbuntu20() {
   }
   Assert::commandExists "locate" || ((++failures))
   return "${failures}"
-}
-
-configureMlocate() {
-  # shellcheck disable=SC1003
-  local -r BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
-  local -r prunePaths=(
-    "${BASE_MNT_C}"
-    "/var/cache"
-    "/var/www"
-    "/var/lib/docker"
-    "${HOME}/.npm"
-    "${HOME}/.cache"
-  )
-  # shellcheck disable=SC1003
-  sudo sed -i -E \
-    -e "s#^PRUNEPATHS=\"(.*)\"\$#PRUNEPATHS=\"\1 ${prunePaths[*]} \"#" \
-    -e 's/^# PRUNENAMES="/PRUNENAMES="node_modules /' \
-    -e '$a\' \
-    -e "# updated by bash-dev-env" \
-    /etc/updatedb.conf
 }
 
 configure() {

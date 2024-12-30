@@ -114,10 +114,9 @@ testConfigure() {
   Assert::fileExists "${HOME}/.gitconfig" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/GitDefaultConfig/gitignore" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/aliases.d/git.sh" || ((++failures))
-  if [[
-    -f "${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe" ||
-    -f "${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe" ]] \
-    ; then
+  local WINDOWS_MELD_PATH1="${BASE_MNT_C:-/mnt/c}/Program Files (x86)/Meld/Meld.exe"
+  local WINDOWS_MELD_PATH2="${BASE_MNT_C:-/mnt/c}/Program Files/Meld/Meld.exe"
+  if [[ -f "${WINDOWS_MELD_PATH1}" || -f "${WINDOWS_MELD_PATH2}" ]]; then
     Assert::symLinkValid /usr/local/bin/meld
   fi
   # git config

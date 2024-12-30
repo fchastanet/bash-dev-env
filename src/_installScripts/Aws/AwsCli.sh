@@ -5,6 +5,7 @@ helpDescription() {
 }
 
 dependencies() {
+  echo "installScripts/Saml2Aws"
   echo "installScripts/Xvfb"
 }
 

@@ -413,6 +413,34 @@ Assert::wsl() {
 }
 
 
+# @description Backup given file in the same directory or in BACKUP_DIR directory
+# backup file name is composed by following fields separated by -:
+#   - if BACKUP_DIR is not empty then escaped dir name separated by @
+#   - filename(without path)
+#   - date with format %Y%m%d_%H:%M:%S (Eg: 20240326_14:45:08)
+# @arg $1 file:String the file to backup
+# @stderr messages about backup file location
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_DIR if not set backup the file in the same directory as original file
+# @exitcode 1 on copy failure
+Backup::file() {
+  local file="$1"
+  if [[ -f "${file}" ]]; then
+    local backupFile fileDirname escapedDirname
+    fileDirname="${file%/*}"
+    escapedDirname=${fileDirname/\//}      # remove first slash
+    escapedDirname=${escapedDirname//\//@} # replace all slashes by @
+    if [[ -z "${BACKUP_DIR:-}" ]]; then
+      backupFile="${fileDirname}/${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
+    else
+      backupFile="${BACKUP_DIR}/${escapedDirname}@${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
+    fi
+    Log::displayInfo "Backup file '${file}' to ${backupFile}"
+    ${SUDO:-} cp "${file}" "${backupFile}"
+  fi
+}
+
+
 # @description get property value from file
 # if not present compute it using propertyNotFoundCallback (if provided) and store it in property file
 # @arg $1 propertyFile:String the file in which the property will be searched
@@ -450,6 +478,35 @@ Cache::getPropertyValue2() {
     return 0
   fi
   return 1
+}
+
+
+# @description convert base64 encoded back to target dir
+# it is advised to include the md5sum of the binFile in the path of the target dir
+#
+# @arg $1 targetDir:string the directory in which tar archive will be untarred
+# @arg $2 base64:string the base64 encoded tar czf archive
+# @stderr diagnostics information is displayed
+Compiler::Embed::extractDirFromBase64() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireTarCommand has not been loaded"
+    exit 1
+  fi
+
+  local targetDir="$1"
+  local base64="$2"
+
+  if [[ ! -d "${targetDir}" ]]; then
+    mkdir -p "${targetDir}"
+    (
+      cd "${targetDir}" || exit 1
+      base64 -d <<<"${base64}" | tar -xzf - 2>/dev/null || {
+        Log::displayError "untar failure, invalid base64 string"
+        exit 1
+      }
+    ) || return 1
+  fi
 }
 
 
@@ -504,6 +561,45 @@ Conf::dynamicConfFile() {
     Log::displayWarning "Conf::dynamicConfFile - ${file} does not exist in any config dirs declared"
     return 1
   fi
+}
+
+
+# @description generate temp directory where default
+# and overridden directories have been merged
+#   - if overridden dir exists, create a new temp folder
+#     - copy all files from default folder
+#     - overwrite with files from overridden folder
+#     - (Later) delete files listed in .remove$$ file
+#     - return the path of this temp folder
+#   - else just return the default folder path
+# Then it is easier to pick overridden or default files/folders
+#
+# @arg $1 defaultDir:String usually the embed directory
+# @arg $2 overriddenDirPath:String the path to the directory
+#   that could be overridden
+# @exitcode 1 if default dir does not exist
+# @exitcode 2 if error during copy
+Conf::getOverriddenDir() {
+  local defaultDir="$1"
+  local overriddenDirPath="$2"
+
+  if [[ ! -d "${defaultDir}" ]]; then
+    Log::displayError "Directory ${defaultDir} does not exists"
+    return 1
+  fi
+  if [[ ! -d "${overriddenDirPath}" || -z "$(ls -A "${overriddenDirPath}")" ]]; then
+    Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist, keep default one ${defaultDir}"
+    echo "${defaultDir}"
+    return 0
+  fi
+  local tempDir
+  tempDir="$(mktemp -d)"
+  (
+    shopt -s dotglob
+    cp -R "${defaultDir}/." "${tempDir}"
+    cp -R "${overriddenDirPath}/." "${tempDir}"
+  ) || return 2
+  echo "${tempDir}"
 }
 
 
@@ -675,11 +771,11 @@ Engine::Config::loadConfig() {
   fi
 Linux::requireTarCommand
 Compiler::Embed::extractFileFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/35528fc68b49bce04642f2fde5d358c73896a17ab17068827fa8171037afa506/envFileTemplate" \
-  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJmY2hhc3RhbmV0IgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdpdCAmIFNTSCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGlmIDEsIGl0IGluZGljYXRlcyB5b3UgYWNjZXB0IHRoYXQgeW91ciBnaXQga2V5IHdpbGwgYmUgbG9hZGVkLgojIGlmIDAsIGNvbmZpZ3VyYXRpb25zIHRoYXQgbmVlZCB0byBiZSBhdXRoZW50aWNhdGVkIHdpbGwgYmUgc2tpcHBlZC4KIyBEaXN0cm8gbW9kZTogaW4gYW55IGNhc2UsIHlvdXIga2V5IGlzIG5vdCBjb3BpZWQuCkFVVEhPUklaRV9TU0hfS0VZX1VTQUdFPTEKCiMgeW91ciBsb2dpbiB0byBjb25uZWN0IHRvIHNzaCBzZXJ2ZXJzIGlmIGFueQpTU0hfTE9HSU49IiIKCiMgeW91ciBnaXQgZnVsbCBuYW1lICdGaXJzdE5hbWUgTGFzdE5hbWUnCkdJVF9VU0VSTkFNRT0iIgoKIyBlbWFpbCB1c2VkIGZvciBnaXQgJ2xkYXBAZG9tYWluLmNvbScKR0lUX1VTRVJfTUFJTD0iIgoKIyBkZWZhdWx0IGdpdCBtZXJnZSB0b29sIHRvIHVzZQpHSVRfTUVSR0VfVE9PTD0idnNjb2RlIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEFXUyBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGVtYWlsIHVzZWQgdG8gY29ubmVjdCB0byBhd3MKQVdTX1VTRVJfTUFJTD0iZmNoYXN0YW5ldEBnbWFpbC5jb20iCgojIGFwcCBpZCB0byBjb25uZWN0IHRvIGF3cyBhY2NvdW50CkFXU19BUFBfSUQ9IiIKCkFXU19QUk9GSUxFPSIiCkFXU19ERUZBVUxUX1JFR0lPTj0iIgpBV1NfVEVTVF9TRUNSRVRfSUQ9IiIKQVdTX0RFRkFVTFRfRE9DS0VSX1JFR0lTVFJZX0lEPSIiCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgSzhTIGluZm9ybWF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgS3ViZURlZmF1bHRDb25maWcgfi8ua3ViZS9jb25maWcgZ2VuZXJhdGlvbgojIGF3cyByZWdpb24gb2YgdGhlIGNsdXN0ZXIgKEVnOiB1cy1lYXN0LTEpCktVQkVfQ09ORklHX1JFR0lPTl9DT0RFPQoKIyBhd3MgYXJuIG9mIHRoZSBjbHVzdGVyLgojIEVnOiBhcm46YXdzOmVjczpyZWdpb246YXdzX2FjY291bnRfaWQ6Y2x1c3Rlci9NeUNsdXN0ZXIKS1VCRV9DT05GSUdfQ0xVU1RFUl9BUk49CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgRGlyZWN0b3JpZXMKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBvdmVycmlkZGVuIGNvbmYgZGlyZWN0b3J5IHRoYXQgd2lsbCBiZSB1c2VkIHRvIG92ZXJyaWRlCiMgdGhlIGRlZmF1bHQgY29uZmlndXJhdGlvbiB0aGF0IGFyZSBlbWJlZGRlZCBpbiBiaW5hcmllcwpDT05GX09WRVJSSURFX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2NvbmYub3ZlcnJpZGUiCgojIHdoZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29uZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lOU1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09UX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBleGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRvIDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBmaWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBjaGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmlsZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNFUlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9XU19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVzaW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5TVEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9uIHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMgdmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBVc2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFja2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0wCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUgY2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1lbmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUgdG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBzaW5kcmVzb3JodXMvcHVyZSwgc3RhcnNoaXAvc3RhcnNoaXAKWlNIX1BSRUZFUlJFRF9USEVNRT0icG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrIgoKIyBEaXNwbGF5IEZvcnR1bmUgdG9vbHRpcCBhdCBiYXNoL3pzaCBzZXNzaW9uIG9wZW4KU0hPV19GT1JUVU5FUz0xCgojIERpc3BsYXkgTU9URCBhdCBiYXNoL3pzaCBzZXNzaW9uIG9wZW4KU0hPV19NT1REPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBXU0xDT05GSUcKIyBUaGVzZSBwYXJhbWV0ZXJzIGF1dG9tYXRpY2FsbHkgY29uZmlndXJlICVVU0VSUFJPRklMRSUvLndzbGNvbmZpZyBmaWxlLgojIEBzZWUgaHR0cHM6Ly9kb2NzLm1pY3Jvc29mdC5jb20vZW4tdXMvd2luZG93cy93c2wvd3NsLWNvbmZpZwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIFJlY29tbWVuZGVkIDUwJSBvZiB0b3RhbCBtZW1vcnkKV1NMQ09ORklHX01BWF9NRU1PUlk9OEdCCgojIHBlcnNvbmFsbHkgSSBwcmVmZXIgcnVuIG91dCBvZiBtZW1vcnkgaW5zdGVhZCBvZiBiZWdpbm5pbmcgc3dhcHBpbmcKIyBTbyBJIGtub3cgaW1tZWRpYXRlbHkgaWYgc29tZSBwcm9jZXNzZXMgaGF2ZSB0byBiZSBzdG9wcGVkCldTTENPTkZJR19TV0FQPTAKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBIYWNrcwojIG9uIHNvbWUgY29uZmlndXJhdGlvbnMgd2UgaGF2ZSB0byBmb3JjZSBwYXRoIG9mIHNvbWUgd2luZG93cyBjb21tYW5kcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojUE9XRVJTSEVMTF9CSU49L21udC9jL1dpbmRvd3MvU3lzdGVtMzIvV2luZG93c1Bvd2VyU2hlbGwvdjEuMC9wb3dlcnNoZWxsLmV4ZQojSVBDT05GSUdfQklOPS9tbnQvYy9XaW5kb3dzL3N5c3RlbTMyL2lwY29uZmlnLmV4ZQojV1NMX0VYRV9CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvd3NsLmV4ZQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdlbmVyYWwgZGlzdHJpYnV0aW9uIGluZm9ybWF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgaG9zdG5hbWUgb2YgdGhlIGRpc3RybwpESVNUUk9fSE9TVE5BTUU9IndzbEhvc3QiCg==" \
+  "${PERSISTENT_TMPDIR:-/tmp}/dfbb84bdd29315eb016a1d332348162b942dcaf9380c56ce914246da6e7d4481/envFileTemplate" \
+  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJmY2hhc3RhbmV0IgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdpdCAmIFNTSCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGlmIDEsIGl0IGluZGljYXRlcyB5b3UgYWNjZXB0IHRoYXQgeW91ciBnaXQga2V5IHdpbGwgYmUgbG9hZGVkLgojIGlmIDAsIGNvbmZpZ3VyYXRpb25zIHRoYXQgbmVlZCB0byBiZSBhdXRoZW50aWNhdGVkIHdpbGwgYmUgc2tpcHBlZC4KIyBEaXN0cm8gbW9kZTogaW4gYW55IGNhc2UsIHlvdXIga2V5IGlzIG5vdCBjb3BpZWQuCkFVVEhPUklaRV9TU0hfS0VZX1VTQUdFPTEKCiMgeW91ciBsb2dpbiB0byBjb25uZWN0IHRvIHNzaCBzZXJ2ZXJzIGlmIGFueQpTU0hfTE9HSU49IiIKCiMgeW91ciBnaXQgZnVsbCBuYW1lICdGaXJzdE5hbWUgTGFzdE5hbWUnCkdJVF9VU0VSTkFNRT0iIgoKIyBlbWFpbCB1c2VkIGZvciBnaXQgJ2xkYXBAZG9tYWluLmNvbScKR0lUX1VTRVJfTUFJTD0iIgoKIyBkZWZhdWx0IGdpdCBtZXJnZSB0b29sIHRvIHVzZQpHSVRfTUVSR0VfVE9PTD0idnNjb2RlIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEFXUyBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGVtYWlsIHVzZWQgdG8gY29ubmVjdCB0byBhd3MKQVdTX1VTRVJfTUFJTD0iZmNoYXN0YW5ldEBnbWFpbC5jb20iCgojIGFwcCBpZCB0byBjb25uZWN0IHRvIGF3cyBhY2NvdW50CkFXU19BUFBfSUQ9IiIKCkFXU19QUk9GSUxFPSIiCkFXU19ERUZBVUxUX1JFR0lPTj0iIgpBV1NfVEVTVF9TRUNSRVRfSUQ9IiIKQVdTX0RFRkFVTFRfRE9DS0VSX1JFR0lTVFJZX0lEPSIiCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgSzhTIGluZm9ybWF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgS3ViZURlZmF1bHRDb25maWcgfi8ua3ViZS9jb25maWcgZ2VuZXJhdGlvbgojIGF3cyByZWdpb24gb2YgdGhlIGNsdXN0ZXIgKEVnOiB1cy1lYXN0LTEpCktVQkVfQ09ORklHX1JFR0lPTl9DT0RFPQoKIyBhd3MgYXJuIG9mIHRoZSBjbHVzdGVyLgojIEVnOiBhcm46YXdzOmVjczpyZWdpb246YXdzX2FjY291bnRfaWQ6Y2x1c3Rlci9NeUNsdXN0ZXIKS1VCRV9DT05GSUdfQ0xVU1RFUl9BUk49CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgRGlyZWN0b3JpZXMKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBvdmVycmlkZGVuIGNvbmYgZGlyZWN0b3J5IHRoYXQgd2lsbCBiZSB1c2VkIHRvIG92ZXJyaWRlCiMgdGhlIGRlZmF1bHQgY29uZmlndXJhdGlvbiB0aGF0IGFyZSBlbWJlZGRlZCBpbiBiaW5hcmllcwpDT05GX09WRVJSSURFX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2NvbmYub3ZlcnJpZGUiCgojIHdoZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29uZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lOU1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09UX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBleGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRvIDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBmaWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBjaGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmlsZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNFUlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9XU19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVzaW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5TVEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9uIHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMgdmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBVc2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFja2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0wCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUgY2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1lbmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUgdG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBzaW5kcmVzb3JodXMvcHVyZSwgc3RhcnNoaXAvc3RhcnNoaXAKWlNIX1BSRUZFUlJFRF9USEVNRT0icG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrIgoKIyBEaXNwbGF5IEZvcnR1bmUgdG9vbHRpcCBhdCBiYXNoL3pzaCBzZXNzaW9uIG9wZW4KU0hPV19GT1JUVU5FUz0xCgojIERpc3BsYXkgTU9URCBhdCBiYXNoL3pzaCBzZXNzaW9uIG9wZW4KU0hPV19NT1REPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBXU0xDT05GSUcKIyBUaGVzZSBwYXJhbWV0ZXJzIGF1dG9tYXRpY2FsbHkgY29uZmlndXJlICVVU0VSUFJPRklMRSUvLndzbGNvbmZpZyBmaWxlLgojIEBzZWUgaHR0cHM6Ly9kb2NzLm1pY3Jvc29mdC5jb20vZW4tdXMvd2luZG93cy93c2wvd3NsLWNvbmZpZwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIFJlY29tbWVuZGVkIDUwJSBvZiB0b3RhbCBtZW1vcnkKV1NMQ09ORklHX01BWF9NRU1PUlk9OEdCCgojIHBlcnNvbmFsbHkgSSBwcmVmZXIgcnVuIG91dCBvZiBtZW1vcnkgaW5zdGVhZCBvZiBiZWdpbm5pbmcgc3dhcHBpbmcKIyBTbyBJIGtub3cgaW1tZWRpYXRlbHkgaWYgc29tZSBwcm9jZXNzZXMgaGF2ZSB0byBiZSBzdG9wcGVkCldTTENPTkZJR19TV0FQPTAKCiMgaWYgMSBpdCB3aWxsIGNvbXB1dGUgYXV0b21hdGljYWxseSB0aGUgbWF4IHZoZCBzaXplCiMgZGVmYXVsdCAoMS8zIG9mIGRpc2sgc2l6ZSwgbWluIDE1MEdCKQojIGlmIDAgaXQgd2lsbCB1c2Ugd3NsIGRlZmF1bHQgdmFsdWUgKDFUQikKV1NMQ09ORklHX0NPTVBVVEVfTUFYX1ZIRF9TSVpFPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBIYWNrcwojIG9uIHNvbWUgY29uZmlndXJhdGlvbnMgd2UgaGF2ZSB0byBmb3JjZSBwYXRoIG9mIHNvbWUgd2luZG93cyBjb21tYW5kcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojUE9XRVJTSEVMTF9CSU49L21udC9jL1dpbmRvd3MvU3lzdGVtMzIvV2luZG93c1Bvd2VyU2hlbGwvdjEuMC9wb3dlcnNoZWxsLmV4ZQojSVBDT05GSUdfQklOPS9tbnQvYy9XaW5kb3dzL3N5c3RlbTMyL2lwY29uZmlnLmV4ZQojV1NMX0VYRV9CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvd3NsLmV4ZQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdlbmVyYWwgZGlzdHJpYnV0aW9uIGluZm9ybWF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgaG9zdG5hbWUgb2YgdGhlIGRpc3RybwpESVNUUk9fSE9TVE5BTUU9IndzbEhvc3QiCg==" \
   "755"
 
-declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/35528fc68b49bce04642f2fde5d358c73896a17ab17068827fa8171037afa506/envFileTemplate"
+declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/dfbb84bdd29315eb016a1d332348162b942dcaf9380c56ce914246da6e7d4481/envFileTemplate"
 
   local envFile="${BASH_DEV_ENV_ROOT_DIR}/.env"
   # shellcheck disable=SC2154
@@ -1100,6 +1196,126 @@ Framework::createTempFile() {
 }
 
 
+# @description installs file to given directory
+#
+# callbacks parameters `${fromFile} ${targetFile} $@`
+# @arg $1 fromFile - original file to copy
+# @arg $2 targetFile - target file
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @arg $5 successCallback:Function the callback to call when file is installed successfully, by default setUserRights callback is called
+# @arg $6 failureCallback:Function the callback to call when file installation has failed, by default unableToCopyCallback callback is called
+# @arg $@ callbacksParams:String[] additional parameters passed to callbacks
+# @exitcode 1 if fromFile is not readable
+# @exitcode 2 if backup file failure
+# @exitcode 3 if copy failure
+# @exitcode 0 on success or if OVERWRITE_CONFIG_FILES=0
+# @exitcode 0 on success or if CHANGE_WINDOWS_FILES=0 and target file is a windows file
+# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing directory
+# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target file is in windows file system, overwrite it
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env BASE_MNT_C String windows C drive base PATH
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_BEFORE_INSTALL Boolean (default: 1) backup file before installing the file
+Install::file() {
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+  local successCallback=${5:-Install::setUserRightsCallback}
+  local failureCallback=${6:-Install::unableToCopyCallback}
+  shift 6 || true
+
+  if [[ ! -f "${fromFile}" || ! -r "${fromFile}" ]]; then
+    Log::displayError "cannot read source file '${fromFile}'"
+    return 1
+  fi
+
+  # skip if OVERWRITE_CONFIG_FILES is 0 and target file exists
+  if [[ "${OVERWRITE_CONFIG_FILES}" = "0" && -f "${targetFile}" ]]; then
+    Log::displayWarning "File '${targetFile}' exists - Skip install (because OVERWRITE_CONFIG_FILES=0 in .env file)"
+    return 0
+  fi
+
+  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
+  if [[ "${CHANGE_WINDOWS_FILES}" = "0" && "${targetFile}" =~ ^${BASE_MNT_C} ]]; then
+    Log::displayWarning "File '${targetFile}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
+    return 0
+  fi
+
+  local targetDir="${targetFile%/*}"
+  if ! ${SUDO} test -d "${targetDir}"; then
+    ${SUDO:-} mkdir -p "${targetDir}"
+    ${SUDO:-} chown "${userName}":"${userGroup}" "${targetDir}"
+  fi
+  local fromDir="${fromFile%/*}"
+  local fromFilename="${fromFile##*/}"
+
+  local prettyFromDir
+  # shellcheck disable=SC2295
+  prettyFromDir="${fromDir#${PRETTY_ROOT_DIR:-${FRAMEWORK_ROOT_DIR}}/}"
+  if diff -q "${fromFile}" "${targetFile}" &>/dev/null; then
+    Log::displayStatus "No changes detected. No need to update '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
+    return 0
+  fi
+
+  if [[ "${BACKUP_BEFORE_INSTALL:-1}" = "1" ]]; then
+    Backup::file "${targetFile}" || return 2
+  fi
+
+  if ${SUDO:-} cp "${fromFile}" "${targetFile}"; then
+    # shellcheck disable=SC2295
+    Log::displaySuccess "Installed file '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
+    ${successCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
+  else
+    # shellcheck disable=SC2295
+    Log::displayError "unable to copy file '${targetFile}' from '${fromDir#${FRAMEWORK_ROOT_DIR}/}/${fromFilename}'"
+    ${failureCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
+    return 3
+  fi
+}
+
+
+# @description install callback
+#   set file with root ownership and execution bit
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 on any failure
+# @see Install::file
+Install::setUserRightsCallback() {
+  # shellcheck disable=SC2034 # $1 not used
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+
+  ${SUDO:-} chown "${userName}":"${userGroup}" "${targetFile}"
+}
+
+
+# @description install callback
+#   default callback used called when file copy has failed
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @exitcode 1 always fail
+# @stderr diagnostics information is displayed
+# @see Install::file
+Install::unableToCopyCallback() {
+  local fromDir="$1"
+  local fileName="$2"
+  local targetFile="$3"
+  Log::fatal "unable to copy file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fileName}' to '${targetFile}'"
+}
+
+
 # @description the command launch different actions(install, configure, test)
 # depending on the options selected
 # @env SKIP_INSTALL
@@ -1341,10 +1557,12 @@ InstallScripts::scriptFunctionEmpty() {
   if ! declare -f "$1" &>/dev/null; then
     return 0
   fi
-  [[
-    "$(declare -f "$1" | sed '3q;d')" =~ ${pattern} &&
-    "$(declare -f "$1" | sed '4q;d')" = "}"
-  ]]
+  local functionBody
+  functionBody=$(declare -f "$1")
+  local line3 line4
+  line3=$(sed '3q;d' <<<"${functionBody}")
+  line4=$(sed '4q;d' <<<"${functionBody}")
+  [[ "${line3}" =~ ${pattern} && "${line4}" = "}" ]]
 }
 
 
@@ -1634,6 +1852,8 @@ Linux::getDistributorId() {
 # @exitcode 1 if tar command not available
 # @stderr diagnostics information is displayed
 Linux::requireTarCommand() {
+  export REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED=1
+
   Assert::commandExists tar
 }
 
@@ -1749,6 +1969,33 @@ Log::displaySkipped() {
     echo -e "${__SKIPPED_COLOR}SKIPPED - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
   fi
   Log::logSkipped "$1"
+}
+
+
+# @description Display message using info color (blue) but warning level
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displayStatus() {
+  local type="${2:-STATUS}"
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
+    Log::computeDuration
+    echo -e "${__INFO_COLOR}${type}  - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logStatus "$1" "${type}"
+}
+
+
+# @description Display message using success color (bg green/fg white)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displaySuccess() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
+    Log::computeDuration
+    echo -e "${__SUCCESS_COLOR}SUCCESS - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logSuccess "$1"
 }
 
 
@@ -1869,6 +2116,24 @@ Log::logMessage() {
 Log::logSkipped() {
   if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
     Log::logMessage "${2:-SKIPPED}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logStatus() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
+    Log::logMessage "${2:-STATUS}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logSuccess() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
+    Log::logMessage "${2:-SUCCESS}" "$1"
   fi
 }
 
@@ -2522,7 +2787,7 @@ Version::isUbuntuMinimum() {
 
   Version::compare "${VERSION_ID}" "${expectedMinimumVersion}"
   local -r comparisonResult=$?
-  (( comparisonResult == 0 || comparisonResult == 1 ))
+  ((comparisonResult == 0 || comparisonResult == 1))
 }
 # FUNCTIONS
 
@@ -2872,6 +3137,13 @@ commandOptionParseFinished() {
 }
 
 
+Linux::requireTarCommand
+Compiler::Embed::extractDirFromBase64 \
+  "${PERSISTENT_TMPDIR:-/tmp}/92cefa3b7212b72813f1ad56acf869d3bb2cc6a59f85b8648d1bd2651c35645c/conf_dir" \
+  "H4sIAAAAAAAA/+xST2vcPhDdcz7F4Hts7f6Whd9hDylNaA/Zhm5yNrY0sgWWR9VIhs2nL/KfDaSXQltKwQ+sN/NmmHkywiCL6FQVUNW5pF5vfj+EEOKw348shHjP2+1ut8STvt3tt/9tQPwBLz8gcqj8RvzyrveX+0fw9PXldF9++Hz6WD5+eTk9n4/ZBTm7GfXT3eP9+ZjljQmQ168e8raBnIceelJYWlKxuzY/3T1/Oh+zIlgHxVD5gh1RB4VFZapJ6UxdEN86TzX6N0mia6FoyWKRo/QXFzS/VVm2nijMWx7Ox+z0cIZKM1QxkGaoTa9tKK1hCeMo2XiKbqYdSKMZJKkK0vs2Tcqi73RwmkFhHZuRh+l0YaRgU/XqZmrWkTEfV0yRvywi9nIJmy5yQH9N6TpjTAfN6jaFU26Xgpcd9bPo6ZUWnbmdQxm6kdnW0MYGQ1drBsP0/+EgIG31OFPZmYCQZttvESNCL5P/fvr2QMltOnbgPElwHMgjeCdLZxxqBkYZvQnpgqMBtmkZX1gzTP8m+EqmzqhwgKg0RK41Zzd/+0WvWLFixYqfwfcAAAD//1ayDokACgAA"
+
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/92cefa3b7212b72813f1ad56acf869d3bb2cc6a59f85b8648d1bd2651c35645c/conf_dir"
+
 
 helpDescription() {
   echo "installs mlocate(before 22.04) or plocate package (since 22.04)"
@@ -2893,7 +3165,40 @@ breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
 # jscpd:ignore-end
 
+configureMlocate() {
+  # shellcheck disable=SC1003
+  local -r BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
+  local -r prunePaths=(
+    "${BASE_MNT_C}"
+    "/var/cache"
+    "/var/www"
+    "/var/lib/docker"
+    "${HOME}/.npm"
+    "${HOME}/.cache"
+    "${HOME}/.venvs"
+  )
+  # shellcheck disable=SC1003
+  sudo sed -i -E \
+    -e "s#^PRUNEPATHS=\"(.*)\"\$#PRUNEPATHS=\"\1 ${prunePaths[*]} \"#" \
+    -e '$a\' \
+    -e "# updated by bash-dev-env" \
+    /etc/updatedb.conf
+}
+
+installMlocateConfigFile() {
+  local configDir
+  # shellcheck disable=SC2154
+  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "${CONF_OVERRIDE_DIR}/${scriptName}")"
+  SUDO=sudo OVERWRITE_CONFIG_FILES=0 Install::file \
+    "${configDir}/etc/updatedb.conf" \
+    "/etc/updatedb.conf" \
+    "root" "root" configureMlocate
+}
+
 install() {
+  Log::displayInfo "Configure locate updatedb.conf to exclude some directories"
+  installMlocateConfigFile
+
   if Version::isUbuntuMinimum "22.04"; then
     # since 22.04 mlocate has been replaced by plocate
     installFromUbuntu22
@@ -2907,44 +3212,25 @@ installFromUbuntu22() {
     Log::displayInfo "install plocate required packages"
     Linux::Apt::update
     Linux::Apt::install --no-install-recommends \
-      -o APT::Update::Exclude=updatedb plocate
+      plocate -o Dpkg::Options::="--force-confold"
   fi
 }
 
 installFromUbuntu20() {
-  # download mlocate package
-  if ! dpkg -s mlocate &>/dev/null; then
-    (
-      mkdir -p /tmp/mlocate true
-      cd /tmp/mlocate || exit 1
-      # download mlocate package
-      sudo apt-get download mlocate
-      # extract it
-      dpkg-deb -R mlocate_*_amd64.deb /tmp/mlocate/deb
-      rm ./*.deb
-      # shellcheck disable=SC1003
-      BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
-      # update configuration in order to remove /mnt/c, docker and other cache directories
-      PRUNEPATHS="${BASE_MNT_C} /var/cache /var/www /var/lib/docker ${HOME}/.npm ${HOME}/.cache"
-      sudo sed -i -r \
-        "s#^PRUNEPATHS=\"(.*)\"\$#PRUNEPATHS=\"\1 ${PRUNEPATHS} \"#" \
-        deb/etc/updatedb.conf
-      sudo sed -i -r 's/^# PRUNENAMES=/PRUNENAMES=/' deb/etc/updatedb.conf
-      # recompress package
-      sudo dpkg-deb -b deb mlocate.deb
-      rm -Rf deb
-      # install the new package
-      sudo dpkg -i mlocate.deb
-    )
+  if ! Linux::Apt::isPackageInstalled mlocate; then
+    Log::displayInfo "install mlocate required packages"
+    Linux::Apt::update
+    Linux::Apt::install --no-install-recommends \
+      mlocate -o Dpkg::Options::="--force-confold"
   fi
 }
 
 testInstall() {
   if Version::isUbuntuMinimum "22.04"; then
     # since 22.04 mlocate has been replaced by plocate
-    testInstallFromUbuntu22
+    testInstallFromUbuntu22 || return 1
   else
-    testInstallFromUbuntu20
+    testInstallFromUbuntu20 || return 1
   fi
 }
 
@@ -2966,26 +3252,6 @@ testInstallFromUbuntu20() {
   }
   Assert::commandExists "locate" || ((++failures))
   return "${failures}"
-}
-
-configureMlocate() {
-  # shellcheck disable=SC1003
-  local -r BASE_MNT_C="$(mount | grep 'path=C:\\' | awk -F ' ' '{print $3}')"
-  local -r prunePaths=(
-    "${BASE_MNT_C}"
-    "/var/cache"
-    "/var/www"
-    "/var/lib/docker"
-    "${HOME}/.npm"
-    "${HOME}/.cache"
-  )
-  # shellcheck disable=SC1003
-  sudo sed -i -E \
-    -e "s#^PRUNEPATHS=\"(.*)\"\$#PRUNEPATHS=\"\1 ${prunePaths[*]} \"#" \
-    -e 's/^# PRUNENAMES="/PRUNENAMES="node_modules /' \
-    -e '$a\' \
-    -e "# updated by bash-dev-env" \
-    /etc/updatedb.conf
 }
 
 configure() {

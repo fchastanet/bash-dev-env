@@ -1,0 +1,6 @@
+colors: true
+fuzzy-match: false
+role-duration: 43200
+region: eu-west-3
+console:
+  browser_command: '"wslview" "{url}"'

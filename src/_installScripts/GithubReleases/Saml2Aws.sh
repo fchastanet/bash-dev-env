@@ -9,9 +9,7 @@ helpLongDescription() {
   echo "It retrieves AWS temporary credentials using a SAML IDP"
 }
 
-dependencies() {
-  echo "installScripts/AwsCli"
-}
+dependencies() { :; }
 
 fortunes() {
   echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- use ${__HELP_EXAMPLE}aws-login${__RESET_COLOR} alias "

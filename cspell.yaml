@@ -148,6 +148,9 @@ overrides:
       - src/_installScripts/_Configs/GitDefaultConfig-conf/home/.config/tig/config
       - src/_installScripts/_Configs/GitDefaultConfig-conf/.gitconfig
       - src/_installScripts/_Configs/GitDefaultConfig-conf/.tigrc
+      - src/_installScripts/_Configs/WslDefaultConfig-conf/settings.json
+      - src/_installScripts/BashUtils/Mlocate-conf/etc/updatedb.conf
+      - src/_installScripts/Aws/Awsume-conf/.bash-dev-env/profile.d/awsume.zsh
     languageId: shellscript
     dictionaries:
       - config

@@ -45,25 +45,34 @@ install() {
   # npm install
   npmInstall() {
     if npm -g list "$1" >/dev/null; then
-      Log::displaySkipped "npm package $1 already installed"
+      Log::displaySkipped "node package $1 already installed"
     else
-      Log::displayInfo "install npm package $1 globally"
+      Log::displayInfo "install node package $1 globally"
       npm install -g "$1"
     fi
   }
-
   npmInstall npm-check-updates
-  npmInstall prettier
-  npmInstall sass-lint
-  npmInstall stylelint
-  npmInstall hjson
-
-  Log::displayInfo "check npm packages update and upgrade"
+  Log::displayInfo "check node packages update and upgrade"
   local updates
   updates=$(npm-check-updates -g -u | grep 'npm -g' || true)
   if [[ -n "${updates}" ]]; then
     eval "${updates}"
   fi
+
+  # yarn install
+  local -a nodePackages=(
+    npm-check
+    prettier
+    sass-lint
+    stylelint
+    hjson
+  )
+  Log::displayInfo "install globally the following node packages ${nodePackages[*]}"
+  yarn global add --non-interactive --latest "${nodePackages[@]}"
+
+
+  Log::displayInfo "check if node packages updates are available and upgrade"
+  npm-check -uy
 }
 
 testInstall() {
@@ -71,6 +80,7 @@ testInstall() {
   # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
   source "${HOME}/.bash-dev-env/profile.d/n_path.sh"
   Version::checkMinimal "npm-check-updates" "--version" "17.1.12" || ((++failures))
+  Version::checkMinimal "npm-check" "--version" "6.0.1" || ((++failures))
   Version::checkMinimal "prettier" "--version" "3.4.2" || ((++failures))
   Version::checkMinimal "sass-lint" "--version" "1.13.1" || ((++failures))
   Version::checkMinimal "stylelint" "--version" "16.12.0" || ((++failures))

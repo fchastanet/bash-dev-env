@@ -139,17 +139,16 @@ testConfigure() {
   Assert::fileExists "${HOME}/.vscode/settings.json" || ((++failures))
 
   # check font in windows terminal configuration
-  local terminalConfFile
-  # cspell:ignore wekyb, bbwe
-  terminalConfFile="${WINDOWS_PROFILE_DIR}/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
-  if [[ -f "${terminalConfFile}" ]]; then
-    if ! grep -q '"face": "MesloLGS NF"' "${terminalConfFile}"; then
-      local terminalConfFilePath
-      Linux::Wsl::cachedWslpath2 terminalConfFilePath -w "${terminalConfFile}"
-      Log::displayHelp "Please change your terminal settings(${terminalConfFilePath}) to use font 'MesloLGS NF' for wsl profile"
+  local terminalConfSettingsPath
+  terminalConfSettingsPath="$(Conf::getWindowsTerminalPath)/LocalState/settings.json"
+  if [[ -f "${terminalConfSettingsPath}" ]]; then
+    if ! grep -q '"face": "MesloLGS NF"' "${terminalConfSettingsPath}"; then
+      local terminalConfSettingsWPath
+      Linux::Wsl::cachedWslpath2 terminalConfSettingsWPath -w "${terminalConfSettingsPath}"
+      Log::displayHelp "Please change your terminal settings(${terminalConfSettingsWPath}) to use font 'MesloLGS NF' for wsl profile"
     fi
   else
-    Log::displayHelp "File ${terminalConfFile} does not exist - please use windows terminal for better shell display results"
+    Log::displayHelp "File ${terminalConfSettingsPath} does not exist - please use windows terminal for better shell display results"
   fi
 
   return "${failures}"

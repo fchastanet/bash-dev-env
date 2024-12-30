@@ -10,5 +10,5 @@ Version::isUbuntuMinimum() {
 
   Version::compare "${VERSION_ID}" "${expectedMinimumVersion}"
   local -r comparisonResult=$?
-  (( comparisonResult == 0 || comparisonResult == 1 ))
+  ((comparisonResult == 0 || comparisonResult == 1))
 }

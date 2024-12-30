@@ -78,11 +78,31 @@ upgradePipPackages() {
     source "${HOME}/.venvs/python3/bin/activate"
 
     Log::displayInfo "Removing duplicate pip packages with ~ prefix that breaks pip packages upgrade otherwise"
-    find "$(python -m site --user-site)" -name '~*' -exec rm -Rf {} ';' || true
+    local pythonUserSite
+    pythonUserSite="$(python -m site --user-site)"
+    if [[ -d "${pythonUserSite}" ]]; then
+      find "${pythonUserSite}" -name '~*' -exec rm -Rf {} ';' || true
+    fi
 
-    Log::displayInfo "Upgrading virtualenv pip packages"
+    Log::displayInfo "Installing pipx"
+    python -m pip install pipx
+    pipx ensurepath
+
+    Log::displayInfo "Upgrading virtualenv dependencies"
+    python -m venv --upgrade-deps "${HOME}/.venvs/python3"
+
+    Log::displayInfo "Upgrading pip"
     python -m pip install --upgrade pip
 
+    if [[ -n "$(pip freeze)" ]]; then
+      Log::displayInfo "Upgrading virtualenv pip packages"
+      pip freeze | awk '{print $1}' | xargs -n1 pip install --upgrade
+    fi
+
+    if [[ -n "$(pip freeze --user)" ]]; then
+      Log::displayInfo "Upgrading virtualenv pip user packages"
+      pip freeze --user | awk '{print $1}' | xargs -n1 pip install --upgrade
+    fi
     PIP_PACKAGES_UPGRADED=1
   fi
 }

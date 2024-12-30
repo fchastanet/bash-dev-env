@@ -1,0 +1,6 @@
+[wsl2]
+memory=10GB
+swap=0
+defaultVhdSize=322122547200
+nestedVirtualization=false
+#guiApplications=false # needed for dev container

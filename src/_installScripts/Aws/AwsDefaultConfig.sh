@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# @embed "${FRAMEWORK_ROOT_DIR}/src/UI/talk.ps1" as talkScript
-# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/Aws/conf" as conf_dir
+# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/Aws/AwsCli-conf" as conf_dir
 
 helpDescription() {
   echo "Default aws config using saml2aws"
@@ -119,20 +118,11 @@ testConfigure() {
   if [[ "${INSTALL_INTERACTIVE}" = "0" ]]; then
     Log::displaySkipped "saml2aws configuration skipped as INSTALL_INTERACTIVE is set to 0"
   elif [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
-    # try to login
-    # shellcheck disable=SC2154
-    cp "${embed_file_talkScript}" "${embed_file_talkScript}.ps1"
-    UI::talkToUser "Please on Bash Dev env installation, your input may be required" \
-      "${embed_file_talkScript}.ps1"
-    if ! Retry::parameterized 3 0 \
-      "AWS Authentication, please provide your credentials ..." \
-      saml2aws login -p "${AWS_PROFILE}" --disable-keychain; then
+    Auth::authenticate || {
+      Log::displayError "Failed to authenticate"
       ((++failures))
-      Log::displayError "Failed to connect to aws"
       return "${failures}"
-    fi
-    Log::displaySuccess "Aws connection succeeds"
-
+    }
     # try to get secret
     Log::displayInfo "Trying to get secrets from aws"
     if ! aws secretsmanager \

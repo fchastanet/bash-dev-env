@@ -104,7 +104,7 @@ jobs:
 
       - uses: fchastanet/github-action-setup-shfmt@v4.0.0
 
-      - uses: akatov/commit-status-updater@a9e988ec5454692ff7745a509452422a35172ad6
+      - uses: ouzi-dev/commit-status-updater@v2
         with:
           name: build-bash-dev-env
           status: pending
@@ -222,7 +222,7 @@ jobs:
           path: |
             logs/**
 
-      - uses: akatov/commit-status-updater@a9e988ec5454692ff7745a509452422a35172ad6
+      - uses: ouzi-dev/commit-status-updater@v2
         if: always()
         with:
           name: build-bash-dev-env

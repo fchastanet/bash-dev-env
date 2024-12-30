@@ -48,14 +48,20 @@ installVsCodeExtension() {
   local -i total=${#extensions[@]}
   local -i i=0
 
-  while (( i < total )); do
+  while ((i < total)); do
     local batch=("${extensions[@]:${i}:${batchSize}}")
     local -a cmd=(code)
     for extension in "${batch[@]}"; do
       cmd+=(--install-extension "${extension}")
     done
-    Log::displayInfo "Installing VSCode extensions: ${batch[*]} (batch ${i}-$((i + batchSize)) of ${total})"
-    if Retry::default "${cmd[@]}"; then
+    Log::displayInfo "Installing VSCode extensions: ${batch[*]} ..."
+    if
+      Retry::parameterized \
+        "${RETRY_MAX_RETRY:-5}" \
+        "batch ${i}-$((i + batchSize)) of ${total}" \
+        "${RETRY_DELAY_BETWEEN_RETRIES:-15}"
+      "${cmd[@]}"
+    then
       Log::displaySuccess "VSCode extensions '${extension}' successfully installed"
     else
       Log::displayError "Something went wrong while installing '${extension}' VS code extension"
@@ -74,18 +80,19 @@ configure() {
 
   local extensions extensionsCount
   # shellcheck disable=SC2154
-  extensions="$(awk \
-    '!/^#/{for(i=1;i<=NF;i++)if($i!="")names[$i]++}END{for(n in names)print n}' \
-    "${embed_dir_conf_dir}/vscode-extensions-by-profile"/*.md | \
-    tr '[:upper:]' '[:lower:]' | \
-    sort \
+  extensions="$(
+    awk \
+      '!/^#/{for(i=1;i<=NF;i++)if($i!="")names[$i]++}END{for(n in names)print n}' \
+      "${embed_dir_conf_dir}/vscode-extensions-by-profile"/*.md |
+      tr '[:upper:]' '[:lower:]' |
+      sort
   )"
   extensionsCount="$(echo "${extensions}" | grep -c -v -e '^$')" || true
 
   local diffInstalledExtensions diffInstalledExtensionsCount
   diffInstalledExtensions="$(comm -12 <(echo "${installedExtensions}") <(echo "${extensions}"))"
   diffInstalledExtensionsCount="$(echo "${diffInstalledExtensions}" | grep -c -v -e '^$')" || true
-  if (( diffInstalledExtensionsCount > 0 )); then
+  if ((diffInstalledExtensionsCount > 0)); then
     Log::displayInfo "${diffInstalledExtensionsCount}/${extensionsCount} extensions already installed:"
     echo "${diffInstalledExtensions}" | paste -s -d, -
   fi

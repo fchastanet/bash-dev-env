@@ -8,8 +8,10 @@ InstallScripts::scriptFunctionEmpty() {
   if ! declare -f "$1" &>/dev/null; then
     return 0
   fi
-  [[
-    "$(declare -f "$1" | sed '3q;d')" =~ ${pattern} &&
-    "$(declare -f "$1" | sed '4q;d')" = "}"
-  ]]
+  local functionBody
+  functionBody=$(declare -f "$1")
+  local line3 line4
+  line3=$(sed '3q;d' <<<"${functionBody}")
+  line4=$(sed '4q;d' <<<"${functionBody}")
+  [[ "${line3}" =~ ${pattern} && "${line4}" = "}" ]]
 }

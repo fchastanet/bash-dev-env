@@ -112,6 +112,10 @@ getDistroFile() {
 exportDistro() {
   local distroFile
   distroFile="$(getDistroFile)"
+  Log::displayInfo "Shutting down wsl distribution ${DISTRO_NAME}"
+  runWslCmd shutdown -h now
+  Log::displayInfo "Waiting for distro ${DISTRO_NAME} to terminate"
+  sleep 5
   Log::displayInfo "Terminating wsl distribution ${DISTRO_NAME}"
   wsl.exe --terminate "${DISTRO_NAME}"
   Log::displayInfo "Exporting wsl distribution to ${distroFile}"
@@ -204,13 +208,19 @@ runWslCmd rm -Rf "${DISTRO_BASH_DEV_ENV_TARGET_DIR}/"{*,.*} 2>/dev/null || true
 
 Log::displayInfo "Prepare archive of current dir ${DISTRO_BASH_DEV_ENV_TARGET_DIR}"
 mkdir -p "/mnt/wsl/${WSL_DISTRO_NAME}/tmp"
-(cd "${BASH_DEV_ENV_ROOT_DIR}" && tar -c --exclude-ignore=.tarignore -zf "/mnt/wsl/${WSL_DISTRO_NAME}/tmp/bashDevEnv.tgz" .)
+(
+  cd "${BASH_DEV_ENV_ROOT_DIR}" || exit 1
+
+  tar -c --exclude-ignore=.tarignore \
+    -f "/mnt/wsl/${WSL_DISTRO_NAME}/tmp/bashDevEnv.tar" .
+  tar -rf "/mnt/wsl/${WSL_DISTRO_NAME}/tmp/bashDevEnv.tar" logs/.gitignore
+)
 
 Log::displayInfo "Syncing current dir to target distro ${DISTRO_BASH_DEV_ENV_TARGET_DIR}"
 runWslCmd mkdir -p "${DISTRO_BASH_DEV_ENV_TARGET_DIR}"
 runWslCmd chown "${USERNAME}:${USERGROUP}" "${DISTRO_BASH_DEV_ENV_TARGET_DIR}"
 # un-tar file from current distro into the new
-REMOTE_USER=wsl REMOTE_PWD="${DISTRO_BASH_DEV_ENV_TARGET_DIR}" runWslCmd tar xzf "/mnt/wsl/${WSL_DISTRO_NAME}/tmp/bashDevEnv.tgz"
+REMOTE_USER=wsl REMOTE_PWD="${DISTRO_BASH_DEV_ENV_TARGET_DIR}" runWslCmd tar xf "/mnt/wsl/${WSL_DISTRO_NAME}/tmp/bashDevEnv.tar"
 
 Log::displayInfo "Fixing rights on target distro ${DISTRO_BASH_DEV_ENV_TARGET_DIR}"
 runWslCmd chown -R "${USERNAME}:${USERGROUP}" "${DISTRO_BASH_DEV_ENV_TARGET_DIR}"
@@ -223,7 +233,7 @@ if isDistroSystemdRunning; then
   systemdActivated=1
 fi
 Log::displayInfo 'pre-configure /etc/wsl.conf in order to activate systemd'
-sudo cp "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/_Configs/WslDefaultConfig-conf/etc/wsl.conf" \
+sudo cp "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/_Configs/WslDefaultConfig-conf/wsl.conf" \
   "/mnt/wsl/${DISTRO_NAME}/etc/wsl.conf"
 
 # no need to restart the distro if systemd already active
@@ -270,7 +280,7 @@ fi
 (
   # shellcheck disable=SC2034
   SUDO=""
-  SUDOER_FILE_PREFIX="/mnt/wsl/${DISTRO_NAME}/etc/sudoers.d/bash-dev-env-no-password" \
+  SUDOER_FILE="/mnt/wsl/${DISTRO_NAME}/etc/sudoers.d/bash-dev-env-no-password" \
     Linux::createSudoerFile
 
   Log::displayInfo "Installing ... using ${installCmd[*]}"

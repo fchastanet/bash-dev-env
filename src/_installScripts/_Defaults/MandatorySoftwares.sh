@@ -52,6 +52,7 @@ install() {
     cron
     curl
     dos2unix
+    htop
     jq
     mc
     mysql-client
@@ -74,6 +75,7 @@ testInstall() {
   Assert::commandExists "nc" || ((++failures))
   Assert::commandExists "dos2unix" || ((++failures))
   Assert::commandExists "jq" || ((++failures))
+  Assert::commandExists "htop" || ((++failures))
   Assert::commandExists "make" || ((++failures))
   Assert::commandExists "unzip" || ((++failures))
   Assert::commandExists "parallel" || ((++failures))

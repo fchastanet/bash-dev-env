@@ -2,7 +2,7 @@
 ###############################################################################
 # DO NOT EDIT, THIS FILE CAN BE UPDATED WITHOUT NOTICE
 ###############################################################################
-if ! typeset -f zinit > /dev/null; then
+if ! typeset -f zinit >/dev/null; then
   return 0
 fi
 

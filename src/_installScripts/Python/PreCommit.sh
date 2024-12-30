@@ -35,7 +35,7 @@ install() {
   # shellcheck source=/dev/null
   source "${HOME}/.venvs/python3/bin/activate"
 
-  pip install --user pre-commit
+  pip install pre-commit
   # update precommit repo
   export PATH="${PATH}:${HOME}/.local/bin"
   pre-commit gc
@@ -43,7 +43,9 @@ install() {
 
 testInstall() {
   local -i failures=0
-  export PATH="${PATH}:${HOME}/.local/bin"
+  # Load virtualenv
+  # shellcheck source=/dev/null
+  source "${HOME}/.venvs/python3/bin/activate" || ((++failures))
   Version::checkMinimal "pre-commit" "--version" "3.6.2" || ((++failures))
   return "${failures}"
 }

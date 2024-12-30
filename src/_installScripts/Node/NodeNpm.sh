@@ -49,6 +49,9 @@ install() {
     "${embed_dir_conf_dir}" \
     "${CONF_OVERRIDE_DIR}/$(scriptName)" \
     ".bash-dev-env"
+
+  # Install yarn globally
+  N_PREFIX="${HOME}/n" "${HOME}/n/bin/npm" install -g yarn
 }
 
 testInstall() {
@@ -59,6 +62,7 @@ testInstall() {
   Version::checkMinimal "n" "--version" "10.1.0" || ((++failures))
   Version::checkMinimal "node" "-v" "23.5.0" || ((++failures))
   Version::checkMinimal "npm" "-v" "10.9.2" || ((++failures))
+  Version::checkMinimal "yarn" "--version" "1.22.22" || ((++failures))
   return "${failures}"
 }
 

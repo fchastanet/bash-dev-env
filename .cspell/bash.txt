@@ -7,7 +7,6 @@ autojump
 autoload
 automount
 autoupdate
-autoupdate
 auwm
 bashism
 bindkey
@@ -16,13 +15,13 @@ ccomp
 CDPATH
 Chastanet
 chgrp
-chgrp
 chsh
 clrs
 cntrl
 compgen
 compinit
 compinstall
+confold
 cowthink
 CWORD
 debian
@@ -36,6 +35,7 @@ drvfs
 DUPS
 Ecma
 elif
+ensurepath
 envsubst
 errexit
 esac
@@ -78,7 +78,6 @@ MYPRUNEPATHS
 newuser
 noargs
 nocompile
-nohup
 nohup
 noninteractive
 NOPASSWD
