@@ -88,7 +88,14 @@ fullScriptName() {
 fullScriptOverrideDir() {
   local confDir
   confDir="$(fullScriptName)"
-  echo "${CONF_OVERRIDE_DIR}/${confDir//\//@}"
+  local dir
+  for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+    if [[ -d "${dir}/${confDir//\//@}" ]]; then
+      echo "${dir}/${confDir//\//@}"
+      return
+    fi
+  done
+  echo "${CONF_OVERRIDE_DIRS[0]}/${confDir//\//@}"
 }
 
 argsInstallScriptCommandCallback() {

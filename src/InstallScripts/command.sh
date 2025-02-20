@@ -28,14 +28,16 @@ InstallScripts::command() {
     local hookName="$1"
     local configDir
     # shellcheck disable=SC2154
-    local fullScriptOverrideDir="${CONF_OVERRIDE_DIR}/${scriptName//\//@}"
     local -a overriddenDirs=()
     # shellcheck disable=SC2154
     if [[ -d "${embed_dir_hooks_dir}" ]]; then
       overriddenDirs+=("${embed_dir_hooks_dir}")
     fi
-    overriddenDirs+=("${fullScriptOverrideDir}")
-    configDir="$(Conf::getOverriddenDir "${overriddenDirs[@]}")"
+    local dir
+    for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+      overriddenDirs+=("${dir}/${scriptName//\//@}")
+    done
+    configDir="$(Conf::getOverriddenDir "${overriddenDirs[@]}")" || return 0
 
     # ensure necessary functions are imported
     # Assert::dirExists

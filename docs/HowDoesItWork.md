@@ -68,7 +68,7 @@ This function is responsible for:
 - following variables (with default values that could be overridden by .env
   file)
 
-  - CONF_OVERRIDE_DIR => defaults to ${BASH_DEV_ENV_ROOT_DIR}/conf_override
+  - CONF_OVERRIDE_DIRS => defaults to (${BASH_DEV_ENV_ROOT_DIR}/conf_override)
   - LOGS_DIR => defaults to ${BASH_DEV_ENV_ROOT_DIR}/logs
   - PROJECTS_DIR => defaults to ${HOME}/projects
   - BACKUP_DIR => defaults to ${BASH_DEV_ENV_ROOT_DIR}/backup

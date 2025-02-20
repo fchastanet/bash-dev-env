@@ -24,7 +24,7 @@ Conf::getOverriddenDir() {
   (
     shopt -s dotglob
     for overriddenDirPath in "${overriddenDirPaths[@]}"; do
-      if [[ -d "${overriddenDirPath}" && -n "$(ls -A "${overriddenDirPath}")" ]]; then
+      if [[ -d "${overriddenDirPath}" && -n "$(ls -A "${overriddenDirPath}" || true)" ]]; then
         Log::displayInfo "Conf::getOverriddenDir - use overridden files from ${overriddenDirPath}"
         cp -R "${overriddenDirPath}/." "${tempDir}"
       else
@@ -35,6 +35,9 @@ Conf::getOverriddenDir() {
         fi
       fi
     done
-  ) || return 2
+  ) || {
+    Log::displayError "Conf::getOverriddenDir - error during copy"
+    return 2
+  }
   echo "${tempDir}"
 }
