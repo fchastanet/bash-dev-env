@@ -61,7 +61,7 @@ installFromUbuntu24() {
   # shellcheck disable=SC2154
   Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     ".bash-dev-env"
 
   # Upgrade of pip packages will be done on subsequent calls during upgrade cron

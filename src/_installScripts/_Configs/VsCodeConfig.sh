@@ -47,6 +47,7 @@ installVsCodeExtension() {
   local -i batchSize=10
   local -i total=${#extensions[@]}
   local -i i=0
+  local -i currentBatchNumber=1
 
   while ((i < total)); do
     local batch=("${extensions[@]:${i}:${batchSize}}")
@@ -54,19 +55,18 @@ installVsCodeExtension() {
     for extension in "${batch[@]}"; do
       cmd+=(--install-extension "${extension}")
     done
-    Log::displayInfo "Installing VSCode extensions: ${batch[*]} ..."
-    if
-      Retry::parameterized \
-        "${RETRY_MAX_RETRY:-5}" \
-        "batch ${i}-$((i + batchSize)) of ${total}" \
-        "${RETRY_DELAY_BETWEEN_RETRIES:-15}"
-      "${cmd[@]}"
-    then
-      Log::displaySuccess "VSCode extensions '${extension}' successfully installed"
+    Log::displayInfo "Installing VSCode extensions batch ${currentBatchNumber} ${i}-$((i + batchSize)) of ${total}: ${batch[*]} ..."
+    if Retry::parameterized \
+      "${RETRY_MAX_RETRY:-5}" \
+      "batch ${i}-$((i + batchSize)) of ${total}" \
+      "${RETRY_DELAY_BETWEEN_RETRIES:-15}" \
+      "${cmd[@]}"; then
+      Log::displaySuccess "VSCode extensions batch ${currentBatchNumber} successfully installed"
     else
-      Log::displayError "Something went wrong while installing '${extension}' VS code extension"
+      Log::displayError "Something went wrong while installing VS code extensions '${batch[*]}'"
     fi
     ((i += batchSize))
+    ((++currentBatchNumber))
   done
 }
 
@@ -80,7 +80,7 @@ configure() {
 
   local configDir
   # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "${CONF_OVERRIDE_DIR}/$(scriptName)")"
+  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
 
   local extensions extensionsCount
   # shellcheck disable=SC2154
@@ -125,6 +125,8 @@ configure() {
   sed -i -E \
     "s/\"jenkins.pipeline.linter.connector.user\": \"[^\"]*\",/\"jenkins.pipeline.linter.connector.user\": \"${LDAP_LOGIN}\",/g" \
     "${vsCodeSettingsDir}/settings.json"
+
+  code --update-extensions
 }
 
 testConfigure() {

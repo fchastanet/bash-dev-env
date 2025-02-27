@@ -16,24 +16,28 @@
 # @exitcode 1 if default dir does not exist
 # @exitcode 2 if error during copy
 Conf::getOverriddenDir() {
-  local defaultDir="$1"
-  local overriddenDirPath="$2"
+  local -a overriddenDirPaths=("$@")
+  local overriddenDirPath
 
-  if [[ ! -d "${defaultDir}" ]]; then
-    Log::displayError "Directory ${defaultDir} does not exists"
-    return 1
-  fi
-  if [[ ! -d "${overriddenDirPath}" || -z "$(ls -A "${overriddenDirPath}")" ]]; then
-    Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist, keep default one ${defaultDir}"
-    echo "${defaultDir}"
-    return 0
-  fi
   local tempDir
   tempDir="$(mktemp -d)"
   (
     shopt -s dotglob
-    cp -R "${defaultDir}/." "${tempDir}"
-    cp -R "${overriddenDirPath}/." "${tempDir}"
-  ) || return 2
+    for overriddenDirPath in "${overriddenDirPaths[@]}"; do
+      if [[ -d "${overriddenDirPath}" && -n "$(ls -A "${overriddenDirPath}" || true)" ]]; then
+        Log::displayInfo "Conf::getOverriddenDir - use overridden files from ${overriddenDirPath}"
+        cp -R "${overriddenDirPath}/." "${tempDir}"
+      else
+        if [[ -z "${overriddenDirPath}" ]]; then
+          Log::displayError "Conf::getOverriddenDir - empty overridden directory path"
+        else
+          Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist or is empty"
+        fi
+      fi
+    done
+  ) || {
+    Log::displayError "Conf::getOverriddenDir - error during copy"
+    return 2
+  }
   echo "${tempDir}"
 }
