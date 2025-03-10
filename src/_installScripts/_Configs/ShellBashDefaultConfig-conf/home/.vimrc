@@ -12,3 +12,4 @@ filetype plugin indent on
 syntax on "
 set background=dark
 set ruler
+set hlsearch

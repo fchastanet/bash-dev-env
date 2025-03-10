@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/_Configs/ShellZshDefaultConfig-conf" as conf_dir
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/bin/findConfigFiles" as findConfigFiles
-# @embed "${FRAMEWORK_ROOT_DIR}/src/UI/talk.ps1" as talkScript
 
 helpDescription() {
   echo "Default Zsh configuration"
@@ -103,12 +102,12 @@ configure() {
   # shellcheck disable=SC2154
   Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     ".bash-dev-env"
 
   Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     "home" \
     "${HOME}"
 

@@ -78,11 +78,15 @@ installDistro() {
 
 createDistroUser() {
   Log::displayInfo "Add user ${USERNAME} with default password 'wsl' in new distro"
-  if runWslCmd id ubuntu &>/dev/null; then
-    runWslCmd sudo userdel ubuntu
+  if runWslCmd getent group "${USERGROUP}" &>/dev/null; then
+    runWslCmd groupdel "${USERGROUP}"
   fi
+  if runWslCmd getent group "${USERGROUP_ID}" &>/dev/null; then
+    runWslCmd groupdel "${USERGROUP_ID}"
+  fi
+  runWslCmd groupadd -g "${USERGROUP_ID}" "${USERGROUP}"
   # create user with the same uid/gid as local user
-  runWslCmd sudo useradd -m -s /bin/bash "-u$(id -u)" "-g$(id -g)" "${USERNAME}"
+  runWslCmd useradd -m -s /bin/bash "-u${USER_ID}" "-g${USERGROUP_ID}" "${USERNAME}"
   runWslCmd usermod -aG sudo "${USERNAME}"
   echo "${USERNAME}:wsl" | runWslCmd chpasswd
 }

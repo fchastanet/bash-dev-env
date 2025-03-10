@@ -56,6 +56,10 @@ Engine::Config::checkEnv() {
       ((++errorCount))
     fi
   }
+  checkIsArray() {
+    local var="$1"
+    declare -p "${var}" 2>/dev/null | grep -q 'declare \-a'
+  }
 
   if ! echo "${ID}" | grep -qEw 'debian|ubuntu'; then
     Log::fatal "This script is built to support only Debian or Ubuntu distributions. You are using ${ID}."
@@ -86,7 +90,23 @@ Engine::Config::checkEnv() {
     ((errorCount++))
   fi
 
-  checkVarAndDir CONF_OVERRIDE_DIR r || true
+  if ! checkIsArray "CONF_OVERRIDE_DIRS"; then
+    Log::displayError "CONF_OVERRIDE_DIRS - invalid format, expected : array of strings"
+    ((errorCount++))
+  fi
+  ((i = 0)) || true
+  local dir
+  for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+    if [[ ! -d "${dir}" ]]; then
+      Log::displayError "CONF_OVERRIDE_DIRS[${i}] - directory '${dir}' does not exist"
+      ((errorCount++))
+    fi
+    if [[ ! -r "${dir}" ]]; then
+      Log::displayError "CONF_OVERRIDE_DIRS[${i}] - directory '${dir}' is not readable"
+      ((errorCount++))
+    fi
+    ((++i))
+  done
   checkVarAndDir PROJECTS_DIR r || true
   checkVarAndDir BACKUP_DIR rw || true
   checkVarAndDir LOGS_DIR rw || true

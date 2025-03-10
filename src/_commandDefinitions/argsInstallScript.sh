@@ -85,6 +85,19 @@ fullScriptName() {
   File::relativeToDir "${REAL_SCRIPT_FILE}" "${BASH_DEV_ENV_ROOT_DIR}"
 }
 
+fullScriptOverrideDir() {
+  local confDir
+  confDir="$(fullScriptName)"
+  local dir
+  for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+    if [[ -d "${dir}/${confDir//\//@}" ]]; then
+      echo "${dir}/${confDir//\//@}"
+      return
+    fi
+  done
+  echo "${CONF_OVERRIDE_DIRS[0]}/${confDir//\//@}"
+}
+
 argsInstallScriptCommandCallback() {
   if [[ -n "${command}" ]]; then
     case "${command}" in

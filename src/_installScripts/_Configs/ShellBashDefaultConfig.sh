@@ -63,23 +63,23 @@ configure() {
   # shellcheck disable=SC2154
   Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     ".bash-dev-env"
 
   Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     ".vscode"
 
   Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     "home" \
     "${HOME}"
 
   local configDir
   # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "${CONF_OVERRIDE_DIR}/$(scriptName)")"
+  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
 
   SUDO=sudo Install::file \
     "${configDir}/home/.vimrc" "/root/.vimrc" root root

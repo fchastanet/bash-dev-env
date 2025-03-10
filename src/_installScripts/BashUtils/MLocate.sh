@@ -44,7 +44,7 @@ configureMlocate() {
 installMlocateConfigFile() {
   local configDir
   # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "${CONF_OVERRIDE_DIR}/${scriptName}")"
+  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
   SUDO=sudo OVERWRITE_CONFIG_FILES=0 Install::file \
     "${configDir}/etc/updatedb.conf" \
     "/etc/updatedb.conf" \

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/UI/Font.ps1" as fontScript
-# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/UI/.Xresources" as xResources
+# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/UI/Font-conf" as conf_dir
 
 fontBeforeParseCallback() {
   Git::requireGitCommand
@@ -54,7 +53,7 @@ install() {
   Linux::Wsl::cachedWslpath2 windowsTempDir -w "${tempFolder}"
   (
     # shellcheck disable=SC2154
-    cp "${embed_file_fontScript}" "${TMPDIR:-/tmp}/Font.ps1"
+    cp "${embed_dir_conf_dir}/Font.ps1" "${TMPDIR:-/tmp}/Font.ps1"
     local tempFolder
     tempFolder="$(mktemp -p "${TMPDIR:-/tmp}" -d)"
     chmod 777 "${tempFolder}"
@@ -88,13 +87,13 @@ testInstall() {
 }
 
 configure() {
-  local fileToInstall
+  local configDir
   # shellcheck disable=SC2154
-  fileToInstall="$(Conf::dynamicConfFile "${scriptName}/.Xresources" "${embed_file_xResources}")" || return 1
+  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
 
   # shellcheck disable=SC2154
   Install::file \
-    "${fileToInstall}" \
+    "${configDir}/.Xresources" \
     "${HOME}/.Xresources"
 }
 

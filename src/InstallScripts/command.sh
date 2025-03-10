@@ -26,9 +26,25 @@ InstallScripts::command() {
   local installStatus="0"
   sourceHook() {
     local hookName="$1"
+    local configDir
     # shellcheck disable=SC2154
-    hook="$(IGNORE_ERROR=1 Conf::dynamicConfFile "${scriptName}/${hookName}.sh" "${embed_dir_hooks_dir}/${hookName}.sh")"
+    local -a overriddenDirs=()
+    # shellcheck disable=SC2154
+    if [[ -d "${embed_dir_hooks_dir}" ]]; then
+      overriddenDirs+=("${embed_dir_hooks_dir}")
+    fi
+    local dir
+    for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+      overriddenDirs+=("${dir}/${scriptName//\//@}")
+    done
+    configDir="$(Conf::getOverriddenDir "${overriddenDirs[@]}")" || return 0
+
+    # ensure necessary functions are imported
+    # Assert::dirExists
+    # Assert::fileExists
+    hook="${configDir}/${hookName}.sh"
     if [[ -n "${hook}" && -f "${hook}" && -x "${hook}" ]]; then
+      Log::displayInfo "Running hook ${hook}"
       # shellcheck source=src/_installScripts/_Defaults/SimpleTest-hooks/preInstall.sh
       source "${hook}" || {
         Log::displayError "${scriptName} - unable to load hook '${hook}'"

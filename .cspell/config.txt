@@ -92,6 +92,7 @@ HISTFILESIZE
 HISTIGNORE
 HISTSIZE
 histverify
+hlsearch
 HOME
 htmlpurifier
 hugetlbfs

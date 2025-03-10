@@ -57,7 +57,7 @@ configure() {
   # shellcheck disable=SC2154
   OVERWRITE_CONFIG_FILES=0 Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     "info" \
     "${HOME}/.bash-dev-env/GitDefaultConfig/pre-commit-template/info"
 

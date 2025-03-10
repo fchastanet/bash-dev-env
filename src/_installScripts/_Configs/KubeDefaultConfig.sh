@@ -26,7 +26,7 @@ fortunes() {
   echo -e "  - ${__HELP_EXAMPLE}kubectx${__RESET_COLOR}"
   echo -e "  - ${__HELP_EXAMPLE}kubens${__RESET_COLOR}"
   echo -e "  - ${__HELP_EXAMPLE}lazydocker${__RESET_COLOR}"
-  echo -e "  - ${__HELP_EXAMPLE}kube-linter${__RESET_COLOR}."
+  echo -e "  - ${__HELP_EXAMPLE}kube-linter${__RESET_COLOR}"
   echo "%"
   if command -v lazydocker &>/dev/null; then
     echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- you can use ${__HELP_EXAMPLE}lazydocker${__RESET_COLOR} to navigate through your containers."
@@ -232,12 +232,12 @@ configure() {
   # shellcheck disable=SC2154
   Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     ".bash-dev-env"
 
   IGNORE_MISSING_SOURCE_DIR=1 Conf::copyStructure \
     "${embed_dir_conf_dir}" \
-    "${CONF_OVERRIDE_DIR}/$(scriptName)" \
+    "$(fullScriptOverrideDir)" \
     ".kube"
 
   if [[ ! -f "${HOME}/.kube/config" ]] && isKubeConfigGenerationAvailable "generation"; then
@@ -250,6 +250,7 @@ configure() {
 testConfigure() {
   local -i failures=0
   Assert::dirExists "${HOME}/.bash_completion.d" || ((++failures))
+  Assert::fileExists "${HOME}/.kube/config" || ((++failures))
   Assert::fileExists "${HOME}/.bash_completion.d/kubens" || ((++failures))
   Assert::fileExists "${HOME}/.bash_completion.d/kubectx" || ((++failures))
   Assert::fileExists "${HOME}/.bash-dev-env/completions.d/kubectl.zsh" || ((++failures))

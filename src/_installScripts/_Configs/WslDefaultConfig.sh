@@ -45,14 +45,16 @@ computeMaxVhdSize() {
 
 configure() {
   sudo hostnamectl set-hostname "${DISTRO_HOSTNAME}"
+  UI::warnUser
   SUDO=sudo Dns::addHost "${DISTRO_HOSTNAME}"
-  local fileToInstall
   if ! Assert::wsl; then
     Log::displaySkipped "Rest of configure skipped as not in WSL"
     return 0
   fi
+  local configDir
   # shellcheck disable=SC2154
-  fileToInstall="$(Conf::dynamicConfFile "${scriptName}/.wslconfig" "${embed_dir_wsl_conf}/.wslconfig")" || return 1
+  configDir="$(Conf::getOverriddenDir "${embed_dir_wsl_conf}" "$(fullScriptOverrideDir)")"
+
   # shellcheck disable=SC2317
   updateWslConfig() {
     local targetFile="${2}"
@@ -71,22 +73,17 @@ configure() {
     fi
   }
   CHANGE_WINDOWS_FILES="${CHANGE_WINDOWS_FILES:-1}" OVERWRITE_CONFIG_FILES=0 Install::file \
-    "${fileToInstall}" \
+    "${configDir}/.wslconfig" \
     "${WINDOWS_PROFILE_DIR}/.wslconfig" \
     "${USERNAME}" "${USERGROUP}" \
     updateWslConfig
 
-  # shellcheck disable=SC2154
-  fileToInstall="$(Conf::dynamicConfFile "${scriptName}/wsl.conf" "${embed_dir_wsl_conf}/wsl.conf")" || return 1
   SUDO=sudo OVERWRITE_CONFIG_FILES=0 Install::file \
-    "${fileToInstall}" "/etc/wsl.conf" root root "Install::setUserRootCallback"
+    "${configDir}/wsl.conf" "/etc/wsl.conf" root root "Install::setUserRootCallback"
 
-  # shellcheck disable=SC2154
-  fileToInstall="$(Conf::dynamicConfFile "${scriptName}/settings.json" "${embed_dir_wsl_conf}/settings.json")" || return 1
   CHANGE_WINDOWS_FILES="${CHANGE_WINDOWS_FILES:-1}" OVERWRITE_CONFIG_FILES=0 Install::file \
-    "${fileToInstall}" \
+    "${configDir}/settings.json" \
     "$(Conf::getWindowsTerminalPath)/LocalState/settings.json"
-
 }
 
 testConfigure() {
