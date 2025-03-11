@@ -8,4 +8,6 @@ if command -v docker &>/dev/null; then
   # enable docker build kit
   export DOCKER_BUILDKIT=1
   export BUILDKIT_PROGRESS=plain
+  export COMPOSE_DOCKER_CLI_BUILD=true
+  export COMPOSE_BAKE=true
 fi
