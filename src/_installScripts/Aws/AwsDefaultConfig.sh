@@ -73,19 +73,21 @@ configure() {
     ".bash-dev-env"
 
   # use saml2aws to configure with the right parameters
-  if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
-    Log::displayInfo "Please wait saml2aws configuration finishing ..."
-    DBUS_SESSION_BUS_ADDRESS=/dev/null saml2aws configure \
-      --idp-provider='AzureAD' \
-      --session-duration=43200 \
-      --mfa='Auto' \
-      --profile="${AWS_PROFILE}" \
-      --url='https://account.activedirectory.windowsazure.com' \
-      --username="${AWS_USER_MAIL}" \
-      --app-id="${AWS_APP_ID}" \
-      --skip-prompt
-  else
-    Log::displaySkipped "saml2aws configuration skipped as AWS_APP_ID, AWS_PROFILE or AWS_USER_MAIL are not provided"
+  if [[ "${USE_AWS_CONFIGURE_SSO:-1}" = "0" ]]; then
+    if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
+      Log::displayInfo "Please wait saml2aws configuration finishing ..."
+      DBUS_SESSION_BUS_ADDRESS=/dev/null saml2aws configure \
+        --idp-provider='AzureAD' \
+        --session-duration=43200 \
+        --mfa='Auto' \
+        --profile="${AWS_PROFILE}" \
+        --url='https://account.activedirectory.windowsazure.com' \
+        --username="${AWS_USER_MAIL}" \
+        --app-id="${AWS_APP_ID}" \
+        --skip-prompt
+    else
+      Log::displaySkipped "saml2aws configuration skipped as AWS_APP_ID, AWS_PROFILE or AWS_USER_MAIL are not provided"
+    fi
   fi
 }
 
@@ -111,10 +113,11 @@ testConfigure() {
     Log::displayError "default configuration not found in '${HOME}/.aws/config'"
   fi
 
-  if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
-    Assert::fileExists "${HOME}/.saml2aws" || ((++failures))
+  if [[ "${USE_AWS_CONFIGURE_SSO:-1}" = "0" ]]; then
+    if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
+      Assert::fileExists "${HOME}/.saml2aws" || ((++failures))
+    fi
   fi
-
   if [[ "${INSTALL_INTERACTIVE}" = "0" ]]; then
     Log::displaySkipped "saml2aws configuration skipped as INSTALL_INTERACTIVE is set to 0"
   elif [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then

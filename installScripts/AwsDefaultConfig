@@ -471,13 +471,24 @@ Assert::wsl() {
 Auth::authenticate() {
   UI::warnUser
   # try to login
-  if ! Retry::parameterized 3 0 \
-    "AWS Authentication, please provide your credentials ..." \
-    saml2aws login -p "${AWS_PROFILE}" --disable-keychain; then
-    Log::displayError "Failed to connect to aws"
-    return 1
+  if [[ "${USE_AWS_CONFIGURE_SSO:-1}" = "1" ]]; then
+    Log::displayInfo "Trying to connect to aws"
+    if ! Retry::parameterized 3 0 \
+      "AWS Authentication, please provide your credentials ..." \
+      aws configure sso; then
+      Log::displayError "Failed to connect to aws"
+      return 1
+    fi
+    Log::displaySuccess "Aws connection succeeds"
+  else
+    if ! Retry::parameterized 3 0 \
+      "AWS Authentication, please provide your credentials ..." \
+      saml2aws login -p "${AWS_PROFILE}" --disable-keychain; then
+      Log::displayError "Failed to connect to aws"
+      return 1
+    fi
+    Log::displaySuccess "Aws connection succeeds"
   fi
-  Log::displaySuccess "Aws connection succeeds"
 }
 
 
@@ -3442,19 +3453,21 @@ configure() {
     ".bash-dev-env"
 
   # use saml2aws to configure with the right parameters
-  if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
-    Log::displayInfo "Please wait saml2aws configuration finishing ..."
-    DBUS_SESSION_BUS_ADDRESS=/dev/null saml2aws configure \
-      --idp-provider='AzureAD' \
-      --session-duration=43200 \
-      --mfa='Auto' \
-      --profile="${AWS_PROFILE}" \
-      --url='https://account.activedirectory.windowsazure.com' \
-      --username="${AWS_USER_MAIL}" \
-      --app-id="${AWS_APP_ID}" \
-      --skip-prompt
-  else
-    Log::displaySkipped "saml2aws configuration skipped as AWS_APP_ID, AWS_PROFILE or AWS_USER_MAIL are not provided"
+  if [[ "${USE_AWS_CONFIGURE_SSO:-1}" = "0" ]]; then
+    if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
+      Log::displayInfo "Please wait saml2aws configuration finishing ..."
+      DBUS_SESSION_BUS_ADDRESS=/dev/null saml2aws configure \
+        --idp-provider='AzureAD' \
+        --session-duration=43200 \
+        --mfa='Auto' \
+        --profile="${AWS_PROFILE}" \
+        --url='https://account.activedirectory.windowsazure.com' \
+        --username="${AWS_USER_MAIL}" \
+        --app-id="${AWS_APP_ID}" \
+        --skip-prompt
+    else
+      Log::displaySkipped "saml2aws configuration skipped as AWS_APP_ID, AWS_PROFILE or AWS_USER_MAIL are not provided"
+    fi
   fi
 }
 
@@ -3480,10 +3493,11 @@ testConfigure() {
     Log::displayError "default configuration not found in '${HOME}/.aws/config'"
   fi
 
-  if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
-    Assert::fileExists "${HOME}/.saml2aws" || ((++failures))
+  if [[ "${USE_AWS_CONFIGURE_SSO:-1}" = "0" ]]; then
+    if [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
+      Assert::fileExists "${HOME}/.saml2aws" || ((++failures))
+    fi
   fi
-
   if [[ "${INSTALL_INTERACTIVE}" = "0" ]]; then
     Log::displaySkipped "saml2aws configuration skipped as INSTALL_INTERACTIVE is set to 0"
   elif [[ -n "${AWS_APP_ID}" && -n "${AWS_PROFILE}" && -n "${AWS_USER_MAIL}" ]]; then
