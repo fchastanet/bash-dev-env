@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ###############################################################################
-# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/BashUtils/Fasd-binary.yaml
+# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Go/RustDependencies-binary.yaml
 # DO NOT EDIT IT
 # @generated
 ###############################################################################
@@ -319,41 +319,6 @@ Assert::emailAddress() {
 }
 
 
-# @description asserts that first argument is file that exists with specified ownership
-# @arg $1 file:String
-# @arg $2 user:String expected owner user name of the file (default: USERNAME or id -un command)
-# @arg $3 group:String expected owner group name of the file (default: USERGROUP or id -gn command)
-# @env USERNAME String if arg $2 is not provided
-# @env USERGROUP String if arg $3 is not provided
-# @env SUDO String allows to use custom sudo prefix command
-# @exitcode 1 if missing file
-# @exitcode 2 if incorrect user ownership
-# @exitcode 3 if incorrect group ownership
-# @stderr diagnostics information is displayed
-Assert::fileExists() {
-  local file="$1"
-  local user="${2:-${USERNAME}}"
-  local group="${3:-${USERGROUP}}"
-  if [[ -n "${user}" ]]; then
-    Log::displayInfo "Check ${file} exists with user ${user}:${group}"
-  else
-    Log::displayInfo "Check ${file} exists"
-  fi
-  if ! ${SUDO:-} test -f "${file}" &>/dev/null; then
-    Log::displayError "missing file ${file}"
-    return 1
-  fi
-  if [[ -n "${user}" && "${user}" != "$(${SUDO:-} stat -c '%U' "${file}")" ]]; then
-    Log::displayError "incorrect user ownership on file ${file}"
-    return 2
-  fi
-  if [[ -n "${group}" && "${group}" != "$(${SUDO:-} stat -c '%G' "${file}")" ]]; then
-    Log::displayError "incorrect group ownership on file ${file}"
-    return 3
-  fi
-}
-
-
 # @description check if argument respects 2 or more words separated by a space
 # it supports accentuated characters and names with hyphen(-)
 # @arg $1 firstNameLastName:String
@@ -448,31 +413,37 @@ Assert::wsl() {
 }
 
 
-# @description Backup given file in the same directory or in BACKUP_DIR directory
-# backup file name is composed by following fields separated by -:
-#   - if BACKUP_DIR is not empty then escaped dir name separated by @
-#   - filename(without path)
-#   - date with format %Y%m%d_%H:%M:%S (Eg: 20240326_14:45:08)
-# @arg $1 file:String the file to backup
-# @stderr messages about backup file location
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_DIR if not set backup the file in the same directory as original file
-# @exitcode 1 on copy failure
-Backup::file() {
-  local file="$1"
-  if [[ -f "${file}" ]]; then
-    local backupFile fileDirname escapedDirname
-    fileDirname="${file%/*}"
-    escapedDirname=${fileDirname/\//}      # remove first slash
-    escapedDirname=${escapedDirname//\//@} # replace all slashes by @
-    if [[ -z "${BACKUP_DIR:-}" ]]; then
-      backupFile="${fileDirname}/${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
-    else
-      backupFile="${BACKUP_DIR}/${escapedDirname}@${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
+# @description ignore exit code 141 from simple command pipes
+# @example use with:
+#   local resultingStatus=0
+#   local -a originalPipeStatus=()
+#   cmd1 | cmd2 || Bash::handlePipelineFailure resultingStatus originalPipeStatus || true
+#   [[ "${resultingStatus}" = "0" ]]
+# @arg $1 resultingStatusCode:&int (passed by reference) (optional) resulting status code
+# @arg $2 originalStatus:int[] (passed by reference) (optional) copy of original PIPESTATUS array
+# @env PIPESTATUS assuming that this function is called like in the example provided
+# @see https://unix.stackexchange.com/a/709880/582856
+# @see https://gitlab.alpinelinux.org/alpine/aports/-/issues/11152
+# @warning alpine does not support PIPESTATUS very well as execution order of piped process is
+# not guaranteed
+Bash::handlePipelineFailure() {
+  local -a pipeStatusBackup=("${PIPESTATUS[@]}")
+  local -n handlePipelineFailure_resultingStatusCode=$1
+  local -n handlePipelineFailure_originalStatus=$2
+  # shellcheck disable=SC2034
+  handlePipelineFailure_originalStatus=("${pipeStatusBackup[@]}")
+  handlePipelineFailure_resultingStatusCode=0
+  local statusCode
+  for statusCode in "${pipeStatusBackup[@]}"; do
+    if ((statusCode == 141)); then
+      continue
+    elif ((statusCode > 0)); then
+      # shellcheck disable=SC2034
+      handlePipelineFailure_resultingStatusCode="${statusCode}"
+      break
     fi
-    Log::displayInfo "Backup file '${file}' to ${backupFile}"
-    ${SUDO:-} cp "${file}" "${backupFile}"
-  fi
+  done
+  return "${handlePipelineFailure_resultingStatusCode}"
 }
 
 
@@ -516,35 +487,6 @@ Cache::getPropertyValue2() {
 }
 
 
-# @description convert base64 encoded back to target dir
-# it is advised to include the md5sum of the binFile in the path of the target dir
-#
-# @arg $1 targetDir:string the directory in which tar archive will be untarred
-# @arg $2 base64:string the base64 encoded tar czf archive
-# @stderr diagnostics information is displayed
-Compiler::Embed::extractDirFromBase64() {
-
-  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED:-0}" != 1 ]]; then
-    echo >&2 "Requirement Linux::requireTarCommand has not been loaded"
-    exit 1
-  fi
-
-  local targetDir="$1"
-  local base64="$2"
-
-  if [[ ! -d "${targetDir}" ]]; then
-    mkdir -p "${targetDir}"
-    (
-      cd "${targetDir}" || exit 1
-      base64 -d <<<"${base64}" | tar -xzf - 2>/dev/null || {
-        Log::displayError "untar failure, invalid base64 string"
-        exit 1
-      }
-    ) || return 1
-  fi
-}
-
-
 # @description convert base64 encoded back to target file
 # if target file is executable prepend dir of target
 # file to PATH to make binary available everywhere
@@ -571,40 +513,6 @@ Compiler::Embed::extractFileFromBase64() {
 
   if [[ -x "${targetFile}" ]]; then
     Env::pathPrepend "${targetDir}"
-  fi
-}
-
-
-# @description copy folder structure to target directory
-# merge embedDir with overridden directory if provided and available
-# @arg $1 embedDir:String the path embedded
-# @arg $2 overrideDir:String the path overridden
-# @arg $3 subDir:String the sub-directory to copy from embedDir and/or overrideDir
-# @arg $4 targetDir:String the target directory (default: ${HOME}/${subDir})
-# @env SUDO String allows to use custom sudo prefix command
-# @env HOME used for default value of targetDir arg
-# @env OVERWRITE_CONFIG_FILES indicates if target directory should be overwritten if it exists
-# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env IGNORE_MISSING_SOURCE_DIR
-Conf::copyStructure() {
-  local embedDir="$1"
-  local overrideDir="$2"
-  local subDir="$3"
-  local targetDir="${4:-${HOME}/${subDir}}"
-
-  local configDir
-  # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embedDir}" "${overrideDir}")"
-  if [[ -d "${configDir}/${subDir}" ]]; then
-    # shellcheck disable=SC2154
-    OVERWRITE_CONFIG_FILES=${OVERWRITE_CONFIG_FILES:-1} \
-      PRETTY_ROOT_DIR="${embedDir%/*}" \
-      Install::structure "${configDir}/${subDir}" "${targetDir}"
-  elif [[ "${IGNORE_MISSING_SOURCE_DIR:-0}" = "1" ]]; then
-    return 0
-  else
-    Log::displayError "Directory ${subDir} does not exists in '${embedDir}' or '${overrideDir}'"
-    return 1
   fi
 }
 
@@ -1357,224 +1265,6 @@ Framework::createTempFile() {
 }
 
 
-# @description installs file to given directory
-#
-# callbacks parameters `${fromFile} ${targetFile} $@`
-# @arg $1 fromFile - original file to copy
-# @arg $2 targetFile - target file
-# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
-# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
-# @arg $5 successCallback:Function the callback to call when file is installed successfully, by default setUserRights callback is called
-# @arg $6 failureCallback:Function the callback to call when file installation has failed, by default unableToCopyCallback callback is called
-# @arg $@ callbacksParams:String[] additional parameters passed to callbacks
-# @exitcode 1 if fromFile is not readable
-# @exitcode 2 if backup file failure
-# @exitcode 3 if copy failure
-# @exitcode 0 on success or if OVERWRITE_CONFIG_FILES=0
-# @exitcode 0 on success or if CHANGE_WINDOWS_FILES=0 and target file is a windows file
-# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing directory
-# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target file is in windows file system, overwrite it
-# @env USERNAME (default: root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: root) the group name that will be used to set target files ownership
-# @env BASE_MNT_C String windows C drive base PATH
-# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_BEFORE_INSTALL Boolean (default: 1) backup file before installing the file
-Install::file() {
-  local fromFile="$1"
-  local targetFile="$2"
-  local userName="${3:-${USERNAME:-root}}"
-  local userGroup="${4:-${USERGROUP:-root}}"
-  local successCallback=${5:-Install::setUserRightsCallback}
-  local failureCallback=${6:-Install::unableToCopyCallback}
-  shift 6 || true
-
-  if [[ ! -f "${fromFile}" || ! -r "${fromFile}" ]]; then
-    Log::displayError "cannot read source file '${fromFile}'"
-    return 1
-  fi
-
-  # skip if OVERWRITE_CONFIG_FILES is 0 and target file exists
-  if [[ "${OVERWRITE_CONFIG_FILES}" = "0" && -f "${targetFile}" ]]; then
-    Log::displayWarning "File '${targetFile}' exists - Skip install (because OVERWRITE_CONFIG_FILES=0 in .env file)"
-    return 0
-  fi
-
-  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
-  if [[ "${CHANGE_WINDOWS_FILES}" = "0" && "${targetFile}" =~ ^${BASE_MNT_C} ]]; then
-    Log::displayWarning "File '${targetFile}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
-    return 0
-  fi
-
-  local targetDir="${targetFile%/*}"
-  if ! ${SUDO} test -d "${targetDir}"; then
-    ${SUDO:-} mkdir -p "${targetDir}"
-    ${SUDO:-} chown "${userName}":"${userGroup}" "${targetDir}"
-  fi
-  local fromDir="${fromFile%/*}"
-  local fromFilename="${fromFile##*/}"
-
-  local prettyFromDir
-  # shellcheck disable=SC2295
-  prettyFromDir="${fromDir#${PRETTY_ROOT_DIR:-${FRAMEWORK_ROOT_DIR}}/}"
-  if diff -q "${fromFile}" "${targetFile}" &>/dev/null; then
-    Log::displayStatus "No changes detected. No need to update '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
-    return 0
-  fi
-
-  if [[ "${BACKUP_BEFORE_INSTALL:-1}" = "1" ]]; then
-    Backup::file "${targetFile}" || return 2
-  fi
-
-  if ${SUDO:-} cp "${fromFile}" "${targetFile}"; then
-    # shellcheck disable=SC2295
-    Log::displaySuccess "Installed file '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
-    ${successCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
-  else
-    # shellcheck disable=SC2295
-    Log::displayError "unable to copy file '${targetFile}' from '${fromDir#${FRAMEWORK_ROOT_DIR}/}/${fromFilename}'"
-    ${failureCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
-    return 3
-  fi
-}
-
-
-# @description install callback
-#   set file with root ownership and execution bit
-# @arg $1 fromFile:String
-# @arg $2 targetFile:String
-# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
-# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
-# @env USERNAME (default: root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: root) the group name that will be used to set target files ownership
-# @env SUDO String allows to use custom sudo prefix command
-# @exitcode 1 on any failure
-# @see Install::file
-Install::setUserRightsCallback() {
-  # shellcheck disable=SC2034 # $1 not used
-  local fromFile="$1"
-  local targetFile="$2"
-  local userName="${3:-${USERNAME:-root}}"
-  local userGroup="${4:-${USERGROUP:-root}}"
-
-  ${SUDO:-} chown "${userName}":"${userGroup}" "${targetFile}"
-}
-
-
-# @description install dir to given directory but backup it before
-# @arg $1 fromDir:String the source base directory
-# @arg $2 toDir:String the target base directory
-# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing files
-# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target directory is in windows file system, overwrite it
-# @env USERNAME (default: ${USERNAME} if SUDO empty else root) the user name that will be used to set target files ownership
-# @env USERGROUP (default: ${USERGROUP} if SUDO empty else root) the group name that will be used to set target files ownership
-# @env BASE_MNT_C String windows C drive base PATH
-# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @env SUDO String allows to use custom sudo prefix command
-# @env BACKUP_BEFORE_INSTALL Boolean (default:1) backup directory before installing the dir
-# @exitcode 1 if source directory is not readable
-# @exitcode 2 if error during structure replication
-# @exitcode 2 if error during file copy
-# @exitcode 0 if copy successful
-# @exitcode 0 with warning message if CHANGE_WINDOWS_FILES=0 and target directory in C drive
-# @stderr diagnostics information is displayed, skipped information if OVERWRITE_CONFIG_FILES or CHANGE_WINDOWS_FILES are set to 1
-Install::structure() {
-  local fromDir="$1"
-  local toDir="$2"
-  local userName="root"
-  local userGroup="root"
-  if [[ -z "${SUDO:-}" ]]; then
-    userName="${USERNAME:-root}"
-    userGroup="${USERGROUP:-root}"
-  fi
-
-  if [[ ! -d "${fromDir}" || ! -r "${fromDir}" ]]; then
-    Log::displayError "Install::structure - cannot read source directory '${fromDir}'"
-    return 1
-  fi
-
-  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
-  if [[ "${CHANGE_WINDOWS_FILES:-0}" = "0" && "${toDir}" =~ ^${BASE_MNT_C:-/mnt/c} ]]; then
-    Log::displayWarning "Install::structure - Directory '${fromDir}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
-    return 0
-  fi
-
-  # first replicate directory structure
-  # shellcheck disable=SC2317
-  createStructure() {
-    local dir="$1"
-    if ! ${SUDO} test -d "${dir}"; then
-      if ! ${SUDO:-} mkdir -p "${dir}"; then
-        Log::displayError "Install::structure - impossible to create directory '${dir}'"
-        exit 1
-      fi
-    fi
-
-    if ! ${SUDO:-} chown "${userName}":"${userGroup}" "${dir}"; then
-      Log::displayError "Install::structure - impossible to update directory owner '${dir}' with ${userName}:${userGroup}"
-      exit 1
-    fi
-  }
-  local dir
-
-  (
-    local dir
-    shopt -s lastpipe
-    # -links 2 allows to exclude empty directories
-    ${SUDO:-} find "${fromDir}" -depth -type d -links 2 -print0 |
-      while read -rd '' dir; do
-        if ! createStructure "${toDir}/${dir#"${fromDir}"}"; then
-          # error already reported by createStructure
-          exit 1
-        fi
-      done || {
-      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
-        Log::displayError "Install::structure - replicated directory structure - find directories on '${fromDir}' resulted in an error"
-        exit 2
-      fi
-    }
-  ) || return 2
-
-  # for each file, copy it
-  (
-    local file
-    shopt -s lastpipe
-    ${SUDO:-} find "${fromDir}" -depth -type f -print0 |
-      while read -rd '' file; do
-        local localFile="${file#"${fromDir}/"}"
-        if ! Install::file "${fromDir}/${localFile}" "${toDir}/${localFile}"; then
-          # error already reported by Install::file
-          exit 1
-        fi
-      done || {
-      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
-        Log::displayError "Install::structure - replicated file structure - find files on '${fromDir}' resulted in an error"
-        exit 2
-      fi
-    }
-  ) || return 3
-
-  # shellcheck disable=SC2295
-  Log::displaySuccess "Installed directory '${toDir#${PRETTY_ROOT_DIR}/}' from '${fromDir#${PRETTY_ROOT_DIR}/}'"
-}
-
-
-# @description install callback
-#   default callback used called when file copy has failed
-# @arg $1 fromFile:String
-# @arg $2 targetFile:String
-# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
-# @exitcode 1 always fail
-# @stderr diagnostics information is displayed
-# @see Install::file
-Install::unableToCopyCallback() {
-  local fromDir="$1"
-  local fileName="$2"
-  local targetFile="$3"
-  Log::fatal "unable to copy file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fileName}' to '${targetFile}'"
-}
-
-
 # @description the command launch different actions(install, configure, test)
 # depending on the options selected
 # @env SKIP_INSTALL
@@ -1841,31 +1531,6 @@ InstallScripts::scriptFunctionEmpty() {
 }
 
 
-# @description add apt repository followed by an apt-get update
-# @feature Retry::default
-# Linux::requireSudoCommand
-# @env SKIP_APT_GET_UPDATE
-# @stdout diagnostics logs
-Linux::Apt::addRepository() {
-
-  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_UBUNTU_LOADED:-0}" != 1 ]]; then
-    echo >&2 "Requirement Linux::requireUbuntu has not been loaded"
-    exit 1
-  fi
-
-  if ! Linux::Apt::repositoryExists "$1"; then
-    Log::displayInfo "Apt add repository $1"
-    if [[ "${SKIP_APT_GET_UPDATE:-0}" = "0" ]]; then
-      Retry::default sudo add-apt-repository -y --update "$1"
-    else
-      Retry::default sudo add-apt-repository -y "$1"
-    fi
-  else
-    Log::displayInfo "Repository $1 is already installed"
-  fi
-}
-
-
 # @description apt-get install
 # @arg $@ softwares:String[] list of softwares to install
 # @feature Retry::default
@@ -1939,28 +1604,6 @@ Linux::Apt::isPackageInstalled() {
 
   local package="$1"
   dpkg -l "${package}" | grep -Eq "^ii  ${package}"
-}
-
-
-# @description check if apt repository is added to apt sources
-# Linux::requireSudoCommand
-# @stdout diagnostics logs
-Linux::Apt::repositoryExists() {
-
-  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_UBUNTU_LOADED:-0}" != 1 ]]; then
-    echo >&2 "Requirement Linux::requireUbuntu has not been loaded"
-    exit 1
-  fi
-
-  local aptRepoName="$1"
-  local regexp
-  if [[ "${aptRepoName}" =~ https?:// ]]; then
-    regexp="^[[:space:]]*deb ${aptRepoName}"
-  else
-    regexp="^[[:space:]]*deb .*${aptRepoName}"
-  fi
-  [[ -n "$(find /etc/apt/ -name '*.list' -print0 |
-    xargs -0 -P 10 -L 1 grep "${regexp}" || true)" ]]
 }
 
 
@@ -2174,8 +1817,6 @@ Linux::getDistributorId() {
 # @exitcode 1 if tar command not available
 # @stderr diagnostics information is displayed
 Linux::requireTarCommand() {
-  export REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED=1
-
   Assert::commandExists tar
 }
 
@@ -2291,20 +1932,6 @@ Log::displaySkipped() {
     echo -e "${__SKIPPED_COLOR}SKIPPED - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
   fi
   Log::logSkipped "$1"
-}
-
-
-# @description Display message using info color (blue) but warning level
-# @arg $1 message:String the message to display
-# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
-# @env LOG_CONTEXT String allows to contextualize the log
-Log::displayStatus() {
-  local type="${2:-STATUS}"
-  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
-    Log::computeDuration
-    echo -e "${__INFO_COLOR}${type}  - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
-  fi
-  Log::logStatus "$1" "${type}"
 }
 
 
@@ -2467,15 +2094,6 @@ Log::logMessage() {
 Log::logSkipped() {
   if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
     Log::logMessage "${2:-SKIPPED}" "$1"
-  fi
-}
-
-
-# @description log message to file
-# @arg $1 message:String the message to display
-Log::logStatus() {
-  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
-    Log::logMessage "${2:-STATUS}" "$1"
   fi
 }
 
@@ -3095,6 +2713,52 @@ UI::theme() {
 }
 
 
+# @description Check that command version is greater than expected minimal version
+# display warning if command version greater than expected minimal version
+# display error if command version less than expected minimal version and exit 1
+# @arg $1 commandName:String command path
+# @arg $2 argVersion:String command line parameters to launch to get command version
+# @arg $3 minimalVersion:String expected minimal command version
+# @arg $4 parseVersionCallback:Function
+# @arg $5 help:String optional help message to display if command does not exist
+# @exitcode 0 if command version greater or equal to expected minimal version
+# @exitcode 1 if command version less than expected minimal version
+# @exitcode 2 if command does not exist
+Version::checkMinimal() {
+  local commandName="$1"
+  local argVersion="$2"
+  local minimalVersion="$3"
+  local parseVersionCallback=${4:-Version::parse}
+  local help="${5:-}"
+
+  Assert::commandExists "${commandName}" "${help}" || return 2
+
+  # shellcheck disable=SC2034
+  local status=0
+  # shellcheck disable=SC2034
+  local -a pipeStatus=()
+  local version
+  version="$("${commandName}" "${argVersion}" 2>&1 | ${parseVersionCallback} || Bash::handlePipelineFailure status pipeStatus)"
+
+  Log::displayDebug "check ${commandName} version ${version} against minimal ${minimalVersion}"
+
+  local result=0
+  Version::compare "${version}" "${minimalVersion}" || result=$?
+  case "${result}" in
+    1)
+      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
+      ;;
+    2)
+      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
+      return 1
+      ;;
+    *)
+      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
+      ;;
+  esac
+}
+
+
 # @description compare 2 version numbers
 # @arg $1 version1:String version 1
 # @arg $2 version2:String version 2
@@ -3128,17 +2792,19 @@ Version::compare() {
 }
 
 
-# @description Check if the current Ubuntu version
-# is greater or equal to the provided version
-# @arg $1 string Expected minimum version
-# @exitcode 0 If the current Ubuntu version is greater or equal
-# to the provided version
-Version::isUbuntuMinimum() {
-  local expectedMinimumVersion="$1"
-
-  Version::compare "${VERSION_ID}" "${expectedMinimumVersion}"
-  local -r comparisonResult=$?
-  ((comparisonResult == 0 || comparisonResult == 1))
+# @description filter to keep only version number from a string
+# @arg $@ files:String[] the files to filter
+# @exitcode * if one of the filter command fails
+# @stdin you can use stdin as alternative to files argument
+# @stdout the filtered content
+# shellcheck disable=SC2120
+Version::parse() {
+  # match anything, print(p), exit on first match(Q)
+  sed -En \
+    -e 's/\x1b\[[0-9;]*[mGKHF]//g' \
+    -e 's/[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/' \
+    -e '//{p;Q}' \
+    "$@"
 }
 # FUNCTIONS
 
@@ -3155,7 +2821,7 @@ defaultBeforeParseCallback() {
 }
 
 scriptName() {
-  echo "Fasd"
+  echo "RustDependencies"
 }
 
 beforeParseCallback() {
@@ -3470,87 +3136,72 @@ commandOptionParseFinished() {
 }
 
 
-Linux::requireTarCommand
-Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/63977cbc47a725c1fde0ad0f6096e48a50720d446320c5a7fe8267612d1aebf7/conf_dir" \
-  "H4sIAAAAAAAA/+xXbW/aSBDuZ/+Kp8YtGN3GJm1SnXKumgtURWpC1FBVp0CR412XVc2aeu1cD8J/P+36BUOSy0mNqjuJ+bLL7DA7LzvzjPeufDkllF0TJq4dP+K+ZHKPOqEvqT578uPkuq776uBAr67rbq/1s5zfOei8evEE7iPc/SBlMvWTJ+4P37Xt3P+EGk+dKy4clWnD0OmH7zVV9kH8ZsGRJUfyikXXPFoxwzUzLJmVYCVWSYVNw2ggzESQ8lggjcG+syBLGa4yHqWECwTUULKTgLZsLA2Ah2i1rAZ+89Cx7SOkUyYMANAqTeuNaQAskkwzozjwI0y0ioSlmlf98kyrlRvC0JwnXKQhnsmmVmKbWpaHuLwEWcC0ltX/VibG49rNQMLSLCnM4PU/0gf+GNwSuLlBYUrzmRyJ5tb5+o6QG6sioIs8oJOgHuXFBheEN4078r9Z/0E8m0dMJeMxe8AD9b+//+Jwq/4PO+7+rv5/Bm3UfwNqRRDPZr6gmMWUYf0kjPwZKpFJMKOT4oQVhdkoRVmlwA9TlsAkTD3bvBSDLPGs5cng9HzyafChe3GptydqP14ZZd3cIwGCzngFzwNps81SakBOWRQFUxZ8BeXSv4qYd3Gyv+++0udKyYfe+fs/vJbVUoZ+YQLkuDLVtJZBlqxM2zY2ClqXWs21THLxBZSFfhalSJhPIy7Y+rx0+dhErNaucj3wJXvAJ567QY5xA9K1i/bwkFf3+RVXFm75tdGqgKMjvWnb+Y5JP9DufmFpLfFImMyiVBbOs+9zX1BGUUwLVW5zMQPFxrNa68ZMSBUis+AjVwAyV1bWgvNmvDKx/9qh7NoRWRThppAHJKMgAubIks7nvXZzNGrttUcju+mMRh1nnrdHu4z1+/5Zr9GG6qqFhj+nPGI6bSAJVOqOQONK/bcsTtmkyqppLdW6bc3aHJS9+tm3e4SfP78tPBqV8aexUDhlVyHsv73wrOZINI1/Sv6hsZn4ZR7wlW2s6kU6jeOvd1VqGCcIZhRcaKirIlBliLzFPbWu39OMahzSxq9U12BC2favm8ctu/In4kOCIoSkkCEWWCzuAqwdPSpt4j8XKUv8IOXX7Ofhf+fg5f42/ruHO/z/KVTH/8bjktFAd4CzwRC9bn/4C4bv+hd423/fw8nxGX7v4eN593jY6+JTf/hu8HGoRPsnvUc3Q31i+JIaPKyaE7nOW87zdaeuZol8ZvaDKfNMa/lucNpbOXuKSbjgKVGRMqtBxdSgW9dpmyBC4+5aUT7WPwWRt/gbQ0yBlOoezGPJv5McIXWNqq6Z7wLVN2tbwoVM/SjC65st9esBpgYlMs6SgHmV5wYK1rZxBpAJydJaSAyj/H6aJ/Fsnk7Ux1sBK/cjlvvyUJ+zaz+CWXg5T+IA5QcYkb7gKV8wWK0pl2mc/IUObjTem9L5fIlx+9Ilv47bauc4pm2b9ewZwMrQjvqU5kCk4lXOXqa1PP8wOD0fTk4Gp6fHZ92VWU5c7VvulNOQnos2/+aZt6SP7lC9HqZCvsOwHe1oR/9R+jsAAP//yeNBiQAWAAA="
-
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/63977cbc47a725c1fde0ad0f6096e48a50720d446320c5a7fe8267612d1aebf7/conf_dir"
-
 
 helpDescription() {
-  echo "$(scriptName) - configuration for bash shell only allowing to search files quickly"
+  echo "Rust dependencies - development tools"
 }
 
 helpLongDescription() {
   helpDescription
-  echo "Following aliases are available:"
-  echo "  - alias 'a' - search files/directories based on a pattern"
-  echo "  - alias 'd' - search directories based on a pattern"
-  echo "  - alias 'f' - search files based on a pattern"
-  echo "  - alias 'si' - search most used files/directories in interactive mode(index)"
-  echo "  - alias 'sid' - search most used directories in interactive mode(index)"
-  echo "  - alias 'sif' - search most used files in interactive mode(index)"
-  echo "  - alias 'z' - allows to switch to the directory matching the most the given pattern"
-  echo "  - alias 'zz' - allows to select interactively one of the most used directory by index"
+  echo "$(scriptName) -- the following rust tools are available:"
+  echo -e "  - ${__HELP_EXAMPLE}git-delta${__RESET_COLOR}"
+  echo -e "      A syntax-highlighting pager for git"
+  echo -e "      https://crates.io/crates/git-delta"
+  echo -e "  - ${__HELP_EXAMPLE}cargo-cache${__RESET_COLOR}"
+  echo -e "      Allows to manage the cargo cache"
 }
 
-isBash() {
-  [[ "${USER_SHELL}" = "/bin/bash" || "${USER_SHELL}" = "/usr/bin/bash" ]]
+dependencies() {
+  echo "installScripts/Rust"
 }
 
 fortunes() {
-  if isBash; then
-    if command -v fasd &>/dev/null; then
-      echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}z <directory>${__RESET_COLOR} to easily change directory -- see ${__HELP_EXAMPLE}<https://github.com/clvv/fasd>${__RESET_COLOR}."
-      echo "%"
-      echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}v <file>${__RESET_COLOR} to easily edit recently file with vi -- see ${__HELP_EXAMPLE}<https://github.com/clvv/fasd>${__RESET_COLOR}."
-      echo "%"
-    else
-      echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- Think about installing ${__HELP_EXAMPLE}fasd${__RESET_COLOR} to easily switch directory - run ${__HELP_EXAMPLE}installAndConfigure Fasd${__RESET_COLOR}."
-      echo "%"
-    fi
-  fi
+  helpLongDescription
+  echo "%"
 }
 
 # jscpd:ignore-start
-dependencies() { :; }
 listVariables() { :; }
 helpVariables() { :; }
 defaultVariables() { :; }
 checkVariables() { :; }
 breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
+configure() { :; }
+testConfigure() { :; }
+testCleanBeforeExport() { :; }
 # jscpd:ignore-end
 
 install() {
-  if ! Version::isUbuntuMinimum "24.04"; then
-    Linux::Apt::addRepository ppa:aacebedo/fasd
-  fi
-  SKIP_APT_GET_UPDATE=1 Linux::Apt::installIfNecessary --no-install-recommends \
-    fasd
+  Log::displayInfo "Installing Rust dependencies"
+  # install useful dependencies
+  (
+    set -o errexit -o nounset
+    cargo install git-delta
+    cargo install cargo-cache
+
+    Log::displayInfo "Upgrading Rust dependencies"
+    cargo update
+  )
 }
 
 testInstall() {
   local -i failures=0
-  Assert::commandExists fasd || ((++failures))
+  (
+    # shellcheck source=/dev/null
+    source "${HOME}/.bash-dev-env/profile.d/rust.sh" || return 1
+    local -i failures=0
+    Version::checkMinimal "delta" --version "0.18.2" || ((++failures))
+    exit "${failures}"
+  ) || failures="$?"
   return "${failures}"
 }
 
-configure() {
-  # shellcheck disable=SC2154
-  Conf::copyStructure \
-    "${embed_dir_conf_dir}" \
-    "$(fullScriptOverrideDir)" \
-    ".bash-dev-env"
-}
-
-testConfigure() {
-  local -i failures=0
-  Assert::fileExists "${HOME}/.bash-dev-env/aliases.d/fasd.bash" || ((++failures))
-  Assert::fileExists "${HOME}/.bash-dev-env/completions.d/fasd.bash" || ((++failures))
-  Assert::fileExists "${HOME}/.bash-dev-env/interactive.d/fasd.bash" || ((++failures))
-  return "${failures}"
+cleanBeforeExport() {
+  # shellcheck source=/dev/null
+  source "${HOME}/.bash-dev-env/profile.d/rust.sh" || exit 1
+  Log::displayInfo "Cleaning cargo cache"
+  cargo cache -e --gc
 }
 
 
@@ -3691,7 +3342,7 @@ declare -i help_cache_max_duration=86400
 
 
 optionHelpCallback() {
-  "FasdCommandHelp"
+  "RustDependenciesCommandHelp"
   exit 0
 }
 
@@ -3717,7 +3368,7 @@ afterParseCallback() {
 
 
 # ------------------------------------------
-# Command FasdCommand
+# Command RustDependenciesCommand
 # ------------------------------------------
 
 # options variables initialization
@@ -3742,8 +3393,8 @@ declare optionVersion="0"
 declare optionQuiet="0"
 # arguments variables initialization
 declare command="install"
-# @description parse command options and arguments for FasdCommand
-FasdCommandParse() {
+# @description parse command options and arguments for RustDependenciesCommand
+RustDependenciesCommandParse() {
   Log::displayDebug "Command ${SCRIPT_NAME} - parse arguments: ${BASH_FRAMEWORK_ARGV[*]}"
   Log::displayDebug "Command ${SCRIPT_NAME} - parse filtered arguments: ${BASH_FRAMEWORK_ARGV_FILTERED[*]}"
   SKIP_CONFIGURE="0"
@@ -4229,8 +3880,8 @@ FasdCommandParse() {
 
 }
 
-# @description display command options and arguments help for FasdCommand
-FasdCommandHelp() {
+# @description display command options and arguments help for RustDependenciesCommand
+RustDependenciesCommandHelp() {
   echo -e "${__HELP_TITLE_COLOR}SYNOPSIS:${__RESET_COLOR}"
   helpDescriptionFunction
 
@@ -4238,7 +3889,7 @@ FasdCommandHelp() {
   # ------------------------------------------
   # usage section
   # ------------------------------------------
-  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "Fasd [OPTIONS] [ARGUMENTS]"
+  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "RustDependencies [OPTIONS] [ARGUMENTS]"
   echo
   # ------------------------------------------
   # usage/options section
@@ -4246,7 +3897,7 @@ FasdCommandHelp() {
   optionsAltList=("[--skip-config|--skip-configure|--skip-configuration|-sc]" "[--skip-install|--skip-installation|-si]" "[--skip-test|--skip-tests|-st]" "[--skip-deps|--skip-dependencies|-sd]" "[--prepare-export|-e]" "[--profile|-p <profile>]" "[--help|-h]" "[--config]" "[--bash-framework-config <bash-framework-config>]" "[--verbose|-v]" "[-vv]" "[-vvv]" "[--log-level <log-level>]" "[--log-file <log-file>]" "[--display-level <display-level>]" "[--no-color]" "[--theme <theme>]" "[--version]" "[--quiet|-q]"
   )
   Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" \
-    "Fasd" "${optionsAltList[@]}"
+    "RustDependencies" "${optionsAltList[@]}"
   echo
 
   # ------------------------------------------
@@ -4453,7 +4104,7 @@ FasdCommandHelp() {
   # ------------------------------------------
   echo
   echo -n -e "${__HELP_TITLE_COLOR}SOURCE FILE: ${__RESET_COLOR}"
-  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/BashUtils/Fasd-binary.yaml"
+  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Go/RustDependencies-binary.yaml"
   # ------------------------------------------
   # license section
   # ------------------------------------------
@@ -4469,7 +4120,7 @@ FasdCommandHelp() {
 
 beforeParseCallback
 
-FasdCommandParse "$@"
+RustDependenciesCommandParse "$@"
 MAIN_FUNCTION_NAME="main"
 main() {
 

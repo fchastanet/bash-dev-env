@@ -37,10 +37,10 @@ testConfigure() { :; }
 install() {
   Log::displayInfo "Installing composer dependencies"
   composer global require --dev --no-interaction \
-    'squizlabs/php_codesniffer=*' \
-    'phpmd/phpmd=*' \
     'friendsofphp/php-cs-fixer=*' \
+    'phpmd/phpmd=*' \
     'phpstan/phpstan=*' \
+    'squizlabs/php_codesniffer=*' \
     'vimeo/psalm=*'
   composer global update
 }
@@ -56,6 +56,7 @@ testInstall() {
   Version::checkMinimal "phpmd" --version "2.15.0" || ((++failures))
   Version::checkMinimal "php-cs-fixer" --version "3.65.0" || ((++failures))
   Version::checkMinimal "phpstan" --version "2.0.4" || ((++failures))
+  Version::checkMinimal "phpcbf" --version "3.13.2" || ((++failures))
   Version::checkMinimal "psalm" --version "5.26.1" || ((++failures))
 
   return "${failures}"

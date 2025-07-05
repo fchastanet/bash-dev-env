@@ -145,7 +145,7 @@ repos:
         exclude: /testsData/
 
   - repo: https://github.com/fchastanet/bash-tools-framework
-    rev: 6.1.4
+    rev: 6.2.3
     hooks:
       - id: fixShebangExecutionBit
       - id: awkLint
@@ -155,7 +155,7 @@ repos:
         args:
           [
             --image,
-            "oxsecurity/megalinter-terraform:v8.4.2",
+            "oxsecurity/megalinter-terraform:v8.8.0",
             --check-megalinter-version,
           ]
       - id: frameworkLint
@@ -185,7 +185,7 @@ repos:
       - id: plantuml
 
   - repo: https://github.com/fchastanet/bash-compiler
-    rev: 3.1.2
+    rev: 3.1.4
     hooks:
       - id: buildBashBinaries
 
