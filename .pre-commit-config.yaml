@@ -107,7 +107,8 @@ repos:
             ^install$|
             ^distro$|
             ^srcAlt|
-            ^.cspell/codespellrc-.*.txt$
+            ^.cspell/codespellrc-.*.txt$|
+            ^src/_installScripts/_Configs/VsCodeConfig-conf/profiles/
           )
 
   - repo: https://github.com/ComPWA/prettier-pre-commit

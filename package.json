@@ -1,7 +1,16 @@
 {
   "cspell": "cspell.config.yml",
+  "scripts": {
+    "convert-vscode-profiles": "node src/_installScripts/_Configs/decodeVsCodeProfile.js src/_installScripts/_Configs/VsCodeConfig-conf/src-profiles src/_installScripts/_Configs/VsCodeConfig-conf/profiles",
+    "lint": "eslint --ext .js,.jsonc src",
+    "lint:fix": "eslint --ext .js,.jsonc src --fix",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
   "devDependencies": {
     "eslint-config-prettier": "^10.0.2",
     "eslint-plugin-json": "^4.0.1"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
   }
 }
