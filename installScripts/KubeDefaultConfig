@@ -3912,10 +3912,10 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/54c2f2db1f70294999f74b3026129308b3f83a02e276e8fc67c30055017b4875/conf_dir" \
-  "H4sIAAAAAAAA/+yWf2ubThjA87ev4kkN5Fv4Gk8SDXTLWNc4KmxNoJbCYhhGz96R8xTvlC2vfuhcsmZkKdhfAz9/RLk7nieXPJ/nbrDyBdFCXGiYF3qQxCnDkiZcDEJ9na9wINlgI0inCQghNDbN6okQ2n8iYzjavlfjhmUi1AHUKOsDyYX0sw5qnGt/c/8IalfPRaavKNcxL2AjiKLQCBYL6AVJHPs8FIu6DpawXL4BSTBXAESSZwGGt//Vk7ArnTLIqRJR5aX31nKc+/5TLnHmB5IWuPZfS4VRrWmQ45j/pmXu+2+1/j8Pardyv/yHFfVxUVSYzuBq5oI9ddz/wb10ruGj88mGi/Mr+GDDzXx67tpTuHXcy9mNWy51LuxH/xp1P9Mi0JNUVlWdCmNX3YL83thUQTBjAcHBum5yEz3Ehc5zxnZ971AkBWB+bUz6Cy9/7xHwbqFXdcivqTBOl14P+q+sMR7zv/Hh/wD/h5a15785tszW/+fgwPkvv6dYYFlKs6GcSni3lWBrys8Jlgc0hBCnkkwMYIkfAqN3RGpxEmKIkgw8BQAg9te43+36jPoCqs9JH2afv8zPzn5dIf6y0Jdl5JNjt46TexG/1RF3Y6Wlr0zAF2ZQ/ix6kPCI3j1VjtIHazQ66P8f74YxtMat/y0tLS1PyY8AAAD///ftkV8AEgAA"
+  "${PERSISTENT_TMPDIR:-/tmp}/e5a99c60982110bc848bb020c1ba7b484d2672f7dd7081284cc6fc095a86dd80/conf_dir" \
+  "H4sIAAAAAAAA/+yWcW+aQBTA+zef4qkkrsmAYxVM3FzWVRbN1mJamiZT01A4yqUIhDtcp/G7L8eYThZnE1rbJvz+EALP97z4fu9OvrGpL7l4JuFwpjjRNA4wI1FIZVe5S2+wwwJ5Tv2DMiCEUFvTsitCqHhF6lFrdZ89V3UNoQNApao+kJQyOzlApWsVF/dKaNSUlCbKDQkVHM5gTn1BIB6MRiA60XRqhy4d5X0wgcnkPTAfhwIAjdLEwfDhTf4S1q3DkxwKHhGee20Vu9n0n4QMJ7bDyAzn/ksxVbOYEjV2+a/pWtF/vfJ/PzRqmfv8HxYaj4vQgJ4JZ6YFRm9gvQWrP7iAL4NvBpwcn8FnAy6HvWPL6MHVwOqblxYPHZwYj/4z8nkmeaBEMcu6Oqbqurup//dga1AfB4HjY+cuH3JdxcUzJUyDYD33tmUSAIYXarc5Gqefxj6Mr0DMJuR1TNXDyViE5gsbjLv8L735P8D/I10v+K+1da3yfx9s2f/ZzxhTzLg0cxISBh9XEqxM+f0iSB3igotj5ndVCCLbhYDc+kyaRi4GL0pgLAAATO073KzV7IDYFLLPbhPM0+/DTufPEeI/gTbjmeu7Th31jYz3ecb1M27pCxPwmdn0P04ijwSZ+wn+IZdXP2Pn+V9VC/632u9alf/7oOA/1x/fx1HCYHhs9bt1cfH13Li6PjdNqyOJi755aiwVmXfHkn+pIy543LJeKfU6kflYVJwo9MjtU9XgPuit1lb//7lX1SO9XflfUVFR8ZT8CgAA//8ezq7+ABYAAA=="
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/54c2f2db1f70294999f74b3026129308b3f83a02e276e8fc67c30055017b4875/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e5a99c60982110bc848bb020c1ba7b484d2672f7dd7081284cc6fc095a86dd80/conf_dir"
 
 
 kubeBeforeParseCallback() {
@@ -3948,6 +3948,11 @@ fortunes() {
   if command -v lazydocker &>/dev/null; then
     echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- you can use ${__HELP_EXAMPLE}lazydocker${__RESET_COLOR} to navigate through your containers."
     echo -e "Lazydocker is a simple terminal UI for both ${__HELP_EXAMPLE}docker${__RESET_COLOR} and ${__HELP_EXAMPLE}docker-compose${__RESET_COLOR}, written in Go."
+    echo "%"
+  fi
+  if command -v krew &>/dev/null; then
+    echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- you can use ${__HELP_EXAMPLE}krew${__RESET_COLOR} to manage kubectl plugins."
+    echo -e "discover kubectl plugins ${__HELP_EXAMPLE}https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/${__RESET_COLOR}"
     echo "%"
   fi
   if command -v k9s &>/dev/null; then
@@ -4008,6 +4013,27 @@ installKubectl() {
     sudo chmod +x /tmp/kubectl
     sudo mv /tmp/kubectl /usr/local/bin/kubectl
   fi
+}
+
+installKrew() {
+  Log::displayInfo "Installing krew"
+  (
+    set -x -o errexit -o pipefail
+    trap 'rm -rf "${tempDir}" || true' EXIT
+    # shellcheck source=/dev/null
+    tempDir="$(mktemp -d)"
+    cd "${tempDir}" || exit 1
+    OS="$(uname | tr '[:upper:]' '[:lower:]')"
+    ARCH="$(uname -m | sed \
+      -e 's/x86_64/amd64/' \
+      -e 's/\(arm\)\(64\)\?.*/\1\2/' \
+      -e 's/aarch64$/arm64/')"
+    KREW="krew-${OS}_${ARCH}"
+    export OS ARCH KREW
+    curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz"
+    tar zxvf "${KREW}.tar.gz"
+    "./${KREW}" install krew
+  )
 }
 
 installKind() {
@@ -4090,6 +4116,10 @@ install() {
     Log::displayError "Error during k9s install"
     return 1
   }
+  installKrew || {
+    Log::displayError "Error during krew install"
+    return 1
+  }
   Log::displayInfo "Installing kube-linter"
   (
     # shellcheck source=/dev/null
@@ -4162,6 +4192,10 @@ configure() {
       --region "${KUBE_CONFIG_REGION_CODE}" \
       --name "${KUBE_CONFIG_CLUSTER_ARN}" || return 1
   fi
+  # shellcheck source=src/_installScripts/_Configs/KubeDefaultConfig-conf/.bash-dev-env/profile.d/krew.sh
+  source "${HOME}/.bash-dev-env/profile.d/krew.sh" || return 1
+  kubectl krew install explore
+  kubectl krew update
 }
 
 testConfigure() {

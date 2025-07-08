@@ -3472,10 +3472,10 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/b054c56a7680f20167db4f64c5926d46fa913eff2708cb0f8c41a02e66819de0/conf_dir" \
-  "H4sIAAAAAAAA/+yTUWvyMBSGve6vOJ96ofDZZEMnFHqhNlsD08iMbEMc1NlVoTalaYvDut8+KpsdbswLCzLoc3NK+/CeJpyjziy5aMztuGF7MfID8bJ0bXWOHOFanqPKRel0MMa43WrtKsb4sOJ2+2r/vHt/0bpsNkuAc+h9lEiGVlDCJ/c6PNwfofIPRTJAs6WHbC+GdBqUSr4oFTAYDBgHYlD+H7hJR3BNbwn0OgPoEhgPjQ4nBtxTbrIxT1XaI7n/hjKZgFbdDDvc3Gqgv0HtKdHq1Y3J+mSLVFc8W256ETUtqdZhOoUkgVTWvyufMUcinXiFHPF7ZubsQxV77YsghBvWpQO9/INazpThHXt41Bdh6EsNpQu8flU/llcETuaNxn2jq8to9fXruaevoKDgnLwHAAD//6/nSKUACAAA"
+  "${PERSISTENT_TMPDIR:-/tmp}/98d9a8f1475007998c99fd5fa1681ffd57b45b5e478afe2b366dca7450eee1dd/conf_dir" \
+  "H4sIAAAAAAAA/+yT0euaUBTHe75/xVn28AuW99aIwOFDpZvCyljGNsSB2U1lNxWvSiPb3z7MWqxFPRSMDT8vR45fvuecyzni0uF+Z0XzDg1zHCfROmBUXGEvYk7oidxvPA4hhAz6/UMkhFzGbu9N9/Rd5bv9Xm/QAPKE2nfJeOokDfJwrcvh/hGEVzjjCV4GIaZhDuU2IOG5IAEUA6aGCaqim6/B1PQ5vNM/qDAeTmGkwmKmDE1VgU+6qRkLs5TqY/XpbSDLAqm1mw1NbS+B/ANevhZSu7XTjIm6xyKLXIeVD/EiFa022DYUBZRi+U/JyeaOpZdvsBfd9jxrfpkiuo2jJIX3xkifys0r0uZZMvtofP4i+2kacwmXB7z9Lh6PN0q8s26+mCgjmWebK3+PHVVjHPahmrQqhlCwBsuCDoffe+FuEsQpx16+aYJtv4XUpyECEID7lDHXp+434FGWuFTGK5rjMGMMwTF1wwytA/S3D6OmpqbmP+dnAAAA//+FYWemAAoAAA=="
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/b054c56a7680f20167db4f64c5926d46fa913eff2708cb0f8c41a02e66819de0/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/98d9a8f1475007998c99fd5fa1681ffd57b45b5e478afe2b366dca7450eee1dd/conf_dir"
 
 
 helpDescription() {

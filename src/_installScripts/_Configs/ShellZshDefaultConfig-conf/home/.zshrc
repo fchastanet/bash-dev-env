@@ -5,40 +5,21 @@ if [[ $- != *i* ]]; then
   return 0
 fi
 
-# needed for some completion support
-export LC_ALL=en_US.UTF-8
-export LANG=en_US.UTF-8
+source "${HOME}/fchastanet/bash-dev-env/.env" || {
+  echo "Warning: Could not source .env file"
+}
 
-### Added by Zinit's installer
-source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
-autoload -Uz _zinit
-(( ${+_comps} )) && _comps[zinit]=_zinit
-
-# Load a few important annexes, without Turbo
-# (this is currently required for annexes)
-zinit light-mode for \
-    zdharma-continuum/zinit-annex-as-monitor \
-    zdharma-continuum/zinit-annex-bin-gem-node \
-    zdharma-continuum/zinit-annex-patch-dl \
-    zdharma-continuum/zinit-annex-rust
-### End of Zinit's installer chunk
-
-# compinit
-autoload -Uz compinit
-if [[ -n ${HOME}/.cache/zsh/zcompdump-$ZSH_VERSION(#qN.mh+24) ]]; then
-  compinit -d "$HOME/.cache/zsh/zcompdump-$ZSH_VERSION"
-else
-  compinit -C
+# load aliases
+if [[ -f "${HOME}/.aliases" ]]; then
+  source "${HOME}/.aliases"
 fi
-zstyle :compinstall filename "${HOME}/.zshrc"
-zstyle ':completion:*' menu select
 
-# make vi use right keys binding
-bindkey -e
+export PATH="/usr/local/bin:${PATH}"
 
-# make ctrl-arrow left/right navigate through words
-bindkey "^[[1;5C" forward-word
-bindkey "^[[1;5D" backward-word
+source "${HOME}/.bash-dev-env/init.d/zsh-zinit.zsh" || {
+  echo "Error: Could not source zsh-zinit.zsh"
+  exit 1
+}
 
 loadConfigFiles() {
   local dir="$1"

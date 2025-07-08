@@ -9,3 +9,9 @@
 export GOBIN="${HOME}/.gvm/go/bin"
 export GOPROXY=https://proxy.golang.org
 export GOSUMDB=sum.golang.org
+export PATH=${PATH}:/usr/local/go/bin
+
+if [[ -s "${HOME}/.gvm/scripts/gvm" ]]; then
+  # shellcheck source=/dev/null
+  source "${HOME}/.gvm/scripts/gvm"
+fi

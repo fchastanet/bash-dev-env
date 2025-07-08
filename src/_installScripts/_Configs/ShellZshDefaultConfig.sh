@@ -61,6 +61,9 @@ install() {
   )
   Linux::Apt::installIfNecessary --no-install-recommends "${packages[@]}"
 
+  Log::displayInfo "install oh-my-zsh"
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
   Log::displayInfo "install plugin manager"
   if command -v zinit &>/dev/null; then
     zinit self-update

@@ -32,9 +32,16 @@ defaultVariables() { :; }
 checkVariables() { :; }
 breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
-install() { :; }
-testInstall() { :; }
 # jscpd:ignore-end
+
+install() {
+  Linux::Apt::installIfNecessary --no-install-recommends \
+    gh
+}
+
+testInstall() {
+  Assert::commandExists gh || return 1
+}
 
 cleanBeforeExport() {
   git config --global --unset user.name || true
