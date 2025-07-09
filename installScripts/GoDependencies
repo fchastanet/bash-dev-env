@@ -980,16 +980,26 @@ Engine::Config::loadSshKey() {
     export SSH_AGENT_PID
   fi
 
-  if [[ -z "${SSH_PRIVATE_KEY}" ]]; then
-    ssh-add "${HOME}/.ssh/id_rsa" || return 3
-  else
-    ssh-add <(base64 -d <<<"${SSH_PRIVATE_KEY}") || return 3
+  if [[ -n "${SSH_PRIVATE_KEY}" ]]; then
+    base64 -d <<<"${SSH_PRIVATE_KEY}" >"${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to decode SSH_PRIVATE_KEY"
+      return 2
+    }
+    chmod 600 "${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to set permissions on SSH key"
+      return 3
+    }
   fi
+  ssh-keygen -f ~/.ssh/id_rsa -y >~/.ssh/id_rsa.pub || {
+    Log::displayError "Failed to generate public key from private key"
+    return 4
+  }
+  ssh-add "${HOME}/.ssh/id_rsa" || return 5
 
   # Check key has been added to ssh agent
   ssh-add -l &>/dev/null || {
     Log::displayError "Your ssh key has not been loaded"
-    return 4
+    return 6
   }
 }
 

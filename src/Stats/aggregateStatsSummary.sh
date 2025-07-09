@@ -24,7 +24,7 @@ Stats::aggregateStatsSummary() {
       echo -e " - ${__WARNING_COLOR}${warning} ${msg} with warning${__RESET_COLOR}"
     fi
     local humanReadableDuration
-    humanReadableDuration=$(date -ud "@${duration}" +'%H:%M:%S')
+    humanReadableDuration=$(date -ud "@${duration:-0}" +'%H:%M:%S')
     echo -e " - ${__INFO_COLOR}Duration: ${humanReadableDuration}${__RESET_COLOR}"
   )
 }
