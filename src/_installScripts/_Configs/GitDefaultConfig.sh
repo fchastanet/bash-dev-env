@@ -114,6 +114,8 @@ configure() {
 
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
+
+  gh extension install github/gh-copilot
 }
 
 testConfigure() {
@@ -148,6 +150,12 @@ testConfigure() {
   if [[ "${gitEmail}" != "${GIT_USER_MAIL}" ]]; then
     Log::displayWarning "git user email is not the same as GIT_USER_MAIL in ${BASH_DEV_ENV_ROOT_DIR}/.env"
   fi
+
+  if ! gh extension list | grep -q 'github/gh-copilot'; then
+    Log::displayError "gh-copilot extension is not installed"
+    ((++failures))
+  fi
+  Version::checkMinimal "gh copilot" "--version" "1.1.1" || ((++failures))
 
   return "${failures}"
 }
