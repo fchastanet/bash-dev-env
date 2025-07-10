@@ -10,6 +10,10 @@ fortunes() {
     echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}mc${__RESET_COLOR} is a file manager in text mode usable in a terminal."
     echo "%"
   fi
+  if command -v ncdu &>/dev/null; then
+    echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}ncdu${__RESET_COLOR} is a disk usage analyzer with an ncurses interface."
+    echo "%"
+  fi
 }
 
 # jscpd:ignore-start
@@ -57,6 +61,7 @@ install() {
     jq
     mc
     mysql-client
+    ncdu
     # net-tools to get netstat
     net-tools
     parallel
