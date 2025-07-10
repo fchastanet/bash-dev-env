@@ -4,6 +4,7 @@
 - [2. Profiles](#2-profiles)
 - [3. WSL install script](#3-wsl-install-script)
 - [4. If needed, ability to install software one by one](#4-if-needed-ability-to-install-software-one-by-one)
+- [5. Additional steps](#5-additional-steps)
 
 ## 1. Important Notes to know before executing this script
 
@@ -101,4 +102,14 @@ independently** eg:
 
 ```sh
 ./install ShellZsh
+```
+
+## 5. Additional steps
+
+Using Powershell in admin mode, you can run the following commands to set up
+port forwarding for WSL:
+
+```powershell
+$HOST_IP = Get-NetIPAddress -InterfaceAlias "vEthernet (WSL*" | Where-Object { $_.AddressFamily -eq "IPv4" } | Select-Object -ExpandProperty IPAddress
+netsh interface portproxy add v4tov4 listenport=9000 connectaddress="${HOST_IP}" connectport=9000
 ```
