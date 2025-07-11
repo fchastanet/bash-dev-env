@@ -3,6 +3,13 @@
 # DO NOT EDIT, THIS FILE CAN BE UPDATED WITHOUT NOTICE
 ###############################################################################
 
+if [[
+  "${ZSH_PREFERRED_THEME:-${ZSH_DEFAULT_THEME}}" = "powerlevel10k/powerlevel10k"
+  || "${ZSH_PREFERRED_THEME:-${ZSH_DEFAULT_THEME}}" = "sindresorhus/pure"
+]]; then
+  return 0
+fi
+
 zstyle :omz:plugins:ssh-agent agent-forwarding on
 zstyle :omz:plugins:ssh-agent identities ~/.config/ssh/{id_rsa,id_rsa2,id_github}
 zstyle :omz:plugins:ssh-agent lazy yes

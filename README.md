@@ -112,7 +112,7 @@ dependencies:
   - pre configured aliases
   - default variables PATH, ...
   - completions
-  - very powerful and efficient prompt powerlevel10k
+  - very powerful and efficient prompt powerlevel10k or starship/starship
   - zinit plugins/themes manager
   - Fzf (search history)
 
