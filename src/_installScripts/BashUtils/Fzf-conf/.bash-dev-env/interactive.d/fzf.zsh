@@ -19,6 +19,6 @@ if typeset -f zinit >/dev/null; then
 
   # Binary release in archive, from GitHub-releases page.
   # After automatic unpacking it provides program "fzf".
-  zi ice from"gh-r" as"program"
-  zi light junegunn/fzf
+  zinit ice from"gh-r" as"program"
+  zinit light junegunn/fzf
 fi

@@ -1,7 +1,4 @@
-#!/bin/bash
-###############################################################################
-# DO NOT EDIT, THIS FILE CAN BE UPDATED WITHOUT NOTICE
-###############################################################################
+#!/usr/bin/env bash
 
 sshKillAllTunnel() {
   if [[ "$(uname -o)" = "Msys" ]]; then
@@ -9,7 +6,8 @@ sshKillAllTunnel() {
     # shellcheck disable=SC2009
     ps a | grep '/usr/bin/ssh' | grep -v 'grep ' | awk -F " " '{print $1}' | xargs -t --no-run-if-empty kill
   else
-    pgrep -f 'ssh.*-L' | xargs -t --no-run-if-empty kill
+    pkill -f 'ssh '
+    pkill -f '/usr/bin/python3 /usr/bin/sshuttle'
   fi
 }
 alias ssh_kill_all_tunnel='sshKillAllTunnel'

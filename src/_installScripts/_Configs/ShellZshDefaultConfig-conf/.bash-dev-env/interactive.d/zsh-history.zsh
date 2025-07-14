@@ -16,6 +16,14 @@ setopt EXTENDED_HISTORY      # record command start time
 setopt HIST_REDUCE_BLANKS    # remove unnecessary blanks
 setopt APPEND_HISTORY        # Immediately append history instead of overwriting
 
+# Uncomment the following line if you want to change the command execution time
+# stamp shown in the history command output.
+# You can set one of the optional three formats:
+# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
+# or set a custom format using the strftime function format specifications,
+# see 'man strftime' for details.
+# HIST_STAMPS="mm/dd/yyyy"
+
 bindkey -e  # use emacs key bindings
 
 if typeset -f zinit >/dev/null; then

@@ -86,6 +86,7 @@ noprofile
 nullglob
 numfmt
 pgrep
+pkill
 posix
 PREREQ
 PRUNENAMES
@@ -113,8 +114,8 @@ strftime
 Struct
 substr
 sudoer
-SUDOER
 Sudoer
+SUDOER
 SYMFONY
 tarignore
 tempdir

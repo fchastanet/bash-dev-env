@@ -5,10 +5,6 @@ zstyle :compinstall filename "$HOME/.zshrc"
 
 zstyle ':completion:*' menu select
 
-zstyle :omz:plugins:ssh-agent identities id_rsa
-
-[[ $commands[kubectl] ]] && source <(kubectl completion zsh)
-
 # Uncomment the following line to use case-sensitive completion.
 # CASE_SENSITIVE="true"
 
@@ -41,11 +37,7 @@ zstyle :omz:plugins:ssh-agent identities id_rsa
 
 # Handle completions without loading any plugin; see "completions" command.
 # This one is to be ran just once, in interactive session.
-zi creinstall %HOME/my_completions
-# For GNU ls (the binaries can be gls, gdircolors, e.g. on OS X when installing the
-# coreutils package from Homebrew; you can also use https://github.com/ogham/exa)
-zi ice atclone"dircolors -b LS_COLORS > c.zsh" atpull'%atclone' pick"c.zsh" nocompile'!'
-zi light trapd00r/LS_COLORS
+zinit creinstall %HOME/my_completions
 
 autoload -Uz compinit
 compinit
