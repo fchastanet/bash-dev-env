@@ -1,5 +1,8 @@
 #!/usr/bin/env zsh
 
+LC_CTYPE=en_US.UTF-8
+LC_ALL=en_US.UTF-8
+
 # skip if non interactive mode
 if [[ $- != *i* ]]; then
   return 0
