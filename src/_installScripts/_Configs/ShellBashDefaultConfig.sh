@@ -23,6 +23,10 @@ fortunes() {
       echo "%"
     fi
   fi
+  if Assert::wsl; then
+    echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}view${__RESET_COLOR} alias allows to launch given file using default windows file association."
+    echo "%"
+  fi
 }
 
 # jscpd:ignore-start
