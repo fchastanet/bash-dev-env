@@ -39,7 +39,8 @@
 - [4. Additional documentation](#4-additional-documentation)
 - [5. github page](#5-github-page)
 - [6. Development](#6-development)
-- [7. Acknowledgements](#7-acknowledgements)
+- [7. migrate from one distribution to another](#7-migrate-from-one-distribution-to-another)
+- [8. Acknowledgements](#8-acknowledgements)
 
 ## 1. Excerpt
 
@@ -329,7 +330,24 @@ if [[ -d "/mnt/wsl/${MASTER_DISTRO}" ]]; then
 fi
 ```
 
-## 7. Acknowledgements
+## 7. migrate from one distribution to another
+
+```bash
+# from previous distro, sync your important folders
+sudo rsync --info=progress2 --no-compress -W -ax projects /mnt/wsl/UbuntuTest/home/wsl
+sudo rsync --info=progress2 --no-compress -W -ax fchastanet /mnt/wsl/UbuntuTest/home/wsl
+sudo rsync --info=progress2 --no-compress -W -ax /var/lib/docker /mnt/wsl/UbuntuTest/var/lib
+
+# alternatively, you can sync all the necessary directories at once
+sudo rsync --info=progress2 --no-compress -W -ax \
+  --include=/home/wsl/.history
+--include=/home/wsl/projects \
+  --include=/home/wsl/fchastanet \
+  --include=/var/lib/docker \
+  --exclude='*' / /mnt/wsl/UbuntuTest
+```
+
+## 8. Acknowledgements
 
 Like so many projects, this effort has roots in many places.
 
