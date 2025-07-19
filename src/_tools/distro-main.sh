@@ -76,19 +76,108 @@ installDistro() {
     -Command "wsl.exe --import \"${DISTRO_NAME}\" \"${destDistroPath}\" \"${installTarPath}\" --version 2"
 }
 
+# we are supposing that :
+# - the distro is already installed
+# - the DISTRO_DEFAULT_USERNAME/DISTRO_DEFAULT_USERGROUP are already created in the distro
+# - the USER_ID/USERGROUP_ID already exists in the distro
+checkDistroUserPreRequisites() {
+  # check if DISTRO_DEFAULT_USERNAME, USER_ID variables are set and valid
+  if [[ -z "${DISTRO_DEFAULT_USERNAME:-}" ]]; then
+    Log::fatal "DISTRO_DEFAULT_USERNAME is not set, please set it in .env.distro"
+  fi
+  if [[ -z "${USER_ID:-}" ]]; then
+    Log::fatal "USER_ID is not set, please set it in .env.distro"
+  fi
+  if ! [[ "${USER_ID}" =~ ^[0-9]+$ ]]; then
+    Log::fatal "USER_ID must be a number, please set it in .env.distro"
+  fi
+  if ((USER_ID < 1000)); then
+    Log::fatal "USER_ID must be greater than or equal to 1000, please set it in .env.distro"
+  fi
+
+  # check if USER_ID matches the user id of DISTRO_DEFAULT_USERNAME in distro
+  local distroUserId
+  distroUserId="$(runWslCmd id -u "${DISTRO_DEFAULT_USERNAME}" || echo "")"
+  if [[ -z "${distroUserId}" ]]; then
+    Log::fatal "User ${DISTRO_DEFAULT_USERNAME} does not exist in distro, please set the right existing user in .env.distro"
+  fi
+  if [[ "${distroUserId}" != "${USER_ID}" ]]; then
+    Log::fatal "User ${DISTRO_DEFAULT_USERNAME} has a user id ${distroUserId} that does not match USER_ID ${USER_ID} in distro, please set the right existing user in .env.distro"
+  fi
+
+  # check if USERNAME variable is set
+  if [[ -z "${USERNAME:-}" ]]; then
+    Log::fatal "USERNAME is not set, please set it in .env.distro"
+  fi
+  # check if USERNAME exists in distro
+  if [[ "${USERNAME}" != "${DISTRO_DEFAULT_USERNAME}" ]] && runWslCmd id -u "${USERNAME}" &>/dev/null; then
+    Log::fatal "User ${USERNAME} already exists in distro, please set a different USERNAME in .env.distro"
+  fi
+
+  # check if DISTRO_DEFAULT_USERGROUP, USERGROUP and USERGROUP_ID variables are set and valid
+  if [[ -z "${DISTRO_DEFAULT_USERGROUP:-}" ]]; then
+    Log::fatal "DISTRO_DEFAULT_USERGROUP is not set, please set it in .env.distro"
+  fi
+  if [[ -z "${USERGROUP:-}" ]]; then
+    Log::fatal "USERGROUP is not set, please set it in .env.distro"
+  fi
+  if [[ -z "${USERGROUP_ID:-}" ]]; then
+    Log::fatal "USERGROUP_ID is not set, please set it in .env.distro"
+  fi
+  if ! [[ "${USERGROUP_ID}" =~ ^[0-9]+$ ]]; then
+    Log::fatal "USERGROUP_ID must be a number, please set it in .env.distro"
+  fi
+  if ((USERGROUP_ID < 1000)); then
+    Log::fatal "USERGROUP_ID must be greater than or equal to 1000, please set it in .env.distro"
+  fi
+
+  # check if GROUP_ID matches the user id of DISTRO_DEFAULT_USERGROUP in distro
+  local distroGroupId
+  distroGroupId="$(runWslCmd getent group "${DISTRO_DEFAULT_USERGROUP}" | cut -d: -f3 || echo "")"
+  if [[ -z "${distroGroupId}" ]]; then
+    Log::fatal "Group ${DISTRO_DEFAULT_USERGROUP} does not exist in distro, please set the right existing group in .env.distro"
+  fi
+  if [[ "${distroGroupId}" != "${USERGROUP_ID}" ]]; then
+    Log::fatal "Group ${DISTRO_DEFAULT_USERGROUP} has a group id ${distroGroupId} that does not match USERGROUP_ID ${USERGROUP_ID} in distro, please set the right existing group in .env.distro"
+  fi
+  # check if USERGROUP exists in distro
+  if [[ "${USERGROUP}" != "${DISTRO_DEFAULT_USERGROUP}" ]] && runWslCmd id -g "${USERGROUP}" &>/dev/null; then
+    Log::fatal "Group ${USERGROUP} already exists in distro, please set a different USERGROUP in .env.distro"
+  fi
+}
+
 createDistroUser() {
-  Log::displayInfo "Add user ${USERNAME} with default password 'wsl' in new distro"
-  if runWslCmd getent group "${USERGROUP}" &>/dev/null; then
-    runWslCmd groupdel "${USERGROUP}"
+  if runWslCmd test -f "/var/log/distro-user-created"; then
+    Log::displaySkipped "Distro user already created"
+    return 0
   fi
-  if runWslCmd getent group "${USERGROUP_ID}" &>/dev/null; then
-    runWslCmd groupdel "${USERGROUP_ID}"
+  checkDistroUserPreRequisites
+
+  if [[ "${USERNAME}" != "${DISTRO_DEFAULT_USERNAME}" ]]; then
+    Log::displayInfo "Renaming user ${DISTRO_DEFAULT_USERNAME} to ${USERNAME}"
+    runWslCmd usermod -l "${USERNAME}" "${DISTRO_DEFAULT_USERNAME}"
+    Log::displayInfo "move home directory to /home/${USERNAME}"
+    runWslCmd usermod -d "/home/${USERNAME}" -m "${USERNAME}"
   fi
-  runWslCmd groupadd -g "${USERGROUP_ID}" "${USERGROUP}"
-  # create user with the same uid/gid as local user
-  runWslCmd useradd -m -s /bin/bash "-u${USER_ID}" "-g${USERGROUP_ID}" "${USERNAME}"
+  if [[ "${USERGROUP}" != "${DISTRO_DEFAULT_USERGROUP}" ]]; then
+    Log::displayInfo "Renaming group ${DISTRO_DEFAULT_USERGROUP} to ${USERGROUP}"
+    runWslCmd groupmod -n "${USERGROUP}" "${DISTRO_DEFAULT_USERGROUP}"
+  fi
+
+  Log::displayInfo "Adding user ${USERNAME} to sudo group"
   runWslCmd usermod -aG sudo "${USERNAME}"
+
+  Log::displayInfo "Change user ${USERNAME} primary group to ${USERGROUP}"
+  runWslCmd usermod -g "${USERGROUP}" "${USERNAME}"
+
+  Log::displayInfo "Setting user ${USERNAME} password to 'wsl'"
   echo "${USERNAME}:wsl" | runWslCmd chpasswd
+
+  Log::displayInfo "ensure home directory for user ${USERNAME} has the right permissions"
+  runWslCmd chown -R "${USERNAME}:${USERGROUP}" "/home/${USERNAME}"
+  runWslCmd chmod 700 "/home/${USERNAME}"
+
+  runWslCmd touch "/var/log/distro-user-created"
 }
 
 # mount new distro / folder into current distro
@@ -192,8 +281,8 @@ elif [[ "${existingDistroName}" = "${DISTRO_NAME}" ]]; then
   Log::displaySkipped "Distribution ${DISTRO_NAME} already installed"
 else
   installDistro
-  createDistroUser
 fi
+createDistroUser
 REMOTE=runWslCmd Engine::Config::loadUserVariables
 mountDistroFolder
 
