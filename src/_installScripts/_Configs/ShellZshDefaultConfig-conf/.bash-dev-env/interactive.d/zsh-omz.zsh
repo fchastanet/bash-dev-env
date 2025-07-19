@@ -7,6 +7,9 @@ if [[
   return 0
 fi
 
+# Save aliases
+backupAliases="$(alias)"
+
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 
@@ -33,7 +36,6 @@ plugins=(
 	git
 	docker-compose
 	docker
-	zsh-z
 	dirhistory
 	kubectl
 	kube-ps1
@@ -47,3 +49,6 @@ fi
 
 # remove all aliases added by oh-my-zsh plugins
 unalias -a
+
+# restore saved aliases
+source <(echo "${backupAliases}")
