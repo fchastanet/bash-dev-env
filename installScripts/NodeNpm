@@ -3517,10 +3517,10 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/8590d6ee22811c7561672ac302b8b7108a2a5713afc229d586f6dd1ceb37d5fc/conf_dir" \
-  "H4sIAAAAAAAA/+yS0WvqMBTGfc5fcW4tl3tlbaObDDo6cLbSwmbLFtlARFIb10JNS61lQ/u/j+rsmHP4oDAG/b0kJN/5zpdwZJfOfcljmcR4psRJNA1CJnsKH8c09eW5XzsejDG+bLfXK8Z4d202Wxfb/ea82W6dt2qAT9D7IIt5SpMaPrrX7uN+CfU/ihtwpZgCVD8tqA66DX2bgKFb5AyIaT1Az7o1oNvpw40BA0fvEEOHR4uY9oAUUqtrnDwGYi9xlKTQHzv3Rs960gRxadp3Rq5wAQ2HoIpLp0PMXAVNg4agisutMi/+RhUaMBrBagWFqij+fP1e/Y3VppHM45n0HEYuDfdb7peV1iiYwiSazSj3QMrglSYc/l4rHssUvgjDK0h9xhGAxyYhTdha4NDUR1BuNUH8t67b+IMb8P8CAtibeluUf036cVWmmwblHxcn6KdnuqKioqLiMG8BAAD//3516U0ACgAA"
+  "${PERSISTENT_TMPDIR:-/tmp}/42c3588311f2e617aa7eed901d314480afdc3a1baf7458c9672bf15759f1e8d8/conf_dir" \
+  "H4sIAAAAAAAA/9JLSizO0E1JLdNNzSvTLyjKT8vMSdVL0c+LL0gsydArzmCgHBgYGBiYm5qCaQMDA3TawMzMGM4GixuaGpkYMigYUMFugqC0uCSxiMGAYrvQPTdEgLKiflJmnj4oFXApUxdwKSu4+Cv4+YcouLp4hugohHh4Biu4efq4Kjg7+ik4uSqEBrg4hri6KIR7hnj4h4aAlHo6u1LdGVypFQX5RSUKfvEBQa5unhG2SirVHv6+rrX6eUpc0dEKVirVAY4hHrVWCra2ClpKVirVMJW1oLCxUtJSiI1VqKlRAKkCaUaVhurGYRTEIr28glzd9Jz8pMQc7EZiVwY3GuYFEJdroJPMKBgFo2CYAEAAAAD///nBxwIACAAA"
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/8590d6ee22811c7561672ac302b8b7108a2a5713afc229d586f6dd1ceb37d5fc/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/42c3588311f2e617aa7eed901d314480afdc3a1baf7458c9672bf15759f1e8d8/conf_dir"
 
 
 helpDescription() {
@@ -3575,7 +3575,8 @@ install() {
   # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
   source "${HOME}/.bash-dev-env/profile.d/n_path.sh"
   # Install yarn globally
-  N_PREFIX="${HOME}/n" "${HOME}/n/bin/npm" install -g yarn
+  npm install -g corepack
+  corepack prepare yarn@stable --activate
 }
 
 testInstall() {
@@ -3583,10 +3584,10 @@ testInstall() {
   Assert::fileExists "${HOME}/.bash-dev-env/profile.d/n_path.sh" || ((++failures))
   # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
   source "${HOME}/.bash-dev-env/profile.d/n_path.sh" || ((++failures))
-  Version::checkMinimal "n" "--version" "10.1.0" || ((++failures))
-  Version::checkMinimal "node" "-v" "23.5.0" || ((++failures))
-  Version::checkMinimal "npm" "-v" "10.9.2" || ((++failures))
-  Version::checkMinimal "yarn" "--version" "1.22.22" || ((++failures))
+  Version::checkMinimal "n" "--version" "10.2.0" || ((++failures))
+  Version::checkMinimal "node" "-v" "24.4.1" || ((++failures))
+  Version::checkMinimal "npm" "-v" "11.4.2" || ((++failures))
+  Version::checkMinimal "yarn" "--version" "4.9.2" || ((++failures))
   return "${failures}"
 }
 
