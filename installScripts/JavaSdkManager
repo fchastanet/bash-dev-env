@@ -3609,7 +3609,17 @@ install() {
     # shellcheck source=/dev/null
     source "${HOME}/.sdkman/bin/sdkman-init.sh"
     sdk selfupdate force
-    yes | sdk install java || true # exit code of sdk is not reliable
+    if ! sdk current java &>/dev/null; then
+      Log::displayInfo "No java version installed, installing latest Temurin Java"
+
+      # Temurin Java is the version used by Eclipse
+      local latestTemuJavaVersion
+      latestTemuJavaVersion="$(sdk list java | grep -E 'tem' | head -n 1 | awk '{print $9}')" || {
+        Log::displayError "Failed to get latest Temurin Java version"
+        return 1
+      }
+      yes | sdk install java "${latestTemuJavaVersion}" || true # exit code of sdk is not reliable
+    fi
     # exit code can be different than 0 when java already installed
     if ! command -v java &>/dev/null; then
       Log::displayError "java not installed, check above logs"
