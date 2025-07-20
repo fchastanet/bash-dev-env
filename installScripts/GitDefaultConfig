@@ -382,6 +382,35 @@ Assert::ldapLogin() {
 }
 
 
+# @description Assert that a command version is greater than or equal to a minimal version
+#
+# @arg $1 command name
+# @arg $2 command version
+# @arg $3 minimal version
+#
+# @exitcode 0 if version is greater than or equal to minimal version, 1 if not
+# @exitcode 2 if version is not valid
+Assert::minimalVersion() {
+  local commandName="$1"
+  local version="$2"
+  local minimalVersion="$3"
+
+  Version::compare "${version}" "${minimalVersion}" || result=$?
+  case "${result}" in
+    1)
+      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
+      ;;
+    2)
+      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
+      return 1
+      ;;
+    *)
+      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
+      ;;
+  esac
+}
+
+
 # @description asserts that first argument is link to a file
 # that exists
 # @arg $1 link:String expected link
@@ -499,40 +528,6 @@ Backup::file() {
     Log::displayInfo "Backup file '${file}' to ${backupFile}"
     ${SUDO:-} cp "${file}" "${backupFile}"
   fi
-}
-
-
-# @description ignore exit code 141 from simple command pipes
-# @example use with:
-#   local resultingStatus=0
-#   local -a originalPipeStatus=()
-#   cmd1 | cmd2 || Bash::handlePipelineFailure resultingStatus originalPipeStatus || true
-#   [[ "${resultingStatus}" = "0" ]]
-# @arg $1 resultingStatusCode:&int (passed by reference) (optional) resulting status code
-# @arg $2 originalStatus:int[] (passed by reference) (optional) copy of original PIPESTATUS array
-# @env PIPESTATUS assuming that this function is called like in the example provided
-# @see https://unix.stackexchange.com/a/709880/582856
-# @see https://gitlab.alpinelinux.org/alpine/aports/-/issues/11152
-# @warning alpine does not support PIPESTATUS very well as execution order of piped process is
-# not guaranteed
-Bash::handlePipelineFailure() {
-  local -a pipeStatusBackup=("${PIPESTATUS[@]}")
-  local -n handlePipelineFailure_resultingStatusCode=$1
-  local -n handlePipelineFailure_originalStatus=$2
-  # shellcheck disable=SC2034
-  handlePipelineFailure_originalStatus=("${pipeStatusBackup[@]}")
-  handlePipelineFailure_resultingStatusCode=0
-  local statusCode
-  for statusCode in "${pipeStatusBackup[@]}"; do
-    if ((statusCode == 141)); then
-      continue
-    elif ((statusCode > 0)); then
-      # shellcheck disable=SC2034
-      handlePipelineFailure_resultingStatusCode="${statusCode}"
-      break
-    fi
-  done
-  return "${handlePipelineFailure_resultingStatusCode}"
 }
 
 
@@ -3190,52 +3185,6 @@ UI::theme() {
 }
 
 
-# @description Check that command version is greater than expected minimal version
-# display warning if command version greater than expected minimal version
-# display error if command version less than expected minimal version and exit 1
-# @arg $1 commandName:String command path
-# @arg $2 argVersion:String command line parameters to launch to get command version
-# @arg $3 minimalVersion:String expected minimal command version
-# @arg $4 parseVersionCallback:Function
-# @arg $5 help:String optional help message to display if command does not exist
-# @exitcode 0 if command version greater or equal to expected minimal version
-# @exitcode 1 if command version less than expected minimal version
-# @exitcode 2 if command does not exist
-Version::checkMinimal() {
-  local commandName="$1"
-  local argVersion="$2"
-  local minimalVersion="$3"
-  local parseVersionCallback=${4:-Version::parse}
-  local help="${5:-}"
-
-  Assert::commandExists "${commandName}" "${help}" || return 2
-
-  # shellcheck disable=SC2034
-  local status=0
-  # shellcheck disable=SC2034
-  local -a pipeStatus=()
-  local version
-  version="$("${commandName}" "${argVersion}" 2>&1 | ${parseVersionCallback} || Bash::handlePipelineFailure status pipeStatus)"
-
-  Log::displayDebug "check ${commandName} version ${version} against minimal ${minimalVersion}"
-
-  local result=0
-  Version::compare "${version}" "${minimalVersion}" || result=$?
-  case "${result}" in
-    1)
-      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
-      ;;
-    2)
-      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
-      return 1
-      ;;
-    *)
-      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
-      ;;
-  esac
-}
-
-
 # @description compare 2 version numbers
 # @arg $1 version1:String version 1
 # @arg $2 version2:String version 2
@@ -3266,22 +3215,6 @@ Version::compare() {
     fi
   done
   return 0
-}
-
-
-# @description filter to keep only version number from a string
-# @arg $@ files:String[] the files to filter
-# @exitcode * if one of the filter command fails
-# @stdin you can use stdin as alternative to files argument
-# @stdout the filtered content
-# shellcheck disable=SC2120
-Version::parse() {
-  # match anything, print(p), exit on first match(Q)
-  sed -En \
-    -e 's/\x1b\[[0-9;]*[mGKHF]//g' \
-    -e 's/[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/' \
-    -e '//{p;Q}' \
-    "$@"
 }
 # FUNCTIONS
 
@@ -3620,6 +3553,8 @@ Compiler::Embed::extractDirFromBase64 \
 
 declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/f0903aac78e97f4c07adb90f1534ad0c2484a9081bdff67d7eb19bc4d15f176f/conf_dir"
 
+# include functions for postConfigure.sh scripts
+# Assert::dirExists
 
 gitDefaultConfigBeforeParseCallback() {
   Ssh::requireSshKeygenCommand
@@ -3735,6 +3670,7 @@ configure() {
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
 
+  echo "${GH_TOKEN}" | gh auth login --with-token
   gh extension install github/gh-copilot
 }
 
@@ -3771,11 +3707,18 @@ testConfigure() {
     Log::displayWarning "git user email is not the same as GIT_USER_MAIL in ${BASH_DEV_ENV_ROOT_DIR}/.env"
   fi
 
+  echo "${GH_TOKEN}" | gh auth login --with-token
   if ! gh extension list | grep -q 'github/gh-copilot'; then
     Log::displayError "gh-copilot extension is not installed"
     ((++failures))
   fi
-  Version::checkMinimal "gh copilot" "--version" "1.1.1" || ((++failures))
+  Assert::commandExists "gh" || ((++failures))
+  local ghCopilotVersion
+  ghCopilotVersion="$(gh copilot --version | awk '{print $2}')" || {
+    Log::displayError "gh copilot command failed to run"
+    ((++failures))
+  }
+  Assert::minimalVersion "gh copilot" "${ghCopilotVersion}" "1.1.1" || ((++failures))
 
   return "${failures}"
 }

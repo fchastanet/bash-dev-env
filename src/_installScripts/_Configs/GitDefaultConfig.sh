@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/_Configs/GitDefaultConfig-conf" as conf_dir
+# include functions for postConfigure.sh scripts
+# Assert::dirExists
 
 gitDefaultConfigBeforeParseCallback() {
   Ssh::requireSshKeygenCommand
@@ -115,6 +117,7 @@ configure() {
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
 
+  echo "${GH_TOKEN}" | gh auth login --with-token
   gh extension install github/gh-copilot
 }
 
@@ -151,11 +154,18 @@ testConfigure() {
     Log::displayWarning "git user email is not the same as GIT_USER_MAIL in ${BASH_DEV_ENV_ROOT_DIR}/.env"
   fi
 
+  echo "${GH_TOKEN}" | gh auth login --with-token
   if ! gh extension list | grep -q 'github/gh-copilot'; then
     Log::displayError "gh-copilot extension is not installed"
     ((++failures))
   fi
-  Version::checkMinimal "gh copilot" "--version" "1.1.1" || ((++failures))
+  Assert::commandExists "gh" || ((++failures))
+  local ghCopilotVersion
+  ghCopilotVersion="$(gh copilot --version | awk '{print $2}')" || {
+    Log::displayError "gh copilot command failed to run"
+    ((++failures))
+  }
+  Assert::minimalVersion "gh copilot" "${ghCopilotVersion}" "1.1.1" || ((++failures))
 
   return "${failures}"
 }

@@ -3224,6 +3224,8 @@ Log::displayInfo "Fixing rights on target distro ${DISTRO_BASH_DEV_ENV_TARGET_DI
 runWslCmd chown -R "${USERNAME}:${USERGROUP}" "${DISTRO_BASH_DEV_ENV_TARGET_DIR}"
 
 Log::displayInfo "Copying .env.distro"
+sed -E -i -e "s/^GH_TOKEN=.*/GH_TOKEN=$(gh auth token)/" \
+  "${BASH_DEV_ENV_ROOT_DIR}/.env.distro"
 cp -v "${BASH_DEV_ENV_ROOT_DIR}/.env.distro" "/mnt/wsl/${DISTRO_NAME}${DISTRO_BASH_DEV_ENV_TARGET_DIR}/.env"
 
 declare systemdActivated=0
