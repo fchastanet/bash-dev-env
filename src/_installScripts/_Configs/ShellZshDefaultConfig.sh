@@ -77,9 +77,7 @@ install() {
   fi
 
   Log::displayInfo "install ohmyposh theme"
-  if [[ "${ZSH_PREFERRED_THEME:-${ZSH_DEFAULT_THEME}}" = "ohmyposh" ]]; then
-    curl -s https://ohmyposh.dev/install.sh | bash -s
-  fi
+  curl -s https://ohmyposh.dev/install.sh | bash -s
 }
 
 assertZshFunctionExists() {
@@ -92,6 +90,7 @@ assertZshFunctionExists() {
 
 testInstall() {
   local -i failures=0
+  export PATH=${PATH}:${HOME}/.local/bin
   Assert::commandExists zsh || ((++failures))
   Assert::commandExists "svn" || ((++failures))
   Assert::commandExists "oh-my-posh" || ((++failures))
