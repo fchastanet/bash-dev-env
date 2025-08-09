@@ -52,6 +52,13 @@ configure() {
     "$(fullScriptOverrideDir)" \
     ".bash-dev-env"
 
+  # shellcheck disable=SC2154
+  SUDO=sudo Conf::copyStructure \
+    "${embed_dir_conf_dir}" \
+    "$(fullScriptOverrideDir)" \
+    "etc" \
+    "/etc"
+
   touch "${HOME}/.cron_activated"
   sudo groupadd anacron || true
   sudo adduser "${USERNAME}" anacron || true
@@ -72,6 +79,11 @@ testConfigure() {
     ((failures++))
   }
   Assert::dirExists /var/spool/anacron/ "root" "anacron" || ((failures++))
+  Assert::fileExists /etc/anacrontab "root" "root" || ((failures++))
+  grep -q -E '/var/log/anacron.log' /etc/anacrontab || {
+    Log::displayError "anacrontab is not configured correctly"
+    ((failures++))
+  }
 
   if ! sudo service anacron start; then
     Log::displayError "unable to execute anacron service with user ${USERNAME}"

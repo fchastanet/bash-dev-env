@@ -41,7 +41,10 @@ install() {
   sudo systemctl reset-failed
 
   Linux::Apt::remove \
-    openssh-server
+    openssh-server \
+    popularity-contest
+
+  sudo rm /etc/cron.daily/popularity-contest
 
   Log::displayInfo "configure language support"
   Linux::Apt::installIfNecessary --no-install-recommends \
