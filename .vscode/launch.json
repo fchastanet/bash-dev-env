@@ -16,6 +16,24 @@
       "name": "Bash-Debug (AwsDefaultConfig)",
       "program": "installScripts/AwsDefaultConfig",
       "args": []
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Convert VSCode Profiles",
+      "program": "${workspaceFolder}/VsCodeConfig-profiles/convert-vscode-profiles.js",
+      "args": [
+        "${workspaceFolder}/VsCodeConfig-profiles",
+        "${workspaceFolder}/VsCodeConfig-profiles/targetDirForDebug"
+      ],
+      "runtimeExecutable": "node",
+      "cwd": "${workspaceFolder}/",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "skipFiles": ["<node_internals>/**"]
     }
   ]
 }

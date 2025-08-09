@@ -6,11 +6,23 @@
  * to get the actual content.
  *
  * Usage:
- *   node decodeVsCodeProfile.js <file-or-directory-path>
+ *   node convert-vscode-profiles.js <profiles-directory-path> <target-directory-path>
  *
- * The script creates two output files for each processed profile:
- * 1. <filename>.code-profile.decoded.jsonc - A human-readable, prettified JSON with comments
- * 2. <filename>.code-profile.json - A re-encoded version in the same format as the original file
+ * The script will recursively search for all .code-profile files
+ * in the <profiles-directory-path>/src directory and process them.
+ *
+ * For each processed profile:
+ * 1. A human-readable, prettified JSON with comments
+ *    `<profiles-directory-path>/decoded/<filename>.code-profile.jsonc`
+ * 2. A sanitized version with sensitive data redacted
+ *    `<profiles-directory-path>/sanitized/<filename>.code-profile.jsonc`
+ * 3. A re-encoded version in the same format as the original file
+ *    `<profiles-directory-path>/re-encoded/<filename>.code-profile`
+ *
+ * At the end of the process:
+ * - the files in `<target-directory-path>` are deleted
+ *   to ensure obsolete profiles are deleted
+ * - the files from `<profiles-directory-path>/profiles` are copied to `<target-directory-path>`
  *
  * Security features:
  * - Automatically detects and redacts passwords and other sensitive information
@@ -537,10 +549,10 @@ async function writeFileContent(filePath, content) {
  * Process a single file
  *
  * @param {string} filePath - Path to the file to process
- * @param {string} targetDir - Target directory for output files
+ * @param {string} profilesDir - Base profiles directory for output files
  * @returns {Promise<void>}
  */
-async function processFile(filePath, targetDir) {
+async function processFile(filePath, profilesDir) {
   try {
     console.log(`Processing ${filePath}`);
 
@@ -559,31 +571,49 @@ async function processFile(filePath, targetDir) {
     // Decode the profile (for deeply nested JSON strings)
     const decodedProfile = decodeProfile(content);
 
-    // Create output filename for decoded version - changing extension to .decoded.jsonc
-    const outputDecodedFileName = path.basename(filePath) + ".decoded.jsonc";
-    const outputDecodedPath = path.join(targetDir, outputDecodedFileName);
-    writeFileContent(outputDecodedPath, content);
+    // Create output directories
+    const decodedDir = path.join(profilesDir, "decoded");
+    const sanitizedDir = path.join(profilesDir, "sanitized");
+    const reEncodedDir = path.join(profilesDir, "re-encoded");
+
+    // Ensure directories exist
+    if (!fs.existsSync(decodedDir)) {
+      fs.mkdirSync(decodedDir, {recursive: true});
+    }
+    if (!fs.existsSync(sanitizedDir)) {
+      fs.mkdirSync(sanitizedDir, {recursive: true});
+    }
+    if (!fs.existsSync(reEncodedDir)) {
+      fs.mkdirSync(reEncodedDir, {recursive: true});
+    }
+
+    // Create output filename for decoded version
+    const baseFileName = path.basename(filePath);
+    const outputDecodedFileName = baseFileName + ".jsonc";
+    const outputDecodedPath = path.join(decodedDir, outputDecodedFileName);
+    await writeFileContent(outputDecodedPath, decodedProfile);
 
     // Mask sensitive information
     const sanitizedProfile = maskSensitiveInfo(decodedProfile, "", filePath);
 
-    // Create output filename for decoded version - changing extension to .decoded.jsonc
-    const outputSanitizedFileName =
-      path.basename(filePath) + ".sanitized.jsonc";
-    const outputSanitizedPath = path.join(targetDir, outputSanitizedFileName);
-    writeFileContent(outputSanitizedPath, content);
+    // Create output filename for sanitized version
+    const outputSanitizedFileName = baseFileName + ".jsonc";
+    const outputSanitizedPath = path.join(
+      sanitizedDir,
+      outputSanitizedFileName
+    );
+    await writeFileContent(outputSanitizedPath, sanitizedProfile);
 
-    // Create output filename for re-encoded version - changing extension to .json
-    // and move it to the target directory
-    const targetFileName = path.basename(filePath);
-    const targetFilePath = path.join(targetDir, targetFileName);
+    // Create output filename for re-encoded version
+    const outputProfileFileName = baseFileName;
+    const outputProfilePath = path.join(reEncodedDir, outputProfileFileName);
 
     // Re-encode the sanitized profile and write to new file
     let encodedProfile = encodeProfile(sanitizedProfile);
     encodedProfile = encodedProfile + "\n"; // Ensure it ends with a newline
-    await writeFile(targetFilePath, encodedProfile, "utf8");
+    await writeFile(outputProfilePath, encodedProfile, "utf8");
 
-    console.log(`Re-encoded sanitized profile saved to ${targetFilePath}`);
+    console.log(`Re-encoded sanitized profile saved to ${outputProfilePath}`);
 
     // Log any detected passwords
     if (passwordsFound.detected) {
@@ -601,10 +631,10 @@ async function processFile(filePath, targetDir) {
  * Process a directory by finding all .code-profile files
  *
  * @param {string} dirPath - Path to the directory
- * @param {string} targetDir - Target directory for output files
+ * @param {string} profilesDir - Base profiles directory for output files
  * @returns {Promise<void>}
  */
-async function processDirectory(dirPath, targetDir) {
+async function processDirectory(dirPath, profilesDir) {
   try {
     const files = await readdir(dirPath);
 
@@ -613,13 +643,27 @@ async function processDirectory(dirPath, targetDir) {
       const stats = await stat(fullPath);
 
       if (stats.isDirectory()) {
-        await processDirectory(fullPath, targetDir);
+        await processDirectory(fullPath, profilesDir);
       } else if (path.extname(file) === ".code-profile") {
-        await processFile(fullPath, targetDir);
+        await processFile(fullPath, profilesDir);
       }
     }
   } catch (error) {
     console.error(`Error processing directory ${dirPath}:`, error.message);
+  }
+}
+
+async function deleteCodeProfileFiles(targetDir) {
+  if (fs.existsSync(targetDir)) {
+    const targetFiles = await readdir(targetDir);
+    for (const file of targetFiles) {
+      const filePath = path.join(targetDir, file);
+      const stats = await stat(filePath);
+      if (stats.isFile() && path.extname(file) === ".code-profile") {
+        fs.unlinkSync(filePath);
+        console.log(`Deleted obsolete file: ${filePath}`);
+      }
+    }
   }
 }
 
@@ -631,37 +675,42 @@ async function main() {
 
   if (args.length !== 2) {
     console.error(
-      "Usage: node decodeVsCodeProfile.js <src-directory-path> <target-directory-path> "
+      "Usage: node convert-vscode-profiles.js <profiles-directory-path> <target-directory-path>"
     );
     process.exit(1);
   }
 
-  const srcDir = args[0];
+  const profilesDir = args[0];
   const targetDir = args[1];
 
   // Validate source and target directories
-  if (!srcDir || !targetDir) {
-    console.error("Both source and target directory paths must be provided");
+  if (!profilesDir || !targetDir) {
+    console.error(
+      "Both profiles directory and target directory paths must be provided"
+    );
     process.exit(1);
   }
-  const srcDirStats = fs.statSync(srcDir);
-  if (!srcDirStats.isDirectory()) {
-    console.error(`${srcDir} is not a directory`);
+  const profilesDirStats = fs.statSync(profilesDir);
+  if (!profilesDirStats.isDirectory()) {
+    console.error(`${profilesDir} is not a directory`);
     process.exit(1);
   }
+
+  // Create target directory if it doesn't exist
   if (!fs.existsSync(targetDir)) {
-    // create target directory if it doesn't exist
     fs.mkdirSync(targetDir, {recursive: true});
     console.log(`Created target directory: ${targetDir}`);
   }
+
   const targetDirStats = await stat(targetDir);
   if (!targetDirStats.isDirectory()) {
-    // create target directory if it doesn't exist
     fs.mkdirSync(targetDir, {recursive: true});
     console.log(`Created target directory: ${targetDir}`);
   }
-  console.log(`Source directory: ${srcDir}`);
+
+  console.log(`Profiles directory: ${profilesDir}`);
   console.log(`Target directory: ${targetDir}`);
+
   try {
     fs.accessSync(targetDir, fs.constants.W_OK);
   } catch (error) {
@@ -671,14 +720,14 @@ async function main() {
     process.exit(1);
   }
   try {
-    fs.accessSync(srcDir, fs.constants.R_OK);
+    fs.accessSync(profilesDir, fs.constants.R_OK);
   } catch (error) {
-    console.error(`Source directory ${srcDir} is not readable`);
+    console.error(`Profiles directory ${profilesDir} is not readable`);
     process.exit(1);
   }
   // check if source and target directories are not the same
-  if (path.resolve(srcDir) === path.resolve(targetDir)) {
-    console.error("Source and target directories cannot be the same");
+  if (path.resolve(profilesDir) === path.resolve(targetDir)) {
+    console.error("Profiles directory and target directory cannot be the same");
     process.exit(1);
   }
 
@@ -687,7 +736,47 @@ async function main() {
   passwordsFound.paths = [];
 
   try {
-    await processDirectory(srcDir, targetDir);
+    // delete files in re-encoded directory if it exists
+    const reEncodedDir = path.join(profilesDir, "re-encoded");
+    await deleteCodeProfileFiles(reEncodedDir);
+
+    // Process files in the src subdirectory
+    const srcDir = path.join(profilesDir, "src");
+    if (fs.existsSync(srcDir)) {
+      await processDirectory(srcDir, profilesDir);
+    } else {
+      console.warn(
+        `${colors.yellow}Warning:${colors.reset} Source directory ${srcDir} does not exist`
+      );
+    }
+
+    // At the end of the process:
+    // 1. Delete files in target directory to ensure obsolete profiles are deleted
+    await deleteCodeProfileFiles(targetDir);
+
+    // 2. Copy files from re-encoded directory to target directory
+    let profilesCount = 0;
+    if (fs.existsSync(reEncodedDir)) {
+      const profileFiles = await readdir(reEncodedDir);
+      for (const file of profileFiles) {
+        const srcFile = path.join(reEncodedDir, file);
+        const destFile = path.join(targetDir, file);
+        const stats = await stat(srcFile);
+        if (stats.isFile() && path.extname(file) === ".code-profile") {
+          const content = await readFile(srcFile, "utf8");
+          await writeFile(destFile, content, "utf8");
+          console.log(`Copied ${srcFile} to ${destFile}`);
+          profilesCount++;
+        }
+      }
+      console.log(
+        `Copied ${profilesCount} profile files from ${reEncodedDir} to ${targetDir}`
+      );
+    } else {
+      console.warn(
+        `${colors.yellow}Warning:${colors.reset} directory ${reEncodedDir} does not exist`
+      );
+    }
 
     // Show summary of password detection
     if (passwordsFound.detected) {
@@ -705,7 +794,7 @@ async function main() {
       console.log("=".repeat(80) + "\n");
     }
   } catch (error) {
-    console.error(`Error accessing ${srcDir}:`, error.message);
+    console.error(`Error processing profiles:`, error.message);
     process.exit(1);
   }
 }

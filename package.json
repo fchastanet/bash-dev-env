@@ -1,7 +1,7 @@
 {
   "cspell": "cspell.config.yml",
   "scripts": {
-    "convert-vscode-profiles": "node src/_installScripts/_Configs/decodeVsCodeProfile.js src/_installScripts/_Configs/VsCodeConfig-conf/src-profiles src/_installScripts/_Configs/VsCodeConfig-conf/profiles",
+    "convert-vscode-profiles": "node VsCodeConfig-profiles/convert-vscode-profiles.js VsCodeConfig-profiles src/_installScripts/_Configs/VsCodeConfig-conf/profiles",
     "lint": "eslint --ext .js,.jsonc src",
     "lint:fix": "eslint --ext .js,.jsonc src --fix",
     "test": "echo \"No tests specified\" && exit 0"
