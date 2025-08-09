@@ -59,6 +59,8 @@ configure() {
     "etc" \
     "/etc"
 
+  sudo chown root:root /etc/anacrontab
+
   touch "${HOME}/.cron_activated"
   sudo groupadd anacron || true
   sudo adduser "${USERNAME}" anacron || true

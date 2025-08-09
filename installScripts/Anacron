@@ -3522,20 +3522,20 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/fd0e655b342c463f6d21c6890618cffb8ff201c57b7b1a827ca8e5cd824ba0d5/conf_dir" \
-  "H4sIAAAAAAAA/+xVUU/bPBTl2b/ifu0nBg+JndGsE1PR+oDGpEKRKE8IITe+abw5dmU72dC0/z45 \
-NNDRrQ8b2piU82Lf69Me32v7JJ5zV0QC6wh1TdFnlGueWaM9n+88ERhj7NVg0IyMscdjcpAm7fwu \
-nwwOUrYD7Kk2sA2V89zusN/WelzcP4I+PDr0Q8iMzuWistxLoyGXCiE3FlYUQvpwgdiGe6/3gWsB \
-D3+wl+43fIGeS+Vi0geHCIX3S3dIacn1MDZ2QZXU1ecQRku+QBdm6do+4jQufKkIuTg5nkxGdC41 \
-dQU5H89ORrRyliqTcUXdXOrDtbgJ75L3Kw+cudTkZHp6PKLWGE8m03dn49PjUROcjt9PZtNRr0fO \
-pjchuJlezs4vZ6MklDwr0CFYXCqeIYQ9vnCA2luJjvRhiVYaAVKD4LcOAAQqfhviUurKY0h9MPNI \
-CtRe5hItAGSmLLkWJIENpJupoBkLLtXtKmGr0DrrHUSRxaWx/u4s14hHR7TmoTWLtrOxMgt4ebSb \
-kOGmRMJ+rPoJ8WMru1V1Rdwm+7Y02hf3RTSym9U2v1lnbpVtidt0//ZDe6b43v+l9mh55mWNsaCK \
-VzorxqtOuuJXNYIfDtP0Z/7Pkoe1lf8PB0na+f+fQP+/1hgp6hrCbSBE5nB1BZEBZRZSw+4uRDn0 \
-/v8SrPMrjcN1uGluCfcoenB9/QZ8gZoAuEoYcGhrmd1/IiB02JNcdm+wQ4cOHZ4PvgUAAP//SLYG \
-eAAOAAA="
+  "${PERSISTENT_TMPDIR:-/tmp}/e0d9d78c4ec34d843d563c688371b7c914b16914ea67871541cc1e8ed9b029b2/conf_dir" \
+  "H4sIAAAAAAAA/+xV0U/bPhDm2X/F/dqfGDwkdoCsE1PR+oDGpEKRKE8IITe+JN4cu7KdbGja/z45 \
+pdDRrdKYNjYp34tz50s+3/m+SzzjrowENhHqhkrt0fLMywZjQRWvdVaONM+s0bErt54IxhgbpGm7 \
+MsYeryx52Fv4k8FBkm4Beyrhz6B2ntst9stcj5P7R9D/j9bO0pnUFHUDoRsIkTlcXUFkQJlCatje \
+hiiH3v+fTyanx19oHNrhpu0S7lH04Pr6NfgSNQFwtTDg0DYyQ+CLzoFQYU9ySZ472Q5rQJ/Ru3vy \
+fPZ7OIIeXh4c/Ej/yX6aPNL/Hkv2O/3/CfSBftsCh5AZncuittxLoyGXCiE3dqlmQvpwgffi3nm1 \
+C1wLePjATrrbxgv0XCoXkz44RCi9n7tDSiuuB7GxBVVS15+CGc15gS48pSvniNO49JUi5OLkeDwe \
+thPKleR8ND0ZtiNLmYwr6mZSH67Yrblw3u88xMykJmGIDak1xpPx5O3Z6PR42Bqno3fj6WTY65Gz \
+yU0wbiaX0/PL6TAJKU9LdAgW54pnCOGMLxyg9laiI32Yo5VGgNQg+K0DAIGK3wa7krr2GFzvzSyS \
+ArWXuUQLAJmpKq4FSWAN6bqr/QkLLtXtncPWoXTWO4gii3Nj/eIuVwKPjmjDQ2mKZWVjZQrYO9pO \
+yGCdImHfZ/2I+GFJu5H1LnAT7ZvKaF/eJ9HSrmfbvrMauZF2GbiJ97mF1qFDhw5/Gb4GAAD//+EM \
+ujgADgAA"
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/fd0e655b342c463f6d21c6890618cffb8ff201c57b7b1a827ca8e5cd824ba0d5/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e0d9d78c4ec34d843d563c688371b7c914b16914ea67871541cc1e8ed9b029b2/conf_dir"
 
 
 helpDescription() {
@@ -3595,6 +3595,8 @@ configure() {
     "$(fullScriptOverrideDir)" \
     "etc" \
     "/etc"
+
+  sudo chown root:root /etc/anacrontab
 
   touch "${HOME}/.cron_activated"
   sudo groupadd anacron || true
