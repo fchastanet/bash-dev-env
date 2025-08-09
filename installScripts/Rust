@@ -3492,14 +3492,15 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/e93612233e5d594715a2753fef1b87850e4e0d4365a42a0d32852bba98bd53df/conf_dir" \
-  "H4sIAAAAAAAA/9JLSizO0E1JLdNNzSvTLyjKT8vMSdVL0S8qLS7RK85goAYwMDAwMDc1BdMGBgbo \
-tIGJuTmcDRY3NDE3N2BQMKCK7QRAaXFJYhGDAcV2oXtuiABlRf3S4iL9pMw8/dS8MgVQauBSpi7g \
-UlZw8Vfw8w9RcHXxDNFRCPHwDFZw8/RxVXB29FNwclUIDXBxDHF1UQj3DPHwDw0BKfV0dqW6M7ii \
-oxWsVKoDHEM8aq0UbOsUNOJqrDRVqj38fV1r9fWSE4vS80EBoWFVo6KpEBurUFOjAFJsi6kEZgzX \
-QEffKBgFo2AUkA0AAQAA//81Ox/1AAgAAA=="
+  "${PERSISTENT_TMPDIR:-/tmp}/f5f2e59256979b781c83f38658bceb47c5914d8b049227b4b8735942784bfa88/conf_dir" \
+  "H4sIAAAAAAAA/+ySQUvDMBTHd86n+LvusIFrImwrVHaYa6UFXQdmeCgVti61xZJJsvayzs8uHeph \
+Ch4siLLf5YXHj/eS8DdXS53216LsC1nSZ7VJslyYa6oKvTV12moCxhizhsNDZYwdVzYaWB/nQ/9i \
+YI2sFlgj27+h0NularEf7zp+3B/BOKOFVnSVSSpkiToNxGgWYsAJMAs4XMfn5+Cef4dr/8bFdDLD \
+lYvF3Jlw18G9z71gwWvVn7qNX4OEIezObj7h3t7G+AXdh8rudXZecOvuqRkv1eOm/oiuXXV6iCJU \
+FWp5/Fl5H0OyBGGIfoL2kSRk2UYUXWKbCkkAAzoVeR6nIn6C3hQqFmO6FiWVRZ4TvLW+HEOSjPx2 \
+TE6cOPEPeQ0AAP//caXw/QAIAAA="
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e93612233e5d594715a2753fef1b87850e4e0d4365a42a0d32852bba98bd53df/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/f5f2e59256979b781c83f38658bceb47c5914d8b049227b4b8735942784bfa88/conf_dir"
 
 
 helpDescription() {
@@ -3534,7 +3535,14 @@ install() {
   if ! command -v rustup &>/dev/null; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   fi
-  rustup update
+  if [[ -f "${HOME}/.cargo/env" ]]; then
+    # shellcheck source=/dev/null
+    source "${HOME}/.cargo/env"
+    rustup update
+  else
+    Log::displayError "Rust environment file not found: ${HOME}/.cargo/env"
+    return 1
+  fi
 }
 
 testInstall() {

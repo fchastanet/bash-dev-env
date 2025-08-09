@@ -141,6 +141,7 @@ pycharm
 pyupgrade
 redis
 rerere
+rustup
 screenlock
 sdkman
 sdkmanager

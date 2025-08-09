@@ -33,7 +33,14 @@ install() {
   if ! command -v rustup &>/dev/null; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   fi
-  rustup update
+  if [[ -f "${HOME}/.cargo/env" ]]; then
+    # shellcheck source=/dev/null
+    source "${HOME}/.cargo/env"
+    rustup update
+  else
+    Log::displayError "Rust environment file not found: ${HOME}/.cargo/env"
+    return 1
+  fi
 }
 
 testInstall() {

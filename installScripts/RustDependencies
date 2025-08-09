@@ -3304,6 +3304,13 @@ install() {
   # install useful dependencies
   (
     set -o errexit -o nounset
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+      # shellcheck source=/dev/null
+      source "${HOME}/.cargo/env"
+    else
+      Log::displayError "Rust environment file not found: ${HOME}/.cargo/env"
+      return 1
+    fi
     # Install individual packages
     cargo install \
       cargo-cache \
