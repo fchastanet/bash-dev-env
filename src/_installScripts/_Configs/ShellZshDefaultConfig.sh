@@ -61,6 +61,9 @@ install() {
   )
   Linux::Apt::installIfNecessary --no-install-recommends "${packages[@]}"
 
+  Log::displayInfo "install oh-my-zsh"
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
   Log::displayInfo "install plugin manager"
   if command -v zinit &>/dev/null; then
     zinit self-update
@@ -71,6 +74,11 @@ install() {
         --fail --show-error --silent \
         --location https://raw.githubusercontent.com/zdharma-continuum/zinit/HEAD/scripts/install.sh
     )"
+  fi
+
+  Log::displayInfo "install ohmyposh theme"
+  if [[ "${ZSH_PREFERRED_THEME:-${ZSH_DEFAULT_THEME}}" = "ohmyposh" ]]; then
+    curl -s https://ohmyposh.dev/install.sh | bash -s
   fi
 }
 
@@ -86,6 +94,7 @@ testInstall() {
   local -i failures=0
   Assert::commandExists zsh || ((++failures))
   Assert::commandExists "svn" || ((++failures))
+  Assert::commandExists "oh-my-posh" || ((++failures))
   assertZshFunctionExists zinit || ((++failures))
   return "${failures}"
 }
@@ -125,6 +134,7 @@ declare -a confFiles=(
   "${HOME}/.bash-dev-env/interactive.d/zsh-ssh.zsh"
   "${HOME}/.bash-dev-env/interactive.d/zsh-z.zsh"
   "${HOME}/.bash-dev-env/themes.d/powerlevel10k.zsh"
+  "${HOME}/.bash-dev-env/themes.d/ohmyposh.zsh"
   "${HOME}/.bash-dev-env/themes.d/pure.zsh"
   "${HOME}/.bash-dev-env/themes.d/starship.zsh"
   "${HOME}/.bash-dev-env/findConfigFiles"

@@ -37,5 +37,36 @@
   "shellcheck.customArgs": ["--source-path=SCRIPTDIR", "--external-sources"],
   "shellcheck.ignorePatterns": {
     "**/*.tpl": true
+  },
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  "github.copilot.advanced": {
+    "instructionFiles": [
+      ".github/instructions/general.instructions.md",
+      ".github/instructions/github-workflow.instructions.md"
+    ]
+  },
+  "github.copilot.chat.localeOverride": "en",
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {"file": ".github/instructions/commit-message.instructions.md"}
+  ],
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": true,
+    "markdown": true,
+    "scminput": true,
+    "git-commit": true,
+    "inlineSuggest": true,
+    "autoCompletions": true,
+    "chat": true,
+    "chatCompletions": true,
+    "chatCodeGeneration": true,
+    "chatCommitMessageGeneration": true,
+    "chatFileGeneration": true,
+    "chatFileEdit": true,
+    "chatFileEditWithContext": true,
+    "chatFileEditWithContextAndDiff": true,
+    "chatFileEditWithContextAndDiffAndHistory": true,
+    "chatFileEditWithContextAndDiffAndHistoryAndSuggestions": true,
+    "chatFileEditWithContextAndDiffAndHistoryAndSuggestionsAndCodeReview": true
   }
 }

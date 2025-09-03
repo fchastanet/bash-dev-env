@@ -65,7 +65,7 @@ install() {
       cp "${file}" "${tempFolder}/${newName}"
     done
     cd "${tempFolder}" || exit 1
-    powershell.exe -ExecutionPolicy Bypass -NoProfile \
+    powershell.exe -NonInteractive -ExecutionPolicy Bypass -NoProfile \
       -Command "${fontDir}" \
       -verbose "${windowsTempDir}"
   )

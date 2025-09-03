@@ -55,7 +55,7 @@ summary() {
     endDate="$(date +%s)"
     local totalDuration=$((endDate - startDate))
     local humanReadableDuration
-    humanReadableDuration=$(date -ud "@${totalDuration}" +'%H:%M:%S')
+    humanReadableDuration=$(date -ud "@${totalDuration:-0}" +'%H:%M:%S')
     Log::displayInfo "Total duration: ${humanReadableDuration}"
     summaryDisplayed="1"
     if [[ "${installResultCode}" = "0" ]]; then

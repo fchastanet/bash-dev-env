@@ -23,6 +23,10 @@ fortunes() {
       echo "%"
     fi
   fi
+  if Assert::wsl; then
+    echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}view${__RESET_COLOR} alias allows to launch given file using default windows file association."
+    echo "%"
+  fi
 }
 
 # jscpd:ignore-start
@@ -60,26 +64,26 @@ configure() {
     https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh || return 1
   chmod +x "${HOME}/.bash-dev-env/interactive.d/git-prompt.sh"
 
+  local configDir
+  # shellcheck disable=SC2154
+  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
+
   # shellcheck disable=SC2154
   Conf::copyStructure \
-    "${embed_dir_conf_dir}" \
+    "${configDir}" \
     "$(fullScriptOverrideDir)" \
     ".bash-dev-env"
 
   Conf::copyStructure \
-    "${embed_dir_conf_dir}" \
+    "${configDir}" \
     "$(fullScriptOverrideDir)" \
     ".vscode"
 
   Conf::copyStructure \
-    "${embed_dir_conf_dir}" \
+    "${configDir}" \
     "$(fullScriptOverrideDir)" \
     "home" \
     "${HOME}"
-
-  local configDir
-  # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
 
   SUDO=sudo Install::file \
     "${configDir}/home/.vimrc" "/root/.vimrc" root root

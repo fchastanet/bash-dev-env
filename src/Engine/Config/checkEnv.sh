@@ -115,7 +115,7 @@ Engine::Config::checkEnv() {
 
   checkValidValues UPGRADE_UBUNTU_VERSION 0 lts dev
   checkValidValues PREFERRED_SHELL ShellBash ShellZsh
-  checkValidValues ZSH_PREFERRED_THEME powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
+  checkValidValues ZSH_PREFERRED_THEME ohmyposh powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
 
   checkValidValues SHOW_FORTUNES 0 1
   checkValidValues SHOW_MOTD 0 1

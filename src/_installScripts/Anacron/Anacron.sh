@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/Anacron/Anacron-conf" as conf_dir
 
 helpDescription() {
   echo "$(scriptName) - runs commands periodically"
@@ -45,6 +46,13 @@ testInstall() {
 }
 
 configure() {
+  # shellcheck disable=SC2154
+  Conf::copyStructure \
+    "${embed_dir_conf_dir}" \
+    "$(fullScriptOverrideDir)" \
+    ".bash-dev-env"
+
+  touch "${HOME}/.cron_activated"
   sudo groupadd anacron || true
   sudo adduser "${USERNAME}" anacron || true
   sudo chown root:anacron /var/spool/anacron/

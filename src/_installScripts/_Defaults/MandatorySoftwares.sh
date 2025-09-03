@@ -10,6 +10,10 @@ fortunes() {
     echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}mc${__RESET_COLOR} is a file manager in text mode usable in a terminal."
     echo "%"
   fi
+  if command -v ncdu &>/dev/null; then
+    echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- ${__HELP_EXAMPLE}ncdu${__RESET_COLOR} is a disk usage analyzer with an ncurses interface."
+    echo "%"
+  fi
 }
 
 # jscpd:ignore-start
@@ -53,9 +57,11 @@ install() {
     curl
     dos2unix
     htop
+    inotify-tools
     jq
     mc
     mysql-client
+    ncdu
     # net-tools to get netstat
     net-tools
     parallel
@@ -79,6 +85,9 @@ testInstall() {
   Assert::commandExists "make" || ((++failures))
   Assert::commandExists "unzip" || ((++failures))
   Assert::commandExists "parallel" || ((++failures))
+  Assert::commandExists "inotifywait" || ((++failures))
+  Assert::commandExists "puttygen" || ((++failures))
+  Assert::commandExists "pv" || ((++failures))
   if ! PAGER=/usr/bin/cat dpkg -l cron &>/dev/null; then
     Log::displayError "cron is not installed"
     ((++failures))

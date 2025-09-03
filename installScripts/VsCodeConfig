@@ -654,6 +654,42 @@ Conf::list() {
 }
 
 
+# @description Load the nearest config file
+# in next example will search first .framework-config file in "srcDir1"
+# then if not found will go in up directories until /
+# then will search in "srcDir2"
+# then if not found will go in up directories until /
+# source the file if found
+# @example
+#   Conf::loadNearestFile ".framework-config" "srcDir1" "srcDir2"
+#
+# @arg $1 configFileName:String config file name to search
+# @arg $2 loadedFile:String (passed by reference) will return the loaded config file name
+# @arg $@ srcDirs:String[] source directories in which the config file will be searched
+# @exitcode 0 if file found
+# @exitcode 1 if file not found
+Conf::loadNearestFile() {
+  local configFileName="$1"
+  local -n loadedFile="$2"
+  shift 2 || true
+  local -a srcDirs=("$@")
+  for srcDir in "${srcDirs[@]}"; do
+    configFile="$(File::upFind "${srcDir}" "${configFileName}" || true)"
+    if [[ -n "${configFile}" ]]; then
+      # shellcheck source=/.framework-config
+      source "${configFile}" || Log::fatal "error while loading config file '${configFile}'"
+      Log::displayDebug "Config file ${configFile} is loaded"
+      # shellcheck disable=SC2034
+      loadedFile="${configFile}"
+      return 0
+    fi
+  done
+
+  Log::displayDebug "Config file '${configFileName}' not found in any source directories provided"
+  return 1
+}
+
+
 # @description check validity of .env variables
 # @env CHECK_ENV int 0 to avoid checking environment
 # @noargs
@@ -769,7 +805,7 @@ Engine::Config::checkEnv() {
 
   checkValidValues UPGRADE_UBUNTU_VERSION 0 lts dev
   checkValidValues PREFERRED_SHELL ShellBash ShellZsh
-  checkValidValues ZSH_PREFERRED_THEME powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
+  checkValidValues ZSH_PREFERRED_THEME ohmyposh powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
 
   checkValidValues SHOW_FORTUNES 0 1
   checkValidValues SHOW_MOTD 0 1
@@ -806,11 +842,11 @@ Engine::Config::loadConfig() {
   fi
 Linux::requireTarCommand
 Compiler::Embed::extractFileFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/ea77fa89190d79244e08140eaa4a903867b8643e9362d2c40fa8d2f5e8293bb5/envFileTemplate" \
-  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJmY2hhc3RhbmV0IgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdpdCAmIFNTSCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGlmIDEsIGl0IGluZGljYXRlcyB5b3UgYWNjZXB0IHRoYXQgeW91ciBnaXQga2V5IHdpbGwgYmUgbG9hZGVkLgojIGlmIDAsIGNvbmZpZ3VyYXRpb25zIHRoYXQgbmVlZCB0byBiZSBhdXRoZW50aWNhdGVkIHdpbGwgYmUgc2tpcHBlZC4KIyBEaXN0cm8gbW9kZTogaW4gYW55IGNhc2UsIHlvdXIga2V5IGlzIG5vdCBjb3BpZWQuCkFVVEhPUklaRV9TU0hfS0VZX1VTQUdFPTEKCiMgeW91ciBsb2dpbiB0byBjb25uZWN0IHRvIHNzaCBzZXJ2ZXJzIGlmIGFueQpTU0hfTE9HSU49IiIKCiMgeW91ciBnaXQgZnVsbCBuYW1lICdGaXJzdE5hbWUgTGFzdE5hbWUnCkdJVF9VU0VSTkFNRT0iIgoKIyBlbWFpbCB1c2VkIGZvciBnaXQgJ2xkYXBAZG9tYWluLmNvbScKR0lUX1VTRVJfTUFJTD0iIgoKIyBkZWZhdWx0IGdpdCBtZXJnZSB0b29sIHRvIHVzZQpHSVRfTUVSR0VfVE9PTD0idnNjb2RlIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEFXUyBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGVtYWlsIHVzZWQgdG8gY29ubmVjdCB0byBhd3MKQVdTX1VTRVJfTUFJTD0iZmNoYXN0YW5ldEBnbWFpbC5jb20iCgojIGFwcCBpZCB0byBjb25uZWN0IHRvIGF3cyBhY2NvdW50CkFXU19BUFBfSUQ9IiIKCkFXU19QUk9GSUxFPSIiCkFXU19ERUZBVUxUX1JFR0lPTj0iIgpBV1NfVEVTVF9TRUNSRVRfSUQ9IiIKQVdTX0RFRkFVTFRfRE9DS0VSX1JFR0lTVFJZX0lEPSIiCgojIHdpbGwgdXNlIGF3cyBjb25maWd1cmUgc3NvIHRvIGNvbm5lY3QgdG8gYXdzIChpbnN0ZWFkIG9mIHNhbWwyYXdzKQpVU0VfQVdTX0NPTkZJR1VSRV9TU089MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEs4UyBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIEt1YmVEZWZhdWx0Q29uZmlnIH4vLmt1YmUvY29uZmlnIGdlbmVyYXRpb24KIyBhd3MgcmVnaW9uIG9mIHRoZSBjbHVzdGVyIChFZzogdXMtZWFzdC0xKQpLVUJFX0NPTkZJR19SRUdJT05fQ09ERT0KCiMgYXdzIGFybiBvZiB0aGUgY2x1c3Rlci4KIyBFZzogYXJuOmF3czplY3M6cmVnaW9uOmF3c19hY2NvdW50X2lkOmNsdXN0ZXIvTXlDbHVzdGVyCktVQkVfQ09ORklHX0NMVVNURVJfQVJOPQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIERpcmVjdG9yaWVzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgb3ZlcnJpZGRlbiBjb25mIGRpcmVjdG9yeSB0aGF0IHdpbGwgYmUgdXNlZCB0byBvdmVycmlkZQojIHRoZSBkZWZhdWx0IGNvbmZpZ3VyYXRpb24gdGhhdCBhcmUgZW1iZWRkZWQgaW4gYmluYXJpZXMKQ09ORl9PVkVSUklERV9ESVJTPSgKICAiJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2NvbmYub3ZlcnJpZGUiCikKCiMgd2hlcmUgdG8gaW5zdGFsbCBiYXNoLXRvb2xzLCAuLi4KIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMTUzClBST0pFQ1RTX0RJUj0iJHtIT01FfS9wcm9qZWN0cyIKCiMgd2hlcmUgb3ZlcnJpZGRlbiBjb25maWcgZmlsZXMgd2lsbCBiZSBiYWNrZWQgdXAKQkFDS1VQX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2JhY2t1cCIKIyBiYWNrdXAgZmlsZXMvZGlycyBiZWZvcmUgaW5zdGFsbGluZyBuZXcgZmlsZSAodXN1YWxseSAxLCBidXQgMCBpZiB1c2luZyBkaXN0cm8pCkJBQ0tVUF9CRUZPUkVfSU5TVEFMTD0xCgojIGxvZ3MgZGlyZWN0b3J5CkxPR1NfRElSPSIke0JBU0hfREVWX0VOVl9ST09UX0RJUn0vbG9ncyIKCiMgaW5zdGFsbFNjcmlwdHMgcm9vdCBkaXIKSU5TVEFMTF9TQ1JJUFRTX1JPT1RfRElSPSIke0JBU0hfREVWX0VOVl9ST09UX0RJUn0vaW5zdGFsbFNjcmlwdHMiCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgSW5zdGFsbGF0aW9uIGNvbmZpZ3VyYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBDb25maWd1cmF0aW9uIGZpbGVzIGFyZSBvdmVyd3JpdHRlbiBldmVuIGlmIGV4aXN0cwojICEhISEgRmlyc3QgdGltZSBpbml0aWFsaXphdGlvbjogbGV0IHRoaXMgdmFsdWUgdG8gMSAhISEhCiMgVmFsdWUgMDoKIyAtIElmIHRhcmdldCBjb25maWd1cmF0aW9uIGZpbGUgZXhpc3RzLCBkaXNwbGF5cyBhIG1lc3NhZ2UgYW5kIGRvIG5vdCBvdmVyd3JpdGUgdGhlIGZpbGUKIyAtIElmIHRhcmdldCBjb25maWd1cmF0aW9uIGZpbGUgZG9lc24ndCBleGlzdCwgaW5zdGFsbHMgdGhlIGZpbGUKIyBWYWx1ZSAxCiMgLSBpbnN0YWxsIG9yIG92ZXJ3cml0ZSB0aGUgZmlsZSB3aXRob3V0IGNoZWNraW5nIGV4aXN0ZW5jZQpPVkVSV1JJVEVfQ09ORklHX0ZJTEVTPTEKCiMgV2luZG93cyBmaWxlcyBjYW4gYmUgb3ZlcnJpZGRlbiBpZiAxCiMgaWYgMAojIC0gc2tpcCBjaGFuZ2VzIHRvICVVU0VSUFJPRklMRSUvLndzbGNvbmZpZwojIC0gc2tpcCBjb3B5aW5nIGZvbnRzCkNIQU5HRV9XSU5ET1dTX0ZJTEVTPTEKCiMgSW5kaWNhdGUgdGhhdCBpbnN0YWxsIHNjcmlwdCBjYW4gd2FybiB5b3UgdXNpbmcgc3BlYWtlciB3aGVuIHlvdXIgaW5wdXQgaXMgbmVlZGVkCkNBTl9UQUxLX0RVUklOR19JTlNUQUxMQVRJT049MQoKIyBpZiAwIGluc3RhbGwgc2NyaXB0IHdpbGwgc2tpcCBhbGwgaW50ZXJhY3RpdmUgYWN0aXZpdHkgKHNhbWwyYXdzLCAuLi4pLAojIHNvIGRlcGVuZGVudCBpbnN0YWxsYXRpb24gd2lsbCBiZSBza2lwcGVkIGFzIHdlbGwKSU5TVEFMTF9JTlRFUkFDVElWRT0xCgojIGRpc3BsYXkgZWxhcHNlZCB0aW1lIHNpbmNlIGxhc3QgbG9nCkRJU1BMQVlfRFVSQVRJT049MQoKIyAwICAgPT4gbm8gdXBncmFkZSBhdCBhbGwKIyBsdHMgPT4gVVBHUkFERSB0byBsYXRlc3QgdWJ1bnR1IGx0cyB2ZXJzaW9uCiMgZGV2ID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBkZXYgdmVyc2lvbgojIFVzZSBpZiB5b3Uga25vdyB3aGF0IHlvdSBhcmUgZG9pbmcsCiMgY291bGQgY2F1c2Ugc29tZSBwYWNrYWdlcyB0byBub3QgYmVpbmcgYXZhaWxhYmxlIHlldApVUEdSQURFX1VCVU5UVV9WRVJTSU9OPTAKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBQcm9maWxlIGNvbmZpZ3VyYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBDaG9vc2UgeW91ciBwcmVmZXJyZWQgc2hlbGwKIyBwb3NzaWJsZSBjaG9pY2VzOiBTaGVsbEJhc2ggKExlZ2FjeSBleHBlcmllbmNlKSwgU2hlbGxac2ggKFJlY29tbWVuZGVkIGV4cGVyaWVuY2UpClBSRUZFUlJFRF9TSEVMTD0iU2hlbGxac2giCgojIFpzaCB0aGVtZSB0byB1c2UKIyBwb3NzaWJsZSBjaG9pY2VzOiBwb3dlcmxldmVsMTBrL3Bvd2VybGV2ZWwxMGssIHNpbmRyZXNvcmh1cy9wdXJlLCBzdGFyc2hpcC9zdGFyc2hpcApaU0hfUFJFRkVSUkVEX1RIRU1FPSJwb3dlcmxldmVsMTBrL3Bvd2VybGV2ZWwxMGsiCgojIERpc3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRVTkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMgYXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMgQHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29uZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1lbW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4gb3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBpbW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklHX1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhkIHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhEX1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2MvV2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
+  "${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate" \
+  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJGcmFuY29pc0NoYXN0YW5ldCIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBHaXQgJiBTU0ggaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBpZiAxLCBpdCBpbmRpY2F0ZXMgeW91IGFjY2VwdCB0aGF0IHlvdXIgZ2l0IGtleSB3aWxsIGJlIGxvYWRlZC4KIyBpZiAwLCBjb25maWd1cmF0aW9ucyB0aGF0IG5lZWQgdG8gYmUgYXV0aGVudGljYXRlZCB3aWxsIGJlIHNraXBwZWQuCiMgRGlzdHJvIG1vZGU6IGluIGFueSBjYXNlLCB5b3VyIGtleSBpcyBub3QgY29waWVkLgpBVVRIT1JJWkVfU1NIX0tFWV9VU0FHRT0xCgojIHlvdXIgbG9naW4gdG8gY29ubmVjdCB0byBzc2ggc2VydmVycyBpZiBhbnkKU1NIX0xPR0lOPSIiCgojIHlvdXIgZ2l0IGZ1bGwgbmFtZSAnRmlyc3ROYW1lIExhc3ROYW1lJwpHSVRfVVNFUk5BTUU9IiIKCiMgZW1haWwgdXNlZCBmb3IgZ2l0ICdsZGFwQGRvbWFpbi5jb20nCkdJVF9VU0VSX01BSUw9IiIKCiMgZGVmYXVsdCBnaXQgbWVyZ2UgdG9vbCB0byB1c2UKR0lUX01FUkdFX1RPT0w9InZzY29kZSIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBBV1MgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBlbWFpbCB1c2VkIHRvIGNvbm5lY3QgdG8gYXdzCkFXU19VU0VSX01BSUw9ImZjaGFzdGFuZXRAZ21haWwuY29tIgoKIyBhcHAgaWQgdG8gY29ubmVjdCB0byBhd3MgYWNjb3VudApBV1NfQVBQX0lEPSIiCgpBV1NfUFJPRklMRT0iIgpBV1NfREVGQVVMVF9SRUdJT049IiIKQVdTX1RFU1RfU0VDUkVUX0lEPSIiCkFXU19ERUZBVUxUX0RPQ0tFUl9SRUdJU1RSWV9JRD0iIgoKIyB3aWxsIHVzZSBhd3MgY29uZmlndXJlIHNzbyB0byBjb25uZWN0IHRvIGF3cyAoaW5zdGVhZCBvZiBzYW1sMmF3cykKVVNFX0FXU19DT05GSUdVUkVfU1NPPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBLOFMgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBLdWJlRGVmYXVsdENvbmZpZyB+Ly5rdWJlL2NvbmZpZyBnZW5lcmF0aW9uCiMgYXdzIHJlZ2lvbiBvZiB0aGUgY2x1c3RlciAoRWc6IHVzLWVhc3QtMSkKS1VCRV9DT05GSUdfUkVHSU9OX0NPREU9CgojIGF3cyBhcm4gb2YgdGhlIGNsdXN0ZXIuCiMgRWc6IGFybjphd3M6ZWNzOnJlZ2lvbjphd3NfYWNjb3VudF9pZDpjbHVzdGVyL015Q2x1c3RlcgpLVUJFX0NPTkZJR19DTFVTVEVSX0FSTj0KCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBEaXJlY3RvcmllcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIG92ZXJyaWRkZW4gY29uZiBkaXJlY3RvcnkgdGhhdCB3aWxsIGJlIHVzZWQgdG8gb3ZlcnJpZGUKIyB0aGUgZGVmYXVsdCBjb25maWd1cmF0aW9uIHRoYXQgYXJlIGVtYmVkZGVkIGluIGJpbmFyaWVzCkNPTkZfT1ZFUlJJREVfRElSUz0oCiAgIiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9jb25mLm92ZXJyaWRlIgopCgojIHdoZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29uZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lOU1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09UX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBleGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRvIDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBmaWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBjaGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmlsZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNFUlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9XU19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVzaW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5TVEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9uIHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMgdmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBVc2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFja2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0wCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUgY2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1lbmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUgdG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBvaG15cG9zaCwgc2luZHJlc29yaHVzL3B1cmUsIHN0YXJzaGlwL3N0YXJzaGlwClpTSF9QUkVGRVJSRURfVEhFTUU9InBvd2VybGV2ZWwxMGsvcG93ZXJsZXZlbDEwayIKCiMgaWYgcHJlZmVycmVkIHRoZW1lIGlzIG9obXlwb3NoLCB0aGUgcGF0aCB0byB0aGUgdGhlbWUgZmlsZQpQT1NIX1RIRU1FX1BBVEg9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9vaG15cG9zaFRoZW1lcy9qYW5kZWRvYmJlbGVlci55YW1sIgoKIyBpZiBwcmVmZXJyZWQgdGhlbWUgaXMgc3RhcnNoaXAKU1RBUlNISVBfVEhFTUU9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9zdGFyc2hpcFRoZW1lcy9kZWZhdWx0LnRvbWwiClNUQVJTSElQX0NBQ0hFPSIke0hPTUV9Ly5jYWNoZS8uc3RhcnNoaXAiCgojIERpc3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRVTkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMgYXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMgQHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29uZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1lbW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4gb3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBpbW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklHX1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhkIHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhEX1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2MvV2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
   "755"
 
-declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/ea77fa89190d79244e08140eaa4a903867b8643e9362d2c40fa8d2f5e8293bb5/envFileTemplate"
+declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate"
 
   local envFile="${BASH_DEV_ENV_ROOT_DIR}/.env"
   # shellcheck disable=SC2154
@@ -947,16 +983,26 @@ Engine::Config::loadSshKey() {
     export SSH_AGENT_PID
   fi
 
-  if [[ -z "${SSH_PRIVATE_KEY}" ]]; then
-    ssh-add "${HOME}/.ssh/id_rsa" || return 3
-  else
-    ssh-add <(base64 -d <<<"${SSH_PRIVATE_KEY}") || return 3
+  if [[ -n "${SSH_PRIVATE_KEY}" ]]; then
+    base64 -d <<<"${SSH_PRIVATE_KEY}" >"${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to decode SSH_PRIVATE_KEY"
+      return 2
+    }
+    chmod 600 "${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to set permissions on SSH key"
+      return 3
+    }
   fi
+  ssh-keygen -f ~/.ssh/id_rsa -y >~/.ssh/id_rsa.pub || {
+    Log::displayError "Failed to generate public key from private key"
+    return 4
+  }
+  ssh-add "${HOME}/.ssh/id_rsa" || return 5
 
   # Check key has been added to ssh agent
   ssh-add -l &>/dev/null || {
     Log::displayError "Your ssh key has not been loaded"
-    return 4
+    return 6
   }
 }
 
@@ -1101,6 +1147,24 @@ Engine::Config::requireWslu() {
 }
 
 
+# @description default env file with all default values
+# @stdout the default env filepath
+Env::createDefaultEnvFile() {
+  local envFile
+  envFile="$(Framework::createTempFile "createDefaultEnvFileEnvFile")" || return 2
+
+  (
+    echo "BASH_FRAMEWORK_THEME=${BASH_FRAMEWORK_THEME:-default}"
+    echo "BASH_FRAMEWORK_LOG_LEVEL=${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
+    echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+    # shellcheck disable=SC2016
+    echo 'BASH_FRAMEWORK_LOG_FILE="${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"'
+    echo "BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION=${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION:-5}"
+  ) >"${envFile}"
+  echo "${envFile}"
+}
+
+
 # @description prepend directories to the PATH environment variable
 # @arg $@ args:String[] list of directories to prepend
 # @set PATH update PATH with the directories prepended
@@ -1125,28 +1189,33 @@ Env::requireLoad() {
   local -a defaultFiles=("$@")
   # get list of possible config files
   local -a configFiles=()
+  local defaultEnvFile
+  defaultEnvFile="$(Env::createDefaultEnvFile)" || return 1
+  configFiles+=("${defaultEnvFile}")
   if [[ -n "${BASH_FRAMEWORK_ENV_FILES[0]+1}" ]]; then
     # BASH_FRAMEWORK_ENV_FILES is an array
     configFiles+=("${BASH_FRAMEWORK_ENV_FILES[@]}")
   fi
-  local localFrameworkConfigFile
-  localFrameworkConfigFile="$(pwd)/.framework-config"
-  if [[ -f "${localFrameworkConfigFile}" ]]; then
-    configFiles+=("${localFrameworkConfigFile}")
-  fi
   if [[ -f "${FRAMEWORK_ROOT_DIR}/.framework-config" ]]; then
     configFiles+=("${FRAMEWORK_ROOT_DIR}/.framework-config")
+  fi
+  local localFrameworkConfigFile
+  BASH_FRAMEWORK_DISPLAY_LEVEL="${__LEVEL_INFO}" \
+    BASH_FRAMEWORK_LOG_LEVEL="${__LEVEL_OFF}" \
+    Conf::loadNearestFile ".framework-config" localFrameworkConfigFile "$(pwd)" || true
+  if [[ -f "${localFrameworkConfigFile}" ]]; then
+    configFiles+=("${localFrameworkConfigFile}")
   fi
   configFiles+=("${optionEnvFiles[@]}")
   configFiles+=("${defaultFiles[@]}")
 
-  for file in "${configFiles[@]}"; do
-    # shellcheck source=/.framework-config
+  while IFS='' read -r file; do
+    # shellcheck source=/src/Env/createDefaultEnvFile.sh
     CURRENT_LOADED_ENV_FILE="${file}" source "${file}" || {
       Log::displayError "while loading config file: ${file}"
       return 1
     }
-  done
+  done < <(printf '%s\n' "${configFiles[@]}" | awk '!x[$0]++')
 }
 
 
@@ -1204,6 +1273,39 @@ File::relativeToDir() {
   local relativeTo="$2"
 
   realpath -m --relative-to="${relativeTo}" "${srcFile}"
+}
+
+
+# @description search a file in parent directories
+#
+# @arg $1 fromPath:String path
+# @arg $2 fileName:String
+# @arg $3 untilInclusivePath:String (optional) find for given file until reaching this folder (default value: /)
+# @arg $@ untilInclusivePaths:String[] list of untilInclusivePath
+# @stdout The filename if found
+# @exitcode 1 if the command failed or file not found
+File::upFind() {
+  local fromPath="$1"
+  shift || true
+  local fileName="$1"
+  shift || true
+  local untilInclusivePath="${1:-/}"
+  shift || true
+
+  if [[ -f "${fromPath}" ]]; then
+    fromPath="${fromPath%/*}"
+  fi
+  while true; do
+    if [[ -f "${fromPath}/${fileName}" ]]; then
+      echo "${fromPath}/${fileName}"
+      return 0
+    fi
+    if Array::contains "${fromPath}" "${untilInclusivePath}" "$@" "/"; then
+      return 1
+    fi
+    fromPath="$(readlink -f "${fromPath}"/..)"
+  done
+  return 1
 }
 
 # shellcheck disable=SC2120
@@ -2072,6 +2174,35 @@ Log::fatal() {
   echo -e "${__ERROR_COLOR}FATAL   - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
   Log::logFatal "$1"
   exit 1
+}
+
+
+# @description Get the text representation of a log level
+# @arg $1 level:String the log level to convert
+# @exitcode 1 if the level is invalid
+Log::getLevelText() {
+  local level="$1"
+  case "${level}" in
+    "${__LEVEL_OFF}")
+      echo OFF
+      ;;
+    "${__LEVEL_ERROR}")
+      echo ERROR
+      ;;
+    "${__LEVEL_WARNING}")
+      echo WARNING
+      ;;
+    "${__LEVEL_INFO}")
+      echo INFO
+      ;;
+    "${__LEVEL_DEBUG}")
+      echo DEBUG
+      ;;
+    *)
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      return 1
+      ;;
+  esac
 }
 
 
@@ -3007,7 +3138,7 @@ getLevel() {
       echo "${__LEVEL_DEBUG}"
       ;;
     *)
-      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${levelName}"
       return 1
       ;;
   esac
@@ -3045,6 +3176,10 @@ optionDisplayLevelCallback() {
   echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${logLevel}" >>"${overrideEnvFile}"
 }
 
+optionDisplayLevelDefaultValueFunction() {
+  Log::getLevelText "${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+}
+
 # shellcheck disable=SC2317 # if function is overridden
 optionLogLevelCallback() {
   local level="$2"
@@ -3056,10 +3191,19 @@ optionLogLevelCallback() {
   echo "BASH_FRAMEWORK_LOG_LEVEL=${logLevel}" >>"${overrideEnvFile}"
 }
 
+optionLogLevelDefaultValueFunction() {
+  Log::getLevelText "${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
+}
+
 # shellcheck disable=SC2317 # if function is overridden
 optionLogFileCallback() {
   local logFile="$2"
   echo "BASH_FRAMEWORK_LOG_FILE='${logFile}'" >>"${overrideEnvFile}"
+}
+
+optionLogFileDefaultValueFunction() {
+  # shellcheck disable=SC2016
+  echo "${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"
 }
 
 # shellcheck disable=SC2317 # if function is overridden
@@ -3093,53 +3237,9 @@ optionBashFrameworkConfigCallback() {
   fi
 }
 
-defaultFrameworkConfig="$(
-  cat <<'EOF'
-
-# copied from src/_includes/.framework-config.default
-# shellcheck disable=SC2034
-
-REAL_SCRIPT_FILE="${REAL_SCRIPT_FILE:-$(readlink -e "$(realpath "${BASH_SOURCE[0]}")")}"
-FRAMEWORK_ROOT_DIR="${FRAMEWORK_ROOT_DIR:-${REAL_SCRIPT_FILE%/*/*}}"
-FRAMEWORK_SRC_DIR="${FRAMEWORK_SRC_DIR:-${FRAMEWORK_ROOT_DIR}/src}"
-FRAMEWORK_BIN_DIR="${FRAMEWORK_BIN_DIR:-${FRAMEWORK_ROOT_DIR}/bin}"
-FRAMEWORK_VENDOR_DIR="${FRAMEWORK_VENDOR_DIR:-${FRAMEWORK_ROOT_DIR}/vendor}"
-FRAMEWORK_VENDOR_BIN_DIR="${FRAMEWORK_VENDOR_BIN_DIR:-${FRAMEWORK_ROOT_DIR}/vendor/bin}"
-
-# describe the functions that will be skipped from being imported
-FRAMEWORK_FUNCTIONS_IGNORE_REGEXP="${FRAMEWORK_FUNCTIONS_IGNORE_REGEXP:-^(Namespace::functions|Functions::myFunction|Namespace::requireSomething|Acquire::ForceIPv4)$}"
-# describe the files that do not contain function to be imported
-NON_FRAMEWORK_FILES_REGEXP="${NON_FRAMEWORK_FILES_REGEXP:-(^bin/|.framework-config|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/_binaries|^src/_includes|^src/batsHeaders.sh$|^src/_standalone)}"
-# describe the files that are allowed to not have an associated bats file
-BATS_FILE_NOT_NEEDED_REGEXP="${BATS_FILE_NOT_NEEDED_REGEXP:-(^bin/|.framework-config|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/batsHeaders.sh$|^src/_includes)}"
-# describe the files that are allowed to not have a function matching the filename
-FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP="${FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP:-^bin/|^\.framework-config$|/testsData/|^manualTests/|\.bats$}"
-# Source directories
-if [[ ! -v FRAMEWORK_SRC_DIRS ]]; then
-  FRAMEWORK_SRC_DIRS=(
-    "${FRAMEWORK_ROOT_DIR}/src"
-  )
-fi
-
-# export here all the variables that will be used in your templates
-export REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/fchastanet/bash-tools-framework}"
-
-BASH_FRAMEWORK_THEME="${BASH_FRAMEWORK_THEME:-default}"
-BASH_FRAMEWORK_LOG_LEVEL="${BASH_FRAMEWORK_LOG_LEVEL:-0}"
-BASH_FRAMEWORK_DISPLAY_LEVEL="${BASH_FRAMEWORK_DISPLAY_LEVEL:-3}"
-BASH_FRAMEWORK_LOG_FILE="${BASH_FRAMEWORK_LOG_FILE:-${FRAMEWORK_ROOT_DIR}/logs/${0##*/}.log}"
-BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION="${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION:-5}"
-
-EOF
-)"
-
 overrideEnvFile="$(Framework::createTempFile "overrideEnvFile")"
 
 commandOptionParseFinished() {
-  # load default template framework config
-  defaultEnvFile="${PERSISTENT_TMPDIR}/.framework-config"
-  echo "${defaultFrameworkConfig}" >"${defaultEnvFile}"
-  local -a files=("${defaultEnvFile}")
   # shellcheck disable=SC2154
   if [[ -f "${optionBashFrameworkConfig}" ]]; then
     files+=("${optionBashFrameworkConfig}")
@@ -3156,1081 +3256,4 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/a0b8203fd99d584d3b19523a87a8f390e1db80adbe03093e136d154834813c0d/conf_dir" \
-  "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"
-
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/a0b8203fd99d584d3b19523a87a8f390e1db80adbe03093e136d154834813c0d/conf_dir"
-
-
-helpDescription() {
-  echo "VsCode default configuration"
-}
-
-dependencies() {
-  # needs nodes with hjson package
-  echo "installScripts/NodeDependencies"
-}
-
-fortunes() {
-  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- code -- will launch visual studio code."
-  echo "%"
-}
-
-# jscpd:ignore-start
-listVariables() { :; }
-helpVariables() { :; }
-defaultVariables() { :; }
-checkVariables() { :; }
-breakOnConfigFailure() { :; }
-breakOnTestFailure() { :; }
-# jscpd:ignore-end
-
-install() {
-  if ! command -v code &>/dev/null; then
-    Log::displaySkipped "You must install vscode in windows before running that script"
-    return 0
-  fi
-  # vscode is preinstalled
-  Log::displayInfo "Make vscode download vscode server"
-  code --help >/dev/null
-}
-
-testInstall() {
-  if ! command -v code &>/dev/null; then
-    Log::displaySkipped "You must install vscode in windows before running that script"
-    return 0
-  fi
-  Assert::commandExists code
-}
-
-installVsCodeExtension() {
-  local extensions=("$@")
-  local -i batchSize=10
-  local -i total=${#extensions[@]}
-  local -i i=0
-  local -i currentBatchNumber=1
-
-  while ((i < total)); do
-    local batch=("${extensions[@]:${i}:${batchSize}}")
-    local -a cmd=(code)
-    for extension in "${batch[@]}"; do
-      cmd+=(--install-extension "${extension}")
-    done
-    Log::displayInfo "Installing VSCode extensions batch ${currentBatchNumber} ${i}-$((i + batchSize)) of ${total}: ${batch[*]} ..."
-    if Retry::parameterized \
-      "${RETRY_MAX_RETRY:-5}" \
-      "batch ${i}-$((i + batchSize)) of ${total}" \
-      "${RETRY_DELAY_BETWEEN_RETRIES:-15}" \
-      "${cmd[@]}"; then
-      Log::displaySuccess "VSCode extensions batch ${currentBatchNumber} successfully installed"
-    else
-      Log::displayError "Something went wrong while installing VS code extensions '${batch[*]}'"
-    fi
-    ((i += batchSize))
-    ((++currentBatchNumber))
-  done
-}
-
-configure() {
-  if ! command -v code &>/dev/null; then
-    Log::displaySkipped "You must install vscode in windows before running that script"
-    return 0
-  fi
-  local installedExtensions
-  installedExtensions="$(code --list-extensions | tr '[:upper:]' '[:lower:]' | sort)"
-
-  local configDir
-  # shellcheck disable=SC2154
-  configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
-
-  local extensions extensionsCount
-  # shellcheck disable=SC2154
-  extensions="$(
-    awk \
-      '!/^#/{for(i=1;i<=NF;i++)if($i!="")names[$i]++}END{for(n in names)print n}' \
-      "${configDir}/vscode-extensions-by-profile"/*.md |
-      tr '[:upper:]' '[:lower:]' |
-      sort
-  )"
-  extensionsCount="$(echo "${extensions}" | grep -c -v -e '^$')" || true
-
-  local diffInstalledExtensions diffInstalledExtensionsCount
-  diffInstalledExtensions="$(comm -12 <(echo "${installedExtensions}") <(echo "${extensions}"))"
-  diffInstalledExtensionsCount="$(echo "${diffInstalledExtensions}" | grep -c -v -e '^$')" || true
-  if ((diffInstalledExtensionsCount > 0)); then
-    Log::displayInfo "${diffInstalledExtensionsCount}/${extensionsCount} extensions already installed:"
-    echo "${diffInstalledExtensions}" | paste -s -d, -
-  fi
-
-  # Get extensions to install
-  local -a toInstallArray
-  mapfile -t toInstallArray < <(
-    comm -13 <(echo "${installedExtensions}") <(echo "${extensions}")
-  )
-  installVsCodeExtension "${toInstallArray[@]}"
-
-  local vsCodeSettingsDir
-  if Assert::wsl; then
-    # ability to mount wsl folder inside windows visual studio code
-    Retry::default installVsCodeExtension "ms-vscode-remote.remote-wsl"
-    vsCodeSettingsDir="${HOME}/.vscode-server/data/Machine"
-  else
-    vsCodeSettingsDir="${HOME}/.config/Code/User"
-  fi
-
-  BACKUP_BEFORE_INSTALL=1 Install::file \
-    "${configDir}/keybindings.json" "${vsCodeSettingsDir}/keybindings.json"
-  BACKUP_BEFORE_INSTALL=1 Install::file \
-    "${configDir}/settings.json" "${vsCodeSettingsDir}/settings.json"
-
-  sed -i -E \
-    "s/\"jenkins.pipeline.linter.connector.user\": \"[^\"]*\",/\"jenkins.pipeline.linter.connector.user\": \"${LDAP_LOGIN}\",/g" \
-    "${vsCodeSettingsDir}/settings.json"
-
-  code --update-extensions
-}
-
-testConfigure() {
-  if ! command -v code &>/dev/null; then
-    Log::displaySkipped "You must install vscode in windows before running that script"
-    return 0
-  fi
-  local -i failures=0
-
-  local vsCodeSettingsDir
-  if Assert::wsl; then
-    vsCodeSettingsDir="${HOME}/.vscode-server/data/Machine"
-  else
-    vsCodeSettingsDir="${HOME}/.config/Code/User"
-  fi
-  Assert::fileExists "${vsCodeSettingsDir}/keybindings.json" || ((++failures))
-  Assert::fileExists "${vsCodeSettingsDir}/settings.json" || ((++failures))
-
-  exit "${failures}"
-}
-
-
-
-softwareArgHelpFunction() {
-  echo "    List of softwares to install (--profile option cannot be used in this case)"
-  echo "    See below for complete list of softwares available"
-}
-
-profileHelpFunction() {
-  echo "    Profile name to use that contains all the softwares to install"
-}
-
-profilesHelpList() {
-  echo -e "  ${__HELP_TITLE_COLOR}Available profiles:${__RESET_COLOR}"
-  (
-    Conf::list "${BASH_DEV_ENV_ROOT_DIR}/profiles" "profile." ".sh" "-type f" "    - "
-    local dir
-    for dir in "${BASH_DEV_ENV_ROOT_DIR}/srcAlt/"*; do
-      if [[ -d "${dir}/profiles" ]]; then
-        Conf::list "${dir}/profiles" "profile." ".sh" "-type f" "    - "
-      fi
-    done
-  ) | sort | uniq
-}
-
-validateProfile() {
-  local profileName="$2"
-  if ! Profiles::getProfilePath "${profileName}" &>/dev/null; then
-    Log::fatal "Profile file profile.${profileName}.sh doesn't exist in any profiles directory"
-  fi
-}
-
-commandCallback() {
-  if ((${#CONFIG_LIST} > 0)); then
-    if [[ -n "${PROFILE}" ]]; then
-      Log::fatal "You cannot combine profile and softwares"
-    fi
-    # check if each Softwares exists
-    local software
-    for software in "${CONFIG_LIST[@]}"; do
-      if [[ ! -f "${BASH_DEV_ENV_ROOT_DIR}/${software}" ]]; then
-        Log::fatal "Software ${software} configuration does not exists"
-      fi
-    done
-  elif [[ -z "${PROFILE}" ]]; then
-    Log::fatal "You must specify either a list of softwares, either a profile name"
-  else
-    # get profile path
-    local profilePath
-    profilePath="$(Profiles::getProfilePath "${PROFILE}")" # should succeed as it was tested by option
-    # load selected profile
-    Profiles::loadProfile "${profilePath}"
-  fi
-  if [[ "${SKIP_DEPENDENCIES:-0}" = "0" ]]; then
-    CONFIG_LIST=("${CONFIG_LIST[@]}")
-
-    declare rootDependency="your software selection"
-    if [[ -n "${PROFILE}" ]]; then
-      rootDependency="profile ${PROFILE}"
-    fi
-    # deduce dependencies
-    declare -ag allDepsResult=()
-    # shellcheck disable=SC2034
-    declare -Ag allDepsResultSeen=()
-    Profiles::allDepsRecursive \
-      "${BASH_DEV_ENV_ROOT_DIR}" "${rootDependency}" "${CONFIG_LIST[@]}"
-
-    CONFIG_LIST=("${allDepsResult[@]}")
-  fi
-  if ((${#CONFIG_LIST} == 0)); then
-    Log::fatal "Softwares list is empty"
-  fi
-}
-
-export CONFIG_LIST
-export PROFILE
-
-
-
-generateSoftwaresList() {
-  local directory="$1"
-  local relativeDir="$2"
-  local description list softName
-
-  list="$(
-    Conf::list "${directory}" "" "" "-type f" "" |
-      grep -v -E '^(_.*|MandatorySoftwares)$' || true
-  )"
-  local -i maxLineLength
-  maxLineLength="$(wc -L <<<"${list}")"
-  ((maxLineLength += 1 + ${#relativeDir}))
-  while read -r soft; do
-    softName="${soft}"
-    description="$(SKIP_REQUIRES=1 "${directory}/${soft}" helpDescription 2>/dev/null)"
-    if [[ -z "${description}" ]]; then
-      description="<No description available>"
-    fi
-    description="$(printf -- '_%.0s' $(seq "$((maxLineLength - ${#softName} - 1 - ${#relativeDir} + 1))")) ${description}"
-    description="  - ${__HELP_TITLE_COLOR}${relativeDir}/${softName} ${__HELP_EXAMPLE}${description}${__RESET_COLOR}"
-    echo -e " ${description}" | sed '2,$s/^/      /'
-  done <<<"${list}"
-}
-
-softwaresListCacheFile() {
-  local relativeDir="$1"
-  directoryName="$(sed -E 's#/#_#g' <<<"${relativeDir}")"
-  echo "${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_dev_env_${directoryName}_arg_help_cache"
-}
-
-generateSoftwaresListCache() {
-  local directory="$1"
-  local relativeDir="$2"
-  local softwaresListHelpTempFile="$3"
-
-  if [[ ! -f "${softwaresListHelpTempFile}" ]] ||
-    (($(File::elapsedTimeSinceLastModification "${softwaresListHelpTempFile}") > help_cache_max_duration)); then
-    echo >&2 -n "Generating softwares list cache (directory ${relativeDir}) ..."
-    generateSoftwaresList "${directory}" "${relativeDir}" >"${softwaresListHelpTempFile}" || rm -f "${softwaresListHelpTempFile}"
-    echo >&2 -e "\033[2K" # erase line (Generating softwares list cache ...)
-  fi
-}
-
-displayAvailableSoftwares() {
-  local directory="$1"
-
-  local relativeDir
-  relativeDir="$(File::relativeToDir "${directory}" "${BASH_DEV_ENV_ROOT_DIR}")"
-  local softwaresListHelpTempFile
-  softwaresListHelpTempFile="$(softwaresListCacheFile "${relativeDir}")"
-  generateSoftwaresListCache "${directory}" "${relativeDir}" "${softwaresListHelpTempFile}"
-  echo -e "  ${__HELP_TITLE_COLOR}Available Softwares (directory ${relativeDir}):${__RESET_COLOR}"
-  cat "${softwaresListHelpTempFile}"
-}
-
-declare -i help_cache_max_duration=86400
-
-
-
-optionHelpCallback() {
-  "VsCodeConfigCommandHelp"
-  exit 0
-}
-
-defaultBeforeParseCallback() {
-  Env::requireLoad
-  UI::requireTheme
-  Log::requireLoad
-  Linux::requireUbuntu
-  Linux::Wsl::requireWsl
-}
-
-beforeParseCallback() {
-  defaultBeforeParseCallback
-}
-
-defaultAfterParseCallback() {
-  Engine::Config::loadConfig
-}
-
-afterParseCallback() {
-  defaultAfterParseCallback
-}
-
-
-# ------------------------------------------
-# Command VsCodeConfigCommand
-# ------------------------------------------
-
-# options variables initialization
-declare SKIP_CONFIGURE="0"
-declare SKIP_INSTALL="0"
-declare SKIP_TEST="0"
-declare SKIP_DEPENDENCIES="0"
-declare PREPARE_EXPORT="0"
-declare PROFILE=""
-declare optionHelp="0"
-declare optionConfig="0"
-declare optionBashFrameworkConfig=""
-declare optionInfoVerbose="0"
-declare optionDebugVerbose="0"
-declare optionTraceVerbose="0"
-declare optionLogLevel=""
-declare optionLogFile=""
-declare optionDisplayLevel=""
-declare optionNoColor="0"
-declare optionTheme="default"
-declare optionVersion="0"
-declare optionQuiet="0"
-# arguments variables initialization
-declare command="install"
-# @description parse command options and arguments for VsCodeConfigCommand
-VsCodeConfigCommandParse() {
-  Log::displayDebug "Command ${SCRIPT_NAME} - parse arguments: ${BASH_FRAMEWORK_ARGV[*]}"
-  Log::displayDebug "Command ${SCRIPT_NAME} - parse filtered arguments: ${BASH_FRAMEWORK_ARGV_FILTERED[*]}"
-  SKIP_CONFIGURE="0"
-  local -i options_parse_optionParsedCountSKIP_CONFIGURE
-  ((options_parse_optionParsedCountSKIP_CONFIGURE = 0)) || true
-  SKIP_INSTALL="0"
-  local -i options_parse_optionParsedCountSKIP_INSTALL
-  ((options_parse_optionParsedCountSKIP_INSTALL = 0)) || true
-  SKIP_TEST="0"
-  local -i options_parse_optionParsedCountSKIP_TEST
-  ((options_parse_optionParsedCountSKIP_TEST = 0)) || true
-  SKIP_DEPENDENCIES="0"
-  local -i options_parse_optionParsedCountSKIP_DEPENDENCIES
-  ((options_parse_optionParsedCountSKIP_DEPENDENCIES = 0)) || true
-  PREPARE_EXPORT="0"
-  local -i options_parse_optionParsedCountPREPARE_EXPORT
-  ((options_parse_optionParsedCountPREPARE_EXPORT = 0)) || true
-  PROFILE=""
-  local -i options_parse_optionParsedCountPROFILE
-  ((options_parse_optionParsedCountPROFILE = 0)) || true
-  optionHelp="0"
-  local -i options_parse_optionParsedCountOptionHelp
-  ((options_parse_optionParsedCountOptionHelp = 0)) || true
-  optionConfig="0"
-  local -i options_parse_optionParsedCountOptionConfig
-  ((options_parse_optionParsedCountOptionConfig = 0)) || true
-  optionBashFrameworkConfig=""
-  local -i options_parse_optionParsedCountOptionBashFrameworkConfig
-  ((options_parse_optionParsedCountOptionBashFrameworkConfig = 0)) || true
-  optionInfoVerbose="0"
-  local -i options_parse_optionParsedCountOptionInfoVerbose
-  ((options_parse_optionParsedCountOptionInfoVerbose = 0)) || true
-  optionDebugVerbose="0"
-  local -i options_parse_optionParsedCountOptionDebugVerbose
-  ((options_parse_optionParsedCountOptionDebugVerbose = 0)) || true
-  optionTraceVerbose="0"
-  local -i options_parse_optionParsedCountOptionTraceVerbose
-  ((options_parse_optionParsedCountOptionTraceVerbose = 0)) || true
-  optionLogLevel=""
-  local -i options_parse_optionParsedCountOptionLogLevel
-  ((options_parse_optionParsedCountOptionLogLevel = 0)) || true
-  optionLogFile=""
-  local -i options_parse_optionParsedCountOptionLogFile
-  ((options_parse_optionParsedCountOptionLogFile = 0)) || true
-  optionDisplayLevel=""
-  local -i options_parse_optionParsedCountOptionDisplayLevel
-  ((options_parse_optionParsedCountOptionDisplayLevel = 0)) || true
-  optionNoColor="0"
-  local -i options_parse_optionParsedCountOptionNoColor
-  ((options_parse_optionParsedCountOptionNoColor = 0)) || true
-  optionTheme="default"
-  local -i options_parse_optionParsedCountOptionTheme
-  ((options_parse_optionParsedCountOptionTheme = 0)) || true
-  optionVersion="0"
-  local -i options_parse_optionParsedCountOptionVersion
-  ((options_parse_optionParsedCountOptionVersion = 0)) || true
-  optionQuiet="0"
-  local -i options_parse_optionParsedCountOptionQuiet
-  ((options_parse_optionParsedCountOptionQuiet = 0)) || true
-
-  command="install"
-
-  local -i options_parse_argParsedCountCommand
-  ((options_parse_argParsedCountCommand = 0)) || true
-
-
-  # shellcheck disable=SC2034
-  local -i options_parse_parsedArgIndex=0
-  while (($# > 0)); do
-    local options_parse_arg="$1"
-    local argOptDefaultBehavior=0
-    case "${options_parse_arg}" in
-      # Option 1/19
-      # SKIP_CONFIGURE alts --skip-config|--skip-configure|--skip-configuration|-sc
-      # type: Boolean min 0 max 1
-      --skip-config | --skip-configure | --skip-configuration | -sc)
-        # shellcheck disable=SC2034
-        SKIP_CONFIGURE="1"
-
-        if ((options_parse_optionParsedCountSKIP_CONFIGURE >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountSKIP_CONFIGURE))
-        ;;
-
-      # Option 2/19
-      # SKIP_INSTALL alts --skip-install|--skip-installation|-si
-      # type: Boolean min 0 max 1
-      --skip-install | --skip-installation | -si)
-        # shellcheck disable=SC2034
-        SKIP_INSTALL="1"
-
-        if ((options_parse_optionParsedCountSKIP_INSTALL >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountSKIP_INSTALL))
-        ;;
-
-      # Option 3/19
-      # SKIP_TEST alts --skip-test|--skip-tests|-st
-      # type: Boolean min 0 max 1
-      --skip-test | --skip-tests | -st)
-        # shellcheck disable=SC2034
-        SKIP_TEST="1"
-
-        if ((options_parse_optionParsedCountSKIP_TEST >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountSKIP_TEST))
-        ;;
-
-      # Option 4/19
-      # SKIP_DEPENDENCIES alts --skip-deps|--skip-dependencies|-sd
-      # type: Boolean min 0 max 1
-      --skip-deps | --skip-dependencies | -sd)
-        # shellcheck disable=SC2034
-        SKIP_DEPENDENCIES="1"
-
-        if ((options_parse_optionParsedCountSKIP_DEPENDENCIES >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountSKIP_DEPENDENCIES))
-        ;;
-
-      # Option 5/19
-      # PREPARE_EXPORT alts --prepare-export|-e
-      # type: Boolean min 0 max 1
-      --prepare-export | -e)
-        # shellcheck disable=SC2034
-        PREPARE_EXPORT="1"
-
-        if ((options_parse_optionParsedCountPREPARE_EXPORT >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountPREPARE_EXPORT))
-        ;;
-
-      # Option 6/19
-      # PROFILE alts --profile|-p
-      # type: String min 0 max 1
-      --profile | -p)
-        shift
-        if (($# == 0)); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
-          return 1
-        fi
-
-        if ((options_parse_optionParsedCountPROFILE >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountPROFILE))
-        # shellcheck disable=SC2034
-        PROFILE="$1"
-        validateProfile "${options_parse_arg}" "${PROFILE}"
-
-        ;;
-
-      # Option 7/19
-      # optionHelp alts --help|-h
-      # type: Boolean min 0 max 1
-      --help | -h)
-        # shellcheck disable=SC2034
-        optionHelp="1"
-
-        if ((options_parse_optionParsedCountOptionHelp >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionHelp))
-        optionHelpCallback "${options_parse_arg}" "${optionHelp}"
-
-        ;;
-
-      # Option 8/19
-      # optionConfig alts --config
-      # type: Boolean min 0 max 1
-      --config)
-        # shellcheck disable=SC2034
-        optionConfig="1"
-
-        if ((options_parse_optionParsedCountOptionConfig >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionConfig))
-        ;;
-
-      # Option 9/19
-      # optionBashFrameworkConfig alts --bash-framework-config
-      # type: String min 0 max 1
-      --bash-framework-config)
-        shift
-        if (($# == 0)); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
-          return 1
-        fi
-
-        if ((options_parse_optionParsedCountOptionBashFrameworkConfig >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionBashFrameworkConfig))
-        # shellcheck disable=SC2034
-        optionBashFrameworkConfig="$1"
-        optionBashFrameworkConfigCallback "${options_parse_arg}" "${optionBashFrameworkConfig}"
-
-        ;;
-
-      # Option 10/19
-      # optionInfoVerbose alts --verbose|-v
-      # type: Boolean min 0 max 1
-      --verbose | -v)
-        # shellcheck disable=SC2034
-        optionInfoVerbose="1"
-
-        if ((options_parse_optionParsedCountOptionInfoVerbose >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionInfoVerbose))
-        optionInfoVerboseCallback "${options_parse_arg}" "${optionInfoVerbose}"
-
-        updateArgListInfoVerboseCallback "${options_parse_arg}" "${optionInfoVerbose}"
-
-        ;;
-
-      # Option 11/19
-      # optionDebugVerbose alts -vv
-      # type: Boolean min 0 max 1
-      -vv)
-        # shellcheck disable=SC2034
-        optionDebugVerbose="1"
-
-        if ((options_parse_optionParsedCountOptionDebugVerbose >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionDebugVerbose))
-        optionDebugVerboseCallback "${options_parse_arg}" "${optionDebugVerbose}"
-
-        updateArgListDebugVerboseCallback "${options_parse_arg}" "${optionDebugVerbose}"
-
-        ;;
-
-      # Option 12/19
-      # optionTraceVerbose alts -vvv
-      # type: Boolean min 0 max 1
-      -vvv)
-        # shellcheck disable=SC2034
-        optionTraceVerbose="1"
-
-        if ((options_parse_optionParsedCountOptionTraceVerbose >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionTraceVerbose))
-        optionTraceVerboseCallback "${options_parse_arg}" "${optionTraceVerbose}"
-
-        updateArgListTraceVerboseCallback "${options_parse_arg}" "${optionTraceVerbose}"
-
-        ;;
-
-      # Option 13/19
-      # optionLogLevel alts --log-level
-      # type: String min 0 max 1
-      # authorizedValues: OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE
-      --log-level)
-        shift
-        if (($# == 0)); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
-          return 1
-        fi
-        if [[ ! "$1" =~ OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE ]]; then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - value '$1' is not part of authorized values(OFF, ERR, ERROR, WARN, WARNING, INFO, DEBUG, TRACE)"
-          return 1
-        fi
-
-        if ((options_parse_optionParsedCountOptionLogLevel >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionLogLevel))
-        # shellcheck disable=SC2034
-        optionLogLevel="$1"
-        optionLogLevelCallback "${options_parse_arg}" "${optionLogLevel}"
-
-        updateArgListLogLevelCallback "${options_parse_arg}" "${optionLogLevel}"
-
-        ;;
-
-      # Option 14/19
-      # optionLogFile alts --log-file
-      # type: String min 0 max 1
-      --log-file)
-        shift
-        if (($# == 0)); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
-          return 1
-        fi
-
-        if ((options_parse_optionParsedCountOptionLogFile >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionLogFile))
-        # shellcheck disable=SC2034
-        optionLogFile="$1"
-        optionLogFileCallback "${options_parse_arg}" "${optionLogFile}"
-
-        updateArgListLogFileCallback "${options_parse_arg}" "${optionLogFile}"
-
-        ;;
-
-      # Option 15/19
-      # optionDisplayLevel alts --display-level
-      # type: String min 0 max 1
-      # authorizedValues: OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE
-      --display-level)
-        shift
-        if (($# == 0)); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
-          return 1
-        fi
-        if [[ ! "$1" =~ OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE ]]; then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - value '$1' is not part of authorized values(OFF, ERR, ERROR, WARN, WARNING, INFO, DEBUG, TRACE)"
-          return 1
-        fi
-
-        if ((options_parse_optionParsedCountOptionDisplayLevel >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionDisplayLevel))
-        # shellcheck disable=SC2034
-        optionDisplayLevel="$1"
-        optionDisplayLevelCallback "${options_parse_arg}" "${optionDisplayLevel}"
-
-        updateArgListDisplayLevelCallback "${options_parse_arg}" "${optionDisplayLevel}"
-
-        ;;
-
-      # Option 16/19
-      # optionNoColor alts --no-color
-      # type: Boolean min 0 max 1
-      --no-color)
-        # shellcheck disable=SC2034
-        optionNoColor="1"
-
-        if ((options_parse_optionParsedCountOptionNoColor >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionNoColor))
-        optionNoColorCallback "${options_parse_arg}" "${optionNoColor}"
-
-        updateArgListNoColorCallback "${options_parse_arg}" "${optionNoColor}"
-
-        ;;
-
-      # Option 17/19
-      # optionTheme alts --theme
-      # type: String min 0 max 1
-      # authorizedValues: default|default-force|noColor
-      --theme)
-        shift
-        if (($# == 0)); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
-          return 1
-        fi
-        if [[ ! "$1" =~ default|default-force|noColor ]]; then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - value '$1' is not part of authorized values(default, default-force, noColor)"
-          return 1
-        fi
-
-        if ((options_parse_optionParsedCountOptionTheme >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionTheme))
-        # shellcheck disable=SC2034
-        optionTheme="$1"
-        optionThemeCallback "${options_parse_arg}" "${optionTheme}"
-
-        updateArgListThemeCallback "${options_parse_arg}" "${optionTheme}"
-
-        ;;
-
-      # Option 18/19
-      # optionVersion alts --version
-      # type: Boolean min 0 max 1
-      --version)
-        # shellcheck disable=SC2034
-        optionVersion="1"
-
-        if ((options_parse_optionParsedCountOptionVersion >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionVersion))
-        optionVersionCallback "${options_parse_arg}" "${optionVersion}"
-
-        ;;
-
-      # Option 19/19
-      # optionQuiet alts --quiet|-q
-      # type: Boolean min 0 max 1
-      --quiet | -q)
-        # shellcheck disable=SC2034
-        optionQuiet="1"
-
-        if ((options_parse_optionParsedCountOptionQuiet >= 1 )); then
-          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
-          return 1
-        fi
-        ((++options_parse_optionParsedCountOptionQuiet))
-        optionQuietCallback "${options_parse_arg}" "${optionQuiet}"
-
-        updateArgListQuietCallback "${options_parse_arg}" "${optionQuiet}"
-
-        ;;
-
-      -*)
-        if [[ "${argOptDefaultBehavior}" = "0" ]]; then
-          Log::displayError "Command ${SCRIPT_NAME} - Invalid option ${options_parse_arg}"
-          return 1
-        fi
-        ;;
-      *)
-        ((minParsedArgIndex0 = 0)) || true
-        ((maxParsedArgIndex0 = 0)) || true
-        ((minParsedArgIndex1 = minParsedArgIndex0 + 0)) || true
-        ((maxParsedArgIndex1 = maxParsedArgIndex0 + 1)) || true
-        ((incrementArg = 1 ))
-        if ((0)); then
-          # Technical if - never reached
-          :
-
-        # Argument 1/1 - command
-        # Argument command min 0 max 1
-        # Argument command authorizedValues: isInterfaceImplemented|helpDescription|scriptName|dependencies|listVariables|fortunes|helpVariables|defaultVariables|checkVariables|breakOnConfigFailure|breakOnTestFailure|isInstallImplemented|install|isTestInstallImplemented|testInstall|isConfigureImplemented|configure|isTestConfigureImplemented|testConfigure|isCleanBeforeExportImplemented
-        elif (( options_parse_parsedArgIndex >= minParsedArgIndex0 &&
-          options_parse_parsedArgIndex < maxParsedArgIndex1 )); then
-          if [[ ! "${options_parse_arg}" =~ isInterfaceImplemented|helpDescription|scriptName|dependencies|listVariables|fortunes|helpVariables|defaultVariables|checkVariables|breakOnConfigFailure|breakOnTestFailure|isInstallImplemented|install|isTestInstallImplemented|testInstall|isConfigureImplemented|configure|isTestConfigureImplemented|testConfigure|isCleanBeforeExportImplemented ]]; then
-            Log::displayError "Command ${SCRIPT_NAME} - Argument command - value '${options_parse_arg}' is not part of authorized values(isInterfaceImplemented, helpDescription, scriptName, dependencies, listVariables, fortunes, helpVariables, defaultVariables, checkVariables, breakOnConfigFailure, breakOnTestFailure, isInstallImplemented, install, isTestInstallImplemented, testInstall, isConfigureImplemented, configure, isTestConfigureImplemented, testConfigure, isCleanBeforeExportImplemented)"
-            return 1
-          fi
-          if ((options_parse_argParsedCountCommand >= 1 )); then
-            Log::displayError "Command ${SCRIPT_NAME} - Argument command - Maximum number of argument occurrences reached(1)"
-            return 1
-          fi
-          ((++options_parse_argParsedCountCommand))
-          # shellcheck disable=SC2034
-          command="${options_parse_arg}"
-          argsInstallScriptCommandCallback "${command}" -- "${@:2}"
-
-
-        # else too much args
-        else
-
-
-          if [[ "${argOptDefaultBehavior}" = "0" ]]; then
-            # too much args and no unknownArgumentCallbacks configured
-            Log::displayError "Command ${SCRIPT_NAME} - Argument - too much arguments provided: $*"
-            return 1
-          fi
-
-        fi
-        if ((incrementArg == 1)); then
-          ((++options_parse_parsedArgIndex))
-        fi
-        ;;
-    esac
-    shift || true
-  done || return $?
-
-  commandOptionParseFinished
-
-}
-
-# @description display command options and arguments help for VsCodeConfigCommand
-VsCodeConfigCommandHelp() {
-  echo -e "${__HELP_TITLE_COLOR}SYNOPSIS:${__RESET_COLOR}"
-  helpDescriptionFunction
-
-
-  # ------------------------------------------
-  # usage section
-  # ------------------------------------------
-  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "VsCodeConfig [OPTIONS] [ARGUMENTS]"
-  echo
-  # ------------------------------------------
-  # usage/options section
-  # ------------------------------------------
-  optionsAltList=("[--skip-config|--skip-configure|--skip-configuration|-sc]" "[--skip-install|--skip-installation|-si]" "[--skip-test|--skip-tests|-st]" "[--skip-deps|--skip-dependencies|-sd]" "[--prepare-export|-e]" "[--profile|-p <profile>]" "[--help|-h]" "[--config]" "[--bash-framework-config <bash-framework-config>]" "[--verbose|-v]" "[-vv]" "[-vvv]" "[--log-level <log-level>]" "[--log-file <log-file>]" "[--display-level <display-level>]" "[--no-color]" "[--theme <theme>]" "[--version]" "[--quiet|-q]"
-  )
-  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" \
-    "VsCodeConfig" "${optionsAltList[@]}"
-  echo
-
-  # ------------------------------------------
-  # usage/arguments section
-  # ------------------------------------------
-  echo
-  echo -e "${__HELP_TITLE_COLOR}ARGUMENTS:${__RESET_COLOR}"
-
-  Array::wrap2 " " 80 2 "  [${__HELP_OPTION_COLOR}command${__HELP_NORMAL} {single}]"
-  Array::wrap2 ' ' 76 4 "    " "The command to run on this install script."
-  echo
-
-  echo "    Possible values:"
-  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}isInterfaceImplemented:${__RESET_COLOR} Check if all commands below are available"
-  echo
-  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}helpDescription:${__RESET_COLOR} Show help description of this install script."
-  echo
-  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}scriptName:${__RESET_COLOR} Show the internal name of this install script."
-  echo
-  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}dependencies:${__RESET_COLOR} Show this install scripts's dependencies."
-  echo
-  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}listVariables:${__RESET_COLOR} Show the variables needed to execute this
-  install script."
-  echo
-  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}fortunes:${__RESET_COLOR} Show the fortunes sentences that this
-  install script can generate."
-  echo
-  echo -e "      - ${__OPTION_COLOR}helpVariables${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}defaultVariables${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}checkVariables${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}breakOnConfigFailure${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}breakOnTestFailure${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}isInstallImplemented${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}install${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}isTestInstallImplemented${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}testInstall${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}isConfigureImplemented${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}configure${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}isTestConfigureImplemented${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}testConfigure${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}isCleanBeforeExportImplemented${__RESET_COLOR}"
-
-  Array::wrap2 ' ' 76 6 "    Default value: " "install"
-  echo
-
-  # ------------------------------------------
-  # options section
-  # ------------------------------------------
-  echo
-  echo -e "${__HELP_TITLE_COLOR}SKIP OPTIONS:${__RESET_COLOR}"
-  echo -e "  ${__HELP_OPTION_COLOR}--skip-config${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-configure${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-configuration${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-sc${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Skip software configuration."
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--skip-install${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-installation${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-si${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Skip software installation."
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--skip-test${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-tests${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-st${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Skip software installation test."
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--skip-deps${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-dependencies${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-sd${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Install the software requested without resolving dependencies."
-  echo
-
-  echo
-  echo -e "${__HELP_TITLE_COLOR}EXPORT OPTIONS:${__RESET_COLOR}"
-  echo -e "  ${__HELP_OPTION_COLOR}--prepare-export${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-e${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "prepare the wsl installation for export (remove all sensitive files)"
-  echo
-
-  echo
-  echo -e "${__HELP_TITLE_COLOR}INSTALL OPTIONS:${__RESET_COLOR}"
-  echo -e "  ${__HELP_OPTION_COLOR}--profile${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-p <profile>${__HELP_NORMAL} {single}"
-  profileHelpFunction
-
-
-  echo
-  echo -e "${__HELP_TITLE_COLOR}GLOBAL OPTIONS:${__RESET_COLOR}"
-  echo -e "  ${__HELP_OPTION_COLOR}--help${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-h${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Displays this command help"
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--config${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Displays configuration"
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--bash-framework-config <bash-framework-config>${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Use alternate bash framework configuration."
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--verbose${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-v${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Info level verbose mode (alias of --display-level INFO)"
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}-vv${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Debug level verbose mode (alias of --display-level DEBUG)"
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}-vvv${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Trace level verbose mode (alias of --display-level TRACE)"
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--log-level <log-level>${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Set log level"
-  echo
-
-  echo "    Possible values: "
-  echo -e "      - ${__OPTION_COLOR}OFF${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}ERR${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}ERROR${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}WARN${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}WARNING${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}INFO${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
-
-  echo -e "  ${__HELP_OPTION_COLOR}--log-file <log-file>${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Set log file"
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--display-level <display-level>${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Set display level"
-  echo
-
-  echo "    Possible values: "
-  echo -e "      - ${__OPTION_COLOR}OFF${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}ERR${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}ERROR${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}WARN${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}WARNING${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}INFO${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
-
-  echo -e "  ${__HELP_OPTION_COLOR}--no-color${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Produce monochrome output. alias of --theme noColor."
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--theme <theme>${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Choose color theme - default-force means colors will be produced even if command is piped."
-  echo
-
-  echo "    Possible values: "
-  echo -e "      - ${__OPTION_COLOR}default${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}default-force${__RESET_COLOR}"
-  echo -e "      - ${__OPTION_COLOR}noColor${__RESET_COLOR}"
-  Array::wrap2 ' ' 76 6 "    Default value: " "default"
-  echo
-
-  echo -e "  ${__HELP_OPTION_COLOR}--version${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Print version information and quit."
-  echo
-
-
-  echo -e "  ${__HELP_OPTION_COLOR}--quiet${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-q${__HELP_NORMAL} {single}"
-  Array::wrap2 ' ' 76 4 "    " "Quiet mode, doesn't display any output."
-  echo
-
-  # ------------------------------------------
-  # longDescription section
-  # ------------------------------------------
-  echo
-  echo
-  echo -e "${__HELP_TITLE_COLOR}DESCRIPTION:${__RESET_COLOR}"
-  helpLongDescriptionFunction
-  # ------------------------------------------
-  # version section
-  # ------------------------------------------
-  echo
-  echo -n -e "${__HELP_TITLE_COLOR}VERSION: ${__RESET_COLOR}"
-  echo "3.0"
-  # ------------------------------------------
-  # author section
-  # ------------------------------------------
-  echo
-  echo -n -e "${__HELP_TITLE_COLOR}AUTHOR: ${__RESET_COLOR}"
-  echo "[François Chastanet](https://github.com/fchastanet)"
-  # ------------------------------------------
-  # sourceFile section
-  # ------------------------------------------
-  echo
-  echo -n -e "${__HELP_TITLE_COLOR}SOURCE FILE: ${__RESET_COLOR}"
-  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/_Configs/VsCodeConfig-binary.yaml"
-  # ------------------------------------------
-  # license section
-  # ------------------------------------------
-  echo
-  echo -n -e "${__HELP_TITLE_COLOR}LICENSE: ${__RESET_COLOR}"
-  echo "MIT License"
-  # ------------------------------------------
-  # copyright section
-  # ------------------------------------------
-  Array::wrap2 ' ' 76 0 "$(copyrightCallback)"
-}
-
-
-beforeParseCallback
-
-VsCodeConfigCommandParse "$@"
-MAIN_FUNCTION_NAME="main"
-main() {
-
-afterParseCallback
-InstallScripts::command
-
-}
-
-# if file is sourced avoid calling main function
-# shellcheck disable=SC2178
-BASH_SOURCE=".$0" # cannot be changed in bash
-# shellcheck disable=SC2128
-if test ".$0" == ".${BASH_SOURCE}"; then
-  if [[ "${BASH_FRAMEWORK_QUIET_MODE:-0}" = "1" ]]; then
-    main "$@" &>/dev/null
-  else
-    main "$@"
-  fi
-fi
+  "${PERSISTENT_TMPDIR:-/tmp}/45e9d8a76fd669c7e083ffe09063519c72c1c1e1b513ee4224d91d11e27ef316/conf_dir" \

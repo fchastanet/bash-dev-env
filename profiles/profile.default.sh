@@ -37,6 +37,7 @@ CONFIG_LIST+=(
   "installScripts/NodeDependencies"
   "installScripts/GoDependencies"
   "installScripts/PythonDependencies"
+  "installScripts/RustDependencies"
 )
 
 # default configuration

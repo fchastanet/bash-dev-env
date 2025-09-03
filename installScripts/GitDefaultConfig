@@ -502,6 +502,40 @@ Backup::file() {
 }
 
 
+# @description ignore exit code 141 from simple command pipes
+# @example use with:
+#   local resultingStatus=0
+#   local -a originalPipeStatus=()
+#   cmd1 | cmd2 || Bash::handlePipelineFailure resultingStatus originalPipeStatus || true
+#   [[ "${resultingStatus}" = "0" ]]
+# @arg $1 resultingStatusCode:&int (passed by reference) (optional) resulting status code
+# @arg $2 originalStatus:int[] (passed by reference) (optional) copy of original PIPESTATUS array
+# @env PIPESTATUS assuming that this function is called like in the example provided
+# @see https://unix.stackexchange.com/a/709880/582856
+# @see https://gitlab.alpinelinux.org/alpine/aports/-/issues/11152
+# @warning alpine does not support PIPESTATUS very well as execution order of piped process is
+# not guaranteed
+Bash::handlePipelineFailure() {
+  local -a pipeStatusBackup=("${PIPESTATUS[@]}")
+  local -n handlePipelineFailure_resultingStatusCode=$1
+  local -n handlePipelineFailure_originalStatus=$2
+  # shellcheck disable=SC2034
+  handlePipelineFailure_originalStatus=("${pipeStatusBackup[@]}")
+  handlePipelineFailure_resultingStatusCode=0
+  local statusCode
+  for statusCode in "${pipeStatusBackup[@]}"; do
+    if ((statusCode == 141)); then
+      continue
+    elif ((statusCode > 0)); then
+      # shellcheck disable=SC2034
+      handlePipelineFailure_resultingStatusCode="${statusCode}"
+      break
+    fi
+  done
+  return "${handlePipelineFailure_resultingStatusCode}"
+}
+
+
 # @description get property value from file
 # if not present compute it using propertyNotFoundCallback (if provided) and store it in property file
 # @arg $1 propertyFile:String the file in which the property will be searched
@@ -714,6 +748,42 @@ Conf::list() {
 }
 
 
+# @description Load the nearest config file
+# in next example will search first .framework-config file in "srcDir1"
+# then if not found will go in up directories until /
+# then will search in "srcDir2"
+# then if not found will go in up directories until /
+# source the file if found
+# @example
+#   Conf::loadNearestFile ".framework-config" "srcDir1" "srcDir2"
+#
+# @arg $1 configFileName:String config file name to search
+# @arg $2 loadedFile:String (passed by reference) will return the loaded config file name
+# @arg $@ srcDirs:String[] source directories in which the config file will be searched
+# @exitcode 0 if file found
+# @exitcode 1 if file not found
+Conf::loadNearestFile() {
+  local configFileName="$1"
+  local -n loadedFile="$2"
+  shift 2 || true
+  local -a srcDirs=("$@")
+  for srcDir in "${srcDirs[@]}"; do
+    configFile="$(File::upFind "${srcDir}" "${configFileName}" || true)"
+    if [[ -n "${configFile}" ]]; then
+      # shellcheck source=/.framework-config
+      source "${configFile}" || Log::fatal "error while loading config file '${configFile}'"
+      Log::displayDebug "Config file ${configFile} is loaded"
+      # shellcheck disable=SC2034
+      loadedFile="${configFile}"
+      return 0
+    fi
+  done
+
+  Log::displayDebug "Config file '${configFileName}' not found in any source directories provided"
+  return 1
+}
+
+
 # @description check validity of .env variables
 # @env CHECK_ENV int 0 to avoid checking environment
 # @noargs
@@ -829,7 +899,7 @@ Engine::Config::checkEnv() {
 
   checkValidValues UPGRADE_UBUNTU_VERSION 0 lts dev
   checkValidValues PREFERRED_SHELL ShellBash ShellZsh
-  checkValidValues ZSH_PREFERRED_THEME powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
+  checkValidValues ZSH_PREFERRED_THEME ohmyposh powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
 
   checkValidValues SHOW_FORTUNES 0 1
   checkValidValues SHOW_MOTD 0 1
@@ -866,11 +936,11 @@ Engine::Config::loadConfig() {
   fi
 Linux::requireTarCommand
 Compiler::Embed::extractFileFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/ea77fa89190d79244e08140eaa4a903867b8643e9362d2c40fa8d2f5e8293bb5/envFileTemplate" \
-  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJmY2hhc3RhbmV0IgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdpdCAmIFNTSCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGlmIDEsIGl0IGluZGljYXRlcyB5b3UgYWNjZXB0IHRoYXQgeW91ciBnaXQga2V5IHdpbGwgYmUgbG9hZGVkLgojIGlmIDAsIGNvbmZpZ3VyYXRpb25zIHRoYXQgbmVlZCB0byBiZSBhdXRoZW50aWNhdGVkIHdpbGwgYmUgc2tpcHBlZC4KIyBEaXN0cm8gbW9kZTogaW4gYW55IGNhc2UsIHlvdXIga2V5IGlzIG5vdCBjb3BpZWQuCkFVVEhPUklaRV9TU0hfS0VZX1VTQUdFPTEKCiMgeW91ciBsb2dpbiB0byBjb25uZWN0IHRvIHNzaCBzZXJ2ZXJzIGlmIGFueQpTU0hfTE9HSU49IiIKCiMgeW91ciBnaXQgZnVsbCBuYW1lICdGaXJzdE5hbWUgTGFzdE5hbWUnCkdJVF9VU0VSTkFNRT0iIgoKIyBlbWFpbCB1c2VkIGZvciBnaXQgJ2xkYXBAZG9tYWluLmNvbScKR0lUX1VTRVJfTUFJTD0iIgoKIyBkZWZhdWx0IGdpdCBtZXJnZSB0b29sIHRvIHVzZQpHSVRfTUVSR0VfVE9PTD0idnNjb2RlIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEFXUyBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGVtYWlsIHVzZWQgdG8gY29ubmVjdCB0byBhd3MKQVdTX1VTRVJfTUFJTD0iZmNoYXN0YW5ldEBnbWFpbC5jb20iCgojIGFwcCBpZCB0byBjb25uZWN0IHRvIGF3cyBhY2NvdW50CkFXU19BUFBfSUQ9IiIKCkFXU19QUk9GSUxFPSIiCkFXU19ERUZBVUxUX1JFR0lPTj0iIgpBV1NfVEVTVF9TRUNSRVRfSUQ9IiIKQVdTX0RFRkFVTFRfRE9DS0VSX1JFR0lTVFJZX0lEPSIiCgojIHdpbGwgdXNlIGF3cyBjb25maWd1cmUgc3NvIHRvIGNvbm5lY3QgdG8gYXdzIChpbnN0ZWFkIG9mIHNhbWwyYXdzKQpVU0VfQVdTX0NPTkZJR1VSRV9TU089MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEs4UyBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIEt1YmVEZWZhdWx0Q29uZmlnIH4vLmt1YmUvY29uZmlnIGdlbmVyYXRpb24KIyBhd3MgcmVnaW9uIG9mIHRoZSBjbHVzdGVyIChFZzogdXMtZWFzdC0xKQpLVUJFX0NPTkZJR19SRUdJT05fQ09ERT0KCiMgYXdzIGFybiBvZiB0aGUgY2x1c3Rlci4KIyBFZzogYXJuOmF3czplY3M6cmVnaW9uOmF3c19hY2NvdW50X2lkOmNsdXN0ZXIvTXlDbHVzdGVyCktVQkVfQ09ORklHX0NMVVNURVJfQVJOPQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIERpcmVjdG9yaWVzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgb3ZlcnJpZGRlbiBjb25mIGRpcmVjdG9yeSB0aGF0IHdpbGwgYmUgdXNlZCB0byBvdmVycmlkZQojIHRoZSBkZWZhdWx0IGNvbmZpZ3VyYXRpb24gdGhhdCBhcmUgZW1iZWRkZWQgaW4gYmluYXJpZXMKQ09ORl9PVkVSUklERV9ESVJTPSgKICAiJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2NvbmYub3ZlcnJpZGUiCikKCiMgd2hlcmUgdG8gaW5zdGFsbCBiYXNoLXRvb2xzLCAuLi4KIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMTUzClBST0pFQ1RTX0RJUj0iJHtIT01FfS9wcm9qZWN0cyIKCiMgd2hlcmUgb3ZlcnJpZGRlbiBjb25maWcgZmlsZXMgd2lsbCBiZSBiYWNrZWQgdXAKQkFDS1VQX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2JhY2t1cCIKIyBiYWNrdXAgZmlsZXMvZGlycyBiZWZvcmUgaW5zdGFsbGluZyBuZXcgZmlsZSAodXN1YWxseSAxLCBidXQgMCBpZiB1c2luZyBkaXN0cm8pCkJBQ0tVUF9CRUZPUkVfSU5TVEFMTD0xCgojIGxvZ3MgZGlyZWN0b3J5CkxPR1NfRElSPSIke0JBU0hfREVWX0VOVl9ST09UX0RJUn0vbG9ncyIKCiMgaW5zdGFsbFNjcmlwdHMgcm9vdCBkaXIKSU5TVEFMTF9TQ1JJUFRTX1JPT1RfRElSPSIke0JBU0hfREVWX0VOVl9ST09UX0RJUn0vaW5zdGFsbFNjcmlwdHMiCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgSW5zdGFsbGF0aW9uIGNvbmZpZ3VyYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBDb25maWd1cmF0aW9uIGZpbGVzIGFyZSBvdmVyd3JpdHRlbiBldmVuIGlmIGV4aXN0cwojICEhISEgRmlyc3QgdGltZSBpbml0aWFsaXphdGlvbjogbGV0IHRoaXMgdmFsdWUgdG8gMSAhISEhCiMgVmFsdWUgMDoKIyAtIElmIHRhcmdldCBjb25maWd1cmF0aW9uIGZpbGUgZXhpc3RzLCBkaXNwbGF5cyBhIG1lc3NhZ2UgYW5kIGRvIG5vdCBvdmVyd3JpdGUgdGhlIGZpbGUKIyAtIElmIHRhcmdldCBjb25maWd1cmF0aW9uIGZpbGUgZG9lc24ndCBleGlzdCwgaW5zdGFsbHMgdGhlIGZpbGUKIyBWYWx1ZSAxCiMgLSBpbnN0YWxsIG9yIG92ZXJ3cml0ZSB0aGUgZmlsZSB3aXRob3V0IGNoZWNraW5nIGV4aXN0ZW5jZQpPVkVSV1JJVEVfQ09ORklHX0ZJTEVTPTEKCiMgV2luZG93cyBmaWxlcyBjYW4gYmUgb3ZlcnJpZGRlbiBpZiAxCiMgaWYgMAojIC0gc2tpcCBjaGFuZ2VzIHRvICVVU0VSUFJPRklMRSUvLndzbGNvbmZpZwojIC0gc2tpcCBjb3B5aW5nIGZvbnRzCkNIQU5HRV9XSU5ET1dTX0ZJTEVTPTEKCiMgSW5kaWNhdGUgdGhhdCBpbnN0YWxsIHNjcmlwdCBjYW4gd2FybiB5b3UgdXNpbmcgc3BlYWtlciB3aGVuIHlvdXIgaW5wdXQgaXMgbmVlZGVkCkNBTl9UQUxLX0RVUklOR19JTlNUQUxMQVRJT049MQoKIyBpZiAwIGluc3RhbGwgc2NyaXB0IHdpbGwgc2tpcCBhbGwgaW50ZXJhY3RpdmUgYWN0aXZpdHkgKHNhbWwyYXdzLCAuLi4pLAojIHNvIGRlcGVuZGVudCBpbnN0YWxsYXRpb24gd2lsbCBiZSBza2lwcGVkIGFzIHdlbGwKSU5TVEFMTF9JTlRFUkFDVElWRT0xCgojIGRpc3BsYXkgZWxhcHNlZCB0aW1lIHNpbmNlIGxhc3QgbG9nCkRJU1BMQVlfRFVSQVRJT049MQoKIyAwICAgPT4gbm8gdXBncmFkZSBhdCBhbGwKIyBsdHMgPT4gVVBHUkFERSB0byBsYXRlc3QgdWJ1bnR1IGx0cyB2ZXJzaW9uCiMgZGV2ID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBkZXYgdmVyc2lvbgojIFVzZSBpZiB5b3Uga25vdyB3aGF0IHlvdSBhcmUgZG9pbmcsCiMgY291bGQgY2F1c2Ugc29tZSBwYWNrYWdlcyB0byBub3QgYmVpbmcgYXZhaWxhYmxlIHlldApVUEdSQURFX1VCVU5UVV9WRVJTSU9OPTAKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBQcm9maWxlIGNvbmZpZ3VyYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBDaG9vc2UgeW91ciBwcmVmZXJyZWQgc2hlbGwKIyBwb3NzaWJsZSBjaG9pY2VzOiBTaGVsbEJhc2ggKExlZ2FjeSBleHBlcmllbmNlKSwgU2hlbGxac2ggKFJlY29tbWVuZGVkIGV4cGVyaWVuY2UpClBSRUZFUlJFRF9TSEVMTD0iU2hlbGxac2giCgojIFpzaCB0aGVtZSB0byB1c2UKIyBwb3NzaWJsZSBjaG9pY2VzOiBwb3dlcmxldmVsMTBrL3Bvd2VybGV2ZWwxMGssIHNpbmRyZXNvcmh1cy9wdXJlLCBzdGFyc2hpcC9zdGFyc2hpcApaU0hfUFJFRkVSUkVEX1RIRU1FPSJwb3dlcmxldmVsMTBrL3Bvd2VybGV2ZWwxMGsiCgojIERpc3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRVTkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMgYXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMgQHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29uZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1lbW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4gb3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBpbW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklHX1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhkIHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhEX1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2MvV2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
+  "${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate" \
+  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJGcmFuY29pc0NoYXN0YW5ldCIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBHaXQgJiBTU0ggaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBpZiAxLCBpdCBpbmRpY2F0ZXMgeW91IGFjY2VwdCB0aGF0IHlvdXIgZ2l0IGtleSB3aWxsIGJlIGxvYWRlZC4KIyBpZiAwLCBjb25maWd1cmF0aW9ucyB0aGF0IG5lZWQgdG8gYmUgYXV0aGVudGljYXRlZCB3aWxsIGJlIHNraXBwZWQuCiMgRGlzdHJvIG1vZGU6IGluIGFueSBjYXNlLCB5b3VyIGtleSBpcyBub3QgY29waWVkLgpBVVRIT1JJWkVfU1NIX0tFWV9VU0FHRT0xCgojIHlvdXIgbG9naW4gdG8gY29ubmVjdCB0byBzc2ggc2VydmVycyBpZiBhbnkKU1NIX0xPR0lOPSIiCgojIHlvdXIgZ2l0IGZ1bGwgbmFtZSAnRmlyc3ROYW1lIExhc3ROYW1lJwpHSVRfVVNFUk5BTUU9IiIKCiMgZW1haWwgdXNlZCBmb3IgZ2l0ICdsZGFwQGRvbWFpbi5jb20nCkdJVF9VU0VSX01BSUw9IiIKCiMgZGVmYXVsdCBnaXQgbWVyZ2UgdG9vbCB0byB1c2UKR0lUX01FUkdFX1RPT0w9InZzY29kZSIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBBV1MgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBlbWFpbCB1c2VkIHRvIGNvbm5lY3QgdG8gYXdzCkFXU19VU0VSX01BSUw9ImZjaGFzdGFuZXRAZ21haWwuY29tIgoKIyBhcHAgaWQgdG8gY29ubmVjdCB0byBhd3MgYWNjb3VudApBV1NfQVBQX0lEPSIiCgpBV1NfUFJPRklMRT0iIgpBV1NfREVGQVVMVF9SRUdJT049IiIKQVdTX1RFU1RfU0VDUkVUX0lEPSIiCkFXU19ERUZBVUxUX0RPQ0tFUl9SRUdJU1RSWV9JRD0iIgoKIyB3aWxsIHVzZSBhd3MgY29uZmlndXJlIHNzbyB0byBjb25uZWN0IHRvIGF3cyAoaW5zdGVhZCBvZiBzYW1sMmF3cykKVVNFX0FXU19DT05GSUdVUkVfU1NPPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBLOFMgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBLdWJlRGVmYXVsdENvbmZpZyB+Ly5rdWJlL2NvbmZpZyBnZW5lcmF0aW9uCiMgYXdzIHJlZ2lvbiBvZiB0aGUgY2x1c3RlciAoRWc6IHVzLWVhc3QtMSkKS1VCRV9DT05GSUdfUkVHSU9OX0NPREU9CgojIGF3cyBhcm4gb2YgdGhlIGNsdXN0ZXIuCiMgRWc6IGFybjphd3M6ZWNzOnJlZ2lvbjphd3NfYWNjb3VudF9pZDpjbHVzdGVyL015Q2x1c3RlcgpLVUJFX0NPTkZJR19DTFVTVEVSX0FSTj0KCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBEaXJlY3RvcmllcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIG92ZXJyaWRkZW4gY29uZiBkaXJlY3RvcnkgdGhhdCB3aWxsIGJlIHVzZWQgdG8gb3ZlcnJpZGUKIyB0aGUgZGVmYXVsdCBjb25maWd1cmF0aW9uIHRoYXQgYXJlIGVtYmVkZGVkIGluIGJpbmFyaWVzCkNPTkZfT1ZFUlJJREVfRElSUz0oCiAgIiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9jb25mLm92ZXJyaWRlIgopCgojIHdoZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29uZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lOU1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09UX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBleGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRvIDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBmaWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBjaGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmlsZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNFUlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9XU19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVzaW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5TVEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9uIHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMgdmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBVc2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFja2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0wCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUgY2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1lbmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUgdG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBvaG15cG9zaCwgc2luZHJlc29yaHVzL3B1cmUsIHN0YXJzaGlwL3N0YXJzaGlwClpTSF9QUkVGRVJSRURfVEhFTUU9InBvd2VybGV2ZWwxMGsvcG93ZXJsZXZlbDEwayIKCiMgaWYgcHJlZmVycmVkIHRoZW1lIGlzIG9obXlwb3NoLCB0aGUgcGF0aCB0byB0aGUgdGhlbWUgZmlsZQpQT1NIX1RIRU1FX1BBVEg9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9vaG15cG9zaFRoZW1lcy9qYW5kZWRvYmJlbGVlci55YW1sIgoKIyBpZiBwcmVmZXJyZWQgdGhlbWUgaXMgc3RhcnNoaXAKU1RBUlNISVBfVEhFTUU9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9zdGFyc2hpcFRoZW1lcy9kZWZhdWx0LnRvbWwiClNUQVJTSElQX0NBQ0hFPSIke0hPTUV9Ly5jYWNoZS8uc3RhcnNoaXAiCgojIERpc3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRVTkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMgYXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMgQHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29uZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1lbW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4gb3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBpbW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklHX1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhkIHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhEX1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2MvV2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
   "755"
 
-declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/ea77fa89190d79244e08140eaa4a903867b8643e9362d2c40fa8d2f5e8293bb5/envFileTemplate"
+declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate"
 
   local envFile="${BASH_DEV_ENV_ROOT_DIR}/.env"
   # shellcheck disable=SC2154
@@ -1007,16 +1077,26 @@ Engine::Config::loadSshKey() {
     export SSH_AGENT_PID
   fi
 
-  if [[ -z "${SSH_PRIVATE_KEY}" ]]; then
-    ssh-add "${HOME}/.ssh/id_rsa" || return 3
-  else
-    ssh-add <(base64 -d <<<"${SSH_PRIVATE_KEY}") || return 3
+  if [[ -n "${SSH_PRIVATE_KEY}" ]]; then
+    base64 -d <<<"${SSH_PRIVATE_KEY}" >"${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to decode SSH_PRIVATE_KEY"
+      return 2
+    }
+    chmod 600 "${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to set permissions on SSH key"
+      return 3
+    }
   fi
+  ssh-keygen -f ~/.ssh/id_rsa -y >~/.ssh/id_rsa.pub || {
+    Log::displayError "Failed to generate public key from private key"
+    return 4
+  }
+  ssh-add "${HOME}/.ssh/id_rsa" || return 5
 
   # Check key has been added to ssh agent
   ssh-add -l &>/dev/null || {
     Log::displayError "Your ssh key has not been loaded"
-    return 4
+    return 6
   }
 }
 
@@ -1161,6 +1241,24 @@ Engine::Config::requireWslu() {
 }
 
 
+# @description default env file with all default values
+# @stdout the default env filepath
+Env::createDefaultEnvFile() {
+  local envFile
+  envFile="$(Framework::createTempFile "createDefaultEnvFileEnvFile")" || return 2
+
+  (
+    echo "BASH_FRAMEWORK_THEME=${BASH_FRAMEWORK_THEME:-default}"
+    echo "BASH_FRAMEWORK_LOG_LEVEL=${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
+    echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+    # shellcheck disable=SC2016
+    echo 'BASH_FRAMEWORK_LOG_FILE="${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"'
+    echo "BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION=${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION:-5}"
+  ) >"${envFile}"
+  echo "${envFile}"
+}
+
+
 # @description prepend directories to the PATH environment variable
 # @arg $@ args:String[] list of directories to prepend
 # @set PATH update PATH with the directories prepended
@@ -1185,28 +1283,33 @@ Env::requireLoad() {
   local -a defaultFiles=("$@")
   # get list of possible config files
   local -a configFiles=()
+  local defaultEnvFile
+  defaultEnvFile="$(Env::createDefaultEnvFile)" || return 1
+  configFiles+=("${defaultEnvFile}")
   if [[ -n "${BASH_FRAMEWORK_ENV_FILES[0]+1}" ]]; then
     # BASH_FRAMEWORK_ENV_FILES is an array
     configFiles+=("${BASH_FRAMEWORK_ENV_FILES[@]}")
   fi
-  local localFrameworkConfigFile
-  localFrameworkConfigFile="$(pwd)/.framework-config"
-  if [[ -f "${localFrameworkConfigFile}" ]]; then
-    configFiles+=("${localFrameworkConfigFile}")
-  fi
   if [[ -f "${FRAMEWORK_ROOT_DIR}/.framework-config" ]]; then
     configFiles+=("${FRAMEWORK_ROOT_DIR}/.framework-config")
+  fi
+  local localFrameworkConfigFile
+  BASH_FRAMEWORK_DISPLAY_LEVEL="${__LEVEL_INFO}" \
+    BASH_FRAMEWORK_LOG_LEVEL="${__LEVEL_OFF}" \
+    Conf::loadNearestFile ".framework-config" localFrameworkConfigFile "$(pwd)" || true
+  if [[ -f "${localFrameworkConfigFile}" ]]; then
+    configFiles+=("${localFrameworkConfigFile}")
   fi
   configFiles+=("${optionEnvFiles[@]}")
   configFiles+=("${defaultFiles[@]}")
 
-  for file in "${configFiles[@]}"; do
-    # shellcheck source=/.framework-config
+  while IFS='' read -r file; do
+    # shellcheck source=/src/Env/createDefaultEnvFile.sh
     CURRENT_LOADED_ENV_FILE="${file}" source "${file}" || {
       Log::displayError "while loading config file: ${file}"
       return 1
     }
-  done
+  done < <(printf '%s\n' "${configFiles[@]}" | awk '!x[$0]++')
 }
 
 
@@ -1264,6 +1367,39 @@ File::relativeToDir() {
   local relativeTo="$2"
 
   realpath -m --relative-to="${relativeTo}" "${srcFile}"
+}
+
+
+# @description search a file in parent directories
+#
+# @arg $1 fromPath:String path
+# @arg $2 fileName:String
+# @arg $3 untilInclusivePath:String (optional) find for given file until reaching this folder (default value: /)
+# @arg $@ untilInclusivePaths:String[] list of untilInclusivePath
+# @stdout The filename if found
+# @exitcode 1 if the command failed or file not found
+File::upFind() {
+  local fromPath="$1"
+  shift || true
+  local fileName="$1"
+  shift || true
+  local untilInclusivePath="${1:-/}"
+  shift || true
+
+  if [[ -f "${fromPath}" ]]; then
+    fromPath="${fromPath%/*}"
+  fi
+  while true; do
+    if [[ -f "${fromPath}/${fileName}" ]]; then
+      echo "${fromPath}/${fileName}"
+      return 0
+    fi
+    if Array::contains "${fromPath}" "${untilInclusivePath}" "$@" "/"; then
+      return 1
+    fi
+    fromPath="$(readlink -f "${fromPath}"/..)"
+  done
+  return 1
 }
 
 # shellcheck disable=SC2120
@@ -2247,6 +2383,35 @@ Log::fatal() {
 }
 
 
+# @description Get the text representation of a log level
+# @arg $1 level:String the log level to convert
+# @exitcode 1 if the level is invalid
+Log::getLevelText() {
+  local level="$1"
+  case "${level}" in
+    "${__LEVEL_OFF}")
+      echo OFF
+      ;;
+    "${__LEVEL_ERROR}")
+      echo ERROR
+      ;;
+    "${__LEVEL_WARNING}")
+      echo WARNING
+      ;;
+    "${__LEVEL_INFO}")
+      echo INFO
+      ;;
+    "${__LEVEL_DEBUG}")
+      echo DEBUG
+      ;;
+    *)
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      return 1
+      ;;
+  esac
+}
+
+
 # @description Display given text on full line with TEST_COLOR style
 # @arg $1 text:String text to display
 Log::headLine() {
@@ -3023,6 +3188,101 @@ UI::theme() {
     __HELP_NORMAL=''
   fi
 }
+
+
+# @description Check that command version is greater than expected minimal version
+# display warning if command version greater than expected minimal version
+# display error if command version less than expected minimal version and exit 1
+# @arg $1 commandName:String command path
+# @arg $2 argVersion:String command line parameters to launch to get command version
+# @arg $3 minimalVersion:String expected minimal command version
+# @arg $4 parseVersionCallback:Function
+# @arg $5 help:String optional help message to display if command does not exist
+# @exitcode 0 if command version greater or equal to expected minimal version
+# @exitcode 1 if command version less than expected minimal version
+# @exitcode 2 if command does not exist
+Version::checkMinimal() {
+  local commandName="$1"
+  local argVersion="$2"
+  local minimalVersion="$3"
+  local parseVersionCallback=${4:-Version::parse}
+  local help="${5:-}"
+
+  Assert::commandExists "${commandName}" "${help}" || return 2
+
+  # shellcheck disable=SC2034
+  local status=0
+  # shellcheck disable=SC2034
+  local -a pipeStatus=()
+  local version
+  version="$("${commandName}" "${argVersion}" 2>&1 | ${parseVersionCallback} || Bash::handlePipelineFailure status pipeStatus)"
+
+  Log::displayDebug "check ${commandName} version ${version} against minimal ${minimalVersion}"
+
+  local result=0
+  Version::compare "${version}" "${minimalVersion}" || result=$?
+  case "${result}" in
+    1)
+      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
+      ;;
+    2)
+      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
+      return 1
+      ;;
+    *)
+      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
+      ;;
+  esac
+}
+
+
+# @description compare 2 version numbers
+# @arg $1 version1:String version 1
+# @arg $2 version2:String version 2
+# @exitcode 0 if equal
+# @exitcode 1 if version1 > version2
+# @exitcode 2 else
+Version::compare() {
+  if [[ "$1" = "$2" ]]; then
+    return 0
+  fi
+  local IFS=.
+  # shellcheck disable=2206
+  local i ver1=($1) ver2=($2)
+  # fill empty fields in ver1 with zeros
+  for ((i = ${#ver1[@]}; i < ${#ver2[@]}; i++)); do
+    ver1[i]=0
+  done
+  for ((i = 0; i < ${#ver1[@]}; i++)); do
+    if [[ -z "${ver2[i]+unset}" ]] || [[ -z ${ver2[i]} ]]; then
+      # fill empty fields in ver2 with zeros
+      ver2[i]=0
+    fi
+    if ((10#${ver1[i]} > 10#${ver2[i]})); then
+      return 1
+    fi
+    if ((10#${ver1[i]} < 10#${ver2[i]})); then
+      return 2
+    fi
+  done
+  return 0
+}
+
+
+# @description filter to keep only version number from a string
+# @arg $@ files:String[] the files to filter
+# @exitcode * if one of the filter command fails
+# @stdin you can use stdin as alternative to files argument
+# @stdout the filtered content
+# shellcheck disable=SC2120
+Version::parse() {
+  # match anything, print(p), exit on first match(Q)
+  sed -En \
+    -e 's/\x1b\[[0-9;]*[mGKHF]//g' \
+    -e 's/[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/' \
+    -e '//{p;Q}' \
+    "$@"
+}
 # FUNCTIONS
 
 # shellcheck disable=SC2034
@@ -3237,7 +3497,7 @@ getLevel() {
       echo "${__LEVEL_DEBUG}"
       ;;
     *)
-      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${levelName}"
       return 1
       ;;
   esac
@@ -3275,6 +3535,10 @@ optionDisplayLevelCallback() {
   echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${logLevel}" >>"${overrideEnvFile}"
 }
 
+optionDisplayLevelDefaultValueFunction() {
+  Log::getLevelText "${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+}
+
 # shellcheck disable=SC2317 # if function is overridden
 optionLogLevelCallback() {
   local level="$2"
@@ -3286,10 +3550,19 @@ optionLogLevelCallback() {
   echo "BASH_FRAMEWORK_LOG_LEVEL=${logLevel}" >>"${overrideEnvFile}"
 }
 
+optionLogLevelDefaultValueFunction() {
+  Log::getLevelText "${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
+}
+
 # shellcheck disable=SC2317 # if function is overridden
 optionLogFileCallback() {
   local logFile="$2"
   echo "BASH_FRAMEWORK_LOG_FILE='${logFile}'" >>"${overrideEnvFile}"
+}
+
+optionLogFileDefaultValueFunction() {
+  # shellcheck disable=SC2016
+  echo "${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"
 }
 
 # shellcheck disable=SC2317 # if function is overridden
@@ -3323,53 +3596,9 @@ optionBashFrameworkConfigCallback() {
   fi
 }
 
-defaultFrameworkConfig="$(
-  cat <<'EOF'
-
-# copied from src/_includes/.framework-config.default
-# shellcheck disable=SC2034
-
-REAL_SCRIPT_FILE="${REAL_SCRIPT_FILE:-$(readlink -e "$(realpath "${BASH_SOURCE[0]}")")}"
-FRAMEWORK_ROOT_DIR="${FRAMEWORK_ROOT_DIR:-${REAL_SCRIPT_FILE%/*/*}}"
-FRAMEWORK_SRC_DIR="${FRAMEWORK_SRC_DIR:-${FRAMEWORK_ROOT_DIR}/src}"
-FRAMEWORK_BIN_DIR="${FRAMEWORK_BIN_DIR:-${FRAMEWORK_ROOT_DIR}/bin}"
-FRAMEWORK_VENDOR_DIR="${FRAMEWORK_VENDOR_DIR:-${FRAMEWORK_ROOT_DIR}/vendor}"
-FRAMEWORK_VENDOR_BIN_DIR="${FRAMEWORK_VENDOR_BIN_DIR:-${FRAMEWORK_ROOT_DIR}/vendor/bin}"
-
-# describe the functions that will be skipped from being imported
-FRAMEWORK_FUNCTIONS_IGNORE_REGEXP="${FRAMEWORK_FUNCTIONS_IGNORE_REGEXP:-^(Namespace::functions|Functions::myFunction|Namespace::requireSomething|Acquire::ForceIPv4)$}"
-# describe the files that do not contain function to be imported
-NON_FRAMEWORK_FILES_REGEXP="${NON_FRAMEWORK_FILES_REGEXP:-(^bin/|.framework-config|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/_binaries|^src/_includes|^src/batsHeaders.sh$|^src/_standalone)}"
-# describe the files that are allowed to not have an associated bats file
-BATS_FILE_NOT_NEEDED_REGEXP="${BATS_FILE_NOT_NEEDED_REGEXP:-(^bin/|.framework-config|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/batsHeaders.sh$|^src/_includes)}"
-# describe the files that are allowed to not have a function matching the filename
-FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP="${FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP:-^bin/|^\.framework-config$|/testsData/|^manualTests/|\.bats$}"
-# Source directories
-if [[ ! -v FRAMEWORK_SRC_DIRS ]]; then
-  FRAMEWORK_SRC_DIRS=(
-    "${FRAMEWORK_ROOT_DIR}/src"
-  )
-fi
-
-# export here all the variables that will be used in your templates
-export REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/fchastanet/bash-tools-framework}"
-
-BASH_FRAMEWORK_THEME="${BASH_FRAMEWORK_THEME:-default}"
-BASH_FRAMEWORK_LOG_LEVEL="${BASH_FRAMEWORK_LOG_LEVEL:-0}"
-BASH_FRAMEWORK_DISPLAY_LEVEL="${BASH_FRAMEWORK_DISPLAY_LEVEL:-3}"
-BASH_FRAMEWORK_LOG_FILE="${BASH_FRAMEWORK_LOG_FILE:-${FRAMEWORK_ROOT_DIR}/logs/${0##*/}.log}"
-BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION="${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION:-5}"
-
-EOF
-)"
-
 overrideEnvFile="$(Framework::createTempFile "overrideEnvFile")"
 
 commandOptionParseFinished() {
-  # load default template framework config
-  defaultEnvFile="${PERSISTENT_TMPDIR}/.framework-config"
-  echo "${defaultFrameworkConfig}" >"${defaultEnvFile}"
-  local -a files=("${defaultEnvFile}")
   # shellcheck disable=SC2154
   if [[ -f "${optionBashFrameworkConfig}" ]]; then
     files+=("${optionBashFrameworkConfig}")
@@ -3386,10 +3615,10 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/31b5bed6ac206bb5ad29dda0b4c838fa7484429cc338d3ffb615643774d8986b/conf_dir" \
-  "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"
+  "${PERSISTENT_TMPDIR:-/tmp}/f0903aac78e97f4c07adb90f1534ad0c2484a9081bdff67d7eb19bc4d15f176f/conf_dir" \
+  "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"
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/31b5bed6ac206bb5ad29dda0b4c838fa7484429cc338d3ffb615643774d8986b/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/f0903aac78e97f4c07adb90f1534ad0c2484a9081bdff67d7eb19bc4d15f176f/conf_dir"
 
 
 gitDefaultConfigBeforeParseCallback() {
@@ -3423,9 +3652,16 @@ defaultVariables() { :; }
 checkVariables() { :; }
 breakOnConfigFailure() { :; }
 breakOnTestFailure() { :; }
-install() { :; }
-testInstall() { :; }
 # jscpd:ignore-end
+
+install() {
+  Linux::Apt::installIfNecessary --no-install-recommends \
+    gh
+}
+
+testInstall() {
+  Assert::commandExists gh || return 1
+}
 
 cleanBeforeExport() {
   git config --global --unset user.name || true
@@ -3498,6 +3734,8 @@ configure() {
 
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
+
+  gh extension install github/gh-copilot
 }
 
 testConfigure() {
@@ -3532,6 +3770,12 @@ testConfigure() {
   if [[ "${gitEmail}" != "${GIT_USER_MAIL}" ]]; then
     Log::displayWarning "git user email is not the same as GIT_USER_MAIL in ${BASH_DEV_ENV_ROOT_DIR}/.env"
   fi
+
+  if ! gh extension list | grep -q 'github/gh-copilot'; then
+    Log::displayError "gh-copilot extension is not installed"
+    ((++failures))
+  fi
+  Version::checkMinimal "gh copilot" "--version" "1.1.1" || ((++failures))
 
   return "${failures}"
 }
@@ -3716,9 +3960,9 @@ declare optionBashFrameworkConfig=""
 declare optionInfoVerbose="0"
 declare optionDebugVerbose="0"
 declare optionTraceVerbose="0"
-declare optionLogLevel=""
-declare optionLogFile=""
-declare optionDisplayLevel=""
+declare optionLogLevel="optionLogLevelDefaultValueFunction"
+declare optionLogFile="optionLogFileDefaultValueFunction"
+declare optionDisplayLevel="optionDisplayLevelDefaultValueFunction"
 declare optionNoColor="0"
 declare optionTheme="default"
 declare optionVersion="0"
@@ -3765,13 +4009,13 @@ GitDefaultConfigCommandParse() {
   optionTraceVerbose="0"
   local -i options_parse_optionParsedCountOptionTraceVerbose
   ((options_parse_optionParsedCountOptionTraceVerbose = 0)) || true
-  optionLogLevel=""
+  optionLogLevel="optionLogLevelDefaultValueFunction"
   local -i options_parse_optionParsedCountOptionLogLevel
   ((options_parse_optionParsedCountOptionLogLevel = 0)) || true
-  optionLogFile=""
+  optionLogFile="optionLogFileDefaultValueFunction"
   local -i options_parse_optionParsedCountOptionLogFile
   ((options_parse_optionParsedCountOptionLogFile = 0)) || true
-  optionDisplayLevel=""
+  optionDisplayLevel="optionDisplayLevelDefaultValueFunction"
   local -i options_parse_optionParsedCountOptionDisplayLevel
   ((options_parse_optionParsedCountOptionDisplayLevel = 0)) || true
   optionNoColor="0"
@@ -4272,6 +4516,7 @@ GitDefaultConfigCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}testConfigure${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}isCleanBeforeExportImplemented${__RESET_COLOR}"
 
+
   Array::wrap2 ' ' 76 6 "    Default value: " "install"
   echo
 
@@ -4357,10 +4602,16 @@ GitDefaultConfigCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
 
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionLogLevelDefaultValueFunction)"
+  echo
+
   echo -e "  ${__HELP_OPTION_COLOR}--log-file <log-file>${__HELP_NORMAL} {single}"
   Array::wrap2 ' ' 76 4 "    " "Set log file"
   echo
 
+
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionLogFileDefaultValueFunction)"
+  echo
 
   echo -e "  ${__HELP_OPTION_COLOR}--display-level <display-level>${__HELP_NORMAL} {single}"
   Array::wrap2 ' ' 76 4 "    " "Set display level"
@@ -4376,6 +4627,9 @@ GitDefaultConfigCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
 
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionDisplayLevelDefaultValueFunction)"
+  echo
+
   echo -e "  ${__HELP_OPTION_COLOR}--no-color${__HELP_NORMAL} {single}"
   Array::wrap2 ' ' 76 4 "    " "Produce monochrome output. alias of --theme noColor."
   echo
@@ -4389,6 +4643,7 @@ GitDefaultConfigCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}default${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}default-force${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}noColor${__RESET_COLOR}"
+
   Array::wrap2 ' ' 76 6 "    Default value: " "default"
   echo
 

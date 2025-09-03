@@ -33,6 +33,11 @@ fortunes() {
     echo -e "Lazydocker is a simple terminal UI for both ${__HELP_EXAMPLE}docker${__RESET_COLOR} and ${__HELP_EXAMPLE}docker-compose${__RESET_COLOR}, written in Go."
     echo "%"
   fi
+  if command -v krew &>/dev/null; then
+    echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- you can use ${__HELP_EXAMPLE}krew${__RESET_COLOR} to manage kubectl plugins."
+    echo -e "discover kubectl plugins ${__HELP_EXAMPLE}https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/${__RESET_COLOR}"
+    echo "%"
+  fi
   if command -v k9s &>/dev/null; then
     echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- you can use ${__HELP_EXAMPLE}k9s${__RESET_COLOR} to navigate through your pods."
     echo "K9s provides a terminal UI to interact with your Kubernetes clusters."
@@ -91,6 +96,27 @@ installKubectl() {
     sudo chmod +x /tmp/kubectl
     sudo mv /tmp/kubectl /usr/local/bin/kubectl
   fi
+}
+
+installKrew() {
+  Log::displayInfo "Installing krew"
+  (
+    set -x -o errexit -o pipefail
+    trap 'rm -rf "${tempDir}" || true' EXIT
+    # shellcheck source=/dev/null
+    tempDir="$(mktemp -d)"
+    cd "${tempDir}" || exit 1
+    OS="$(uname | tr '[:upper:]' '[:lower:]')"
+    ARCH="$(uname -m | sed \
+      -e 's/x86_64/amd64/' \
+      -e 's/\(arm\)\(64\)\?.*/\1\2/' \
+      -e 's/aarch64$/arm64/')"
+    KREW="krew-${OS}_${ARCH}"
+    export OS ARCH KREW
+    curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz"
+    tar zxvf "${KREW}.tar.gz"
+    "./${KREW}" install krew
+  )
 }
 
 installKind() {
@@ -173,6 +199,10 @@ install() {
     Log::displayError "Error during k9s install"
     return 1
   }
+  installKrew || {
+    Log::displayError "Error during krew install"
+    return 1
+  }
   Log::displayInfo "Installing kube-linter"
   (
     # shellcheck source=/dev/null
@@ -245,6 +275,10 @@ configure() {
       --region "${KUBE_CONFIG_REGION_CODE}" \
       --name "${KUBE_CONFIG_CLUSTER_ARN}" || return 1
   fi
+  # shellcheck source=src/_installScripts/_Configs/KubeDefaultConfig-conf/.bash-dev-env/profile.d/krew.sh
+  source "${HOME}/.bash-dev-env/profile.d/krew.sh" || return 1
+  kubectl krew install explore
+  kubectl krew update
 }
 
 testConfigure() {

@@ -1,0 +1,4379 @@
+#!/usr/bin/env bash
+###############################################################################
+# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/_Defaults/Rust-binary.yaml
+# DO NOT EDIT IT
+# @generated
+###############################################################################
+# shellcheck disable=SC2288,SC2034
+
+
+
+# ensure that no user aliases could interfere with
+# commands used in this script
+unalias -a || true
+shopt -u expand_aliases
+
+# shellcheck disable=SC2034
+((failures = 0)) || true
+
+# Bash will remember & return the highest exit code in a chain of pipes.
+# This way you can catch the error inside pipes, e.g. mysqldump | gzip
+set -o pipefail
+set -o errexit
+
+# Command Substitution can inherit errexit option since bash v4.4
+shopt -s inherit_errexit || true
+
+# if set, and job control is not active, the shell runs the last command
+# of a pipeline not executed in the background in the current shell
+# environment.
+shopt -s lastpipe
+
+# a log is generated when a command fails
+set -o errtrace
+
+# use nullglob so that (file*.php) will return an empty array if no file
+# matches the wildcard
+shopt -s nullglob
+
+# ensure regexp are interpreted without accentuated characters
+export LC_ALL=POSIX
+
+export TERM=xterm-256color
+
+# avoid interactive install
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+
+# store command arguments for later usage
+# shellcheck disable=SC2034
+declare -a BASH_FRAMEWORK_ARGV=("$@")
+# shellcheck disable=SC2034
+declare -a ORIGINAL_BASH_FRAMEWORK_ARGV=("$@")
+
+# @see https://unix.stackexchange.com/a/386856
+# shellcheck disable=SC2317
+interruptManagement() {
+  # restore SIGINT handler
+  trap - INT
+  # ensure that Ctrl-C is trapped by this script and not by sub process
+  # report to the parent that we have indeed been interrupted
+  kill -s INT "$$"
+}
+trap interruptManagement INT
+
+################################################
+# Temp dir management
+################################################
+
+KEEP_TEMP_FILES="${KEEP_TEMP_FILES:-0}"
+export KEEP_TEMP_FILES
+
+# PERSISTENT_TMPDIR is not deleted by traps
+PERSISTENT_TMPDIR="${TMPDIR:-/tmp}/bash-framework"
+export PERSISTENT_TMPDIR
+if [[ ! -d "${PERSISTENT_TMPDIR}" ]]; then
+  mkdir -p "${PERSISTENT_TMPDIR}"
+fi
+
+# shellcheck disable=SC2034
+TMPDIR="$(mktemp -d -p "${PERSISTENT_TMPDIR:-/tmp}" -t bash-framework-$$-XXXXXX)"
+export TMPDIR
+
+# temp dir cleaning
+# shellcheck disable=SC2317
+cleanOnExit() {
+  local rc=$?
+  if [[ "${KEEP_TEMP_FILES:-0}" = "1" ]]; then
+    Log::displayInfo "KEEP_TEMP_FILES=1 temp files kept here '${TMPDIR}'"
+  elif [[ -n "${TMPDIR+xxx}" ]]; then
+    Log::displayDebug "KEEP_TEMP_FILES=0 removing temp files '${TMPDIR}'"
+    rm -Rf "${TMPDIR:-/tmp/fake}" >/dev/null 2>&1
+  fi
+  exit "${rc}"
+}
+trap cleanOnExit EXIT HUP QUIT ABRT TERM
+
+
+SCRIPT_NAME=${0##*/}
+REAL_SCRIPT_FILE="$(readlink -e "$(realpath "${BASH_SOURCE[0]}")")"
+if [[ -n "${EMBED_CURRENT_DIR}" ]]; then
+  CURRENT_DIR="${EMBED_CURRENT_DIR}"
+else
+  CURRENT_DIR="${REAL_SCRIPT_FILE%/*}"
+fi
+FRAMEWORK_ROOT_DIR="$(cd "${CURRENT_DIR}/.." && pwd -P)"
+FRAMEWORK_SRC_DIR="${FRAMEWORK_ROOT_DIR}/src"
+FRAMEWORK_BIN_DIR="${FRAMEWORK_ROOT_DIR}/bin"
+FRAMEWORK_VENDOR_DIR="${FRAMEWORK_ROOT_DIR}/vendor"
+FRAMEWORK_VENDOR_BIN_DIR="${FRAMEWORK_ROOT_DIR}/vendor/bin"
+
+# @description Log namespace provides 2 kind of functions
+# - Log::display* allows to display given message with
+#   given display level
+# - Log::log* allows to log given message with
+#   given log level
+# Log::display* functions automatically log the message too
+# @see Env::requireLoad to load the display and log level from .env file
+
+# @description log level off
+export __LEVEL_OFF=0
+# @description log level error
+export __LEVEL_ERROR=1
+# @description log level warning
+export __LEVEL_WARNING=2
+# @description log level info
+export __LEVEL_INFO=3
+# @description log level success
+export __LEVEL_SUCCESS=3
+# @description log level debug
+export __LEVEL_DEBUG=4
+
+# @description verbose level off
+export __VERBOSE_LEVEL_OFF=0
+# @description verbose level info
+export __VERBOSE_LEVEL_INFO=1
+# @description verbose level info
+export __VERBOSE_LEVEL_DEBUG=2
+# @description verbose level info
+export __VERBOSE_LEVEL_TRACE=3
+
+
+# @description check if an element is contained in an array
+#
+# @arg $1 needle:String
+# @arg $@ array:String[]
+# @exitcode 0 if found
+# @exitcode 1 otherwise
+# @example
+#   Array::contains "${libPath}" "${__BASH_FRAMEWORK_IMPORTED_FILES[@]}"
+Array::contains() {
+  local element
+  for element in "${@:2}"; do
+    [[ "${element}" = "$1" ]] && return 0
+  done
+  return 1
+}
+
+
+# @description concatenate each element of an array with a separator
+# but wrapping text when line length is more than provided argument
+# The algorithm will try not to cut the array element if it can.
+# - if an arg can be placed on current line it will be,
+#   otherwise current line is printed and arg is added to the new
+#   current line
+# - Empty arg is interpreted as a new line.
+# - Add \r to arg in order to force break line and avoid following
+#   arg to be concatenated with current arg.
+#
+# @arg $1 glue:String
+# @arg $2 maxLineLength:int
+# @arg $3 indentNextLine:int
+# @arg $@ array:String[]
+Array::wrap2() {
+  local glue="${1-}"
+  local -i glueLength="${#glue}"
+  shift || true
+  local -i maxLineLength=$1
+  shift || true
+  local -i indentNextLine=$1
+  shift || true
+  local indentStr=""
+  if ((indentNextLine > 0)); then
+    indentStr="$(head -c "${indentNextLine}" </dev/zero | tr '\0' " ")"
+  fi
+  if (($# == 0)); then
+    return 0
+  fi
+
+  printCurrentLine() {
+    if ((isNewline == 0)) || ((previousLineEmpty == 1)); then
+      echo
+    fi
+    ((isNewline = 1))
+    echo -en "${indentStr}"
+    ((currentLineLength = indentNextLine)) || true
+  }
+  appendToCurrentLine() {
+    local text="$1"
+    local -i length=$2
+    ((currentLineLength += length)) || true
+    ((isNewline = 0)) || true
+    if [[ "${text: -1}" = $'\r' ]]; then
+      text="${text:0:-1}"
+      echo -en "${text%%+([[:blank:]])}"
+      printCurrentLine
+    else
+      echo -en "${text%%+([[:blank:]])}"
+    fi
+  }
+
+  (
+    local currentLine
+    local -i currentLineLength=0 isNewline=1 argLength=0
+    local -a additionalLines
+    local -i previousLineEmpty=0
+    local arg=""
+
+    while (($# > 0)); do
+      arg="$1"
+      shift || true
+
+      # replace tab by 2 spaces
+      arg="${arg//$'\t'/  }"
+      # remove trailing spaces
+      arg="${arg%[[:blank:]]}"
+      if [[ "${arg}" = $'\n' || -z "${arg}" ]]; then
+        printCurrentLine
+        ((previousLineEmpty = 1))
+        continue
+      else
+        if ((previousLineEmpty == 1)); then
+          printCurrentLine
+        fi
+        ((previousLineEmpty = 0)) || true
+      fi
+      # convert eol to args
+      mapfile -t additionalLines <<<"${arg}"
+      if ((${#additionalLines[@]} > 1)); then
+        set -- "${additionalLines[@]}" "$@"
+        continue
+      fi
+
+      ((argLength = ${#arg})) || true
+
+      # empty arg
+      if ((argLength == 0)); then
+        if ((isNewline == 0)); then
+          # isNewline = 0 means currentLine is not empty
+          printCurrentLine
+        fi
+        continue
+      fi
+
+      if ((isNewline == 0)); then
+        glueLength="${#glue}"
+      else
+        glueLength="0"
+      fi
+      if ((currentLineLength + argLength + glueLength > maxLineLength)); then
+        if ((argLength + glueLength > maxLineLength)); then
+          # arg is too long to even fit on one line
+          # we have to split the arg on current and next line
+          local -i remainingLineLength
+          ((remainingLineLength = maxLineLength - currentLineLength - glueLength))
+          appendToCurrentLine "${glue:0:${glueLength}}${arg:0:${remainingLineLength}}" "$((glueLength + remainingLineLength))"
+          printCurrentLine
+          arg="${arg:${remainingLineLength}}"
+          # remove leading spaces
+          arg="${arg##[[:blank:]]}"
+
+          set -- "${arg}" "$@"
+        else
+          # the arg can fit on next line
+          printCurrentLine
+          appendToCurrentLine "${arg}" "${argLength}"
+        fi
+      else
+        appendToCurrentLine "${glue:0:${glueLength}}${arg}" "$((glueLength + argLength))"
+      fi
+    done
+    if [[ "${currentLine}" != "" ]] && [[ ! "${currentLine}" =~ ^[\ \t]+$ ]]; then
+      printCurrentLine
+    fi
+  ) | sed -E -e 's/[[:blank:]]+$//'
+}
+
+
+# @description check if command specified exists or return 1
+# with error and message if not
+#
+# @arg $1 commandName:String on which existence must be checked
+# @arg $2 helpIfNotExists:String a help command to display if the command does not exist
+#
+# @exitcode 1 if the command specified does not exist
+# @stderr diagnostic information + help if second argument is provided
+Assert::commandExists() {
+  local commandName="$1"
+  local helpIfNotExists="$2"
+
+  "${BASH_FRAMEWORK_COMMAND:-command}" -v "${commandName}" >/dev/null 2>/dev/null || {
+    Log::displayError "${commandName} is not installed, please install it"
+    if [[ -n "${helpIfNotExists}" ]]; then
+      Log::displayInfo "${helpIfNotExists}"
+    fi
+    return 1
+  }
+  return 0
+}
+
+
+# @description check if param is valid email address
+# @warning it is a very simple check, no RFC validation
+# @arg $1 emailAddress:String the full email address
+# @exitcode 1 if invalid email address
+Assert::emailAddress() {
+  local expectedRegexp="^\S+@\S+$"
+
+  [[ "$1" =~ ${expectedRegexp} ]]
+}
+
+
+# @description asserts that first argument is file that exists with specified ownership
+# @arg $1 file:String
+# @arg $2 user:String expected owner user name of the file (default: USERNAME or id -un command)
+# @arg $3 group:String expected owner group name of the file (default: USERGROUP or id -gn command)
+# @env USERNAME String if arg $2 is not provided
+# @env USERGROUP String if arg $3 is not provided
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 if missing file
+# @exitcode 2 if incorrect user ownership
+# @exitcode 3 if incorrect group ownership
+# @stderr diagnostics information is displayed
+Assert::fileExists() {
+  local file="$1"
+  local user="${2:-${USERNAME}}"
+  local group="${3:-${USERGROUP}}"
+  if [[ -n "${user}" ]]; then
+    Log::displayInfo "Check ${file} exists with user ${user}:${group}"
+  else
+    Log::displayInfo "Check ${file} exists"
+  fi
+  if ! ${SUDO:-} test -f "${file}" &>/dev/null; then
+    Log::displayError "missing file ${file}"
+    return 1
+  fi
+  if [[ -n "${user}" && "${user}" != "$(${SUDO:-} stat -c '%U' "${file}")" ]]; then
+    Log::displayError "incorrect user ownership on file ${file}"
+    return 2
+  fi
+  if [[ -n "${group}" && "${group}" != "$(${SUDO:-} stat -c '%G' "${file}")" ]]; then
+    Log::displayError "incorrect group ownership on file ${file}"
+    return 3
+  fi
+}
+
+
+# @description check if argument respects 2 or more words separated by a space
+# it supports accentuated characters and names with hyphen(-)
+# @arg $1 firstNameLastName:String
+# @exitcode 1 if regexp not matches
+# @see https://regex101.com/r/JyyfOM/1
+Assert::firstNameLastName() {
+  local regexp="^[^ ]+([ ][^ ]+)+$"
+  [[ $1 =~ ${regexp} ]]
+}
+
+
+# @description checks if function name provided exists
+# @arg $1 functionName:String
+# @exitcode 1 if function name doesn't exist
+Assert::functionExists() {
+  declare -F "$1" >/dev/null
+}
+
+
+# @description check if argument respects ldap login naming convention
+# only using lowercase characters a-z
+# @arg $1 ldapLogin:String
+# @exitcode 1 if regexp not matches
+Assert::ldapLogin() {
+  [[ $1 =~ ^[a-z]+$ ]]
+}
+
+
+# @description check if tty (interactive mode) is active
+# @noargs
+# @exitcode 1 if tty not active
+# @env NON_INTERACTIVE if 1 consider as not interactive even if environment is interactive
+# @env INTERACTIVE if 1 consider as interactive even if environment is not interactive
+Assert::tty() {
+  if [[ "${NON_INTERACTIVE:-0}" = "1" ]]; then
+    return 1
+  fi
+  if [[ "${INTERACTIVE:-0}" = "1" ]]; then
+    return 0
+  fi
+  tty -s
+}
+
+
+# @description check if argument respects this framework variable naming convention
+# - if variable begins with an uppercase or underscore, following letters have to be uppercase or underscore
+# - variable name can includes ':' or '_' or digits but not as first letter
+# here valid variable name examples
+#
+# @arg $1 variableName:String
+# @exitcode 1 if regexp not matches
+# @see https://regex101.com/r/BUlPXS/1
+Assert::validVariableName() {
+  [[ "$1" =~ (^[a-z][A-Za-z_0-9:]+$)|(^[A-Z_][A-Z_0-9:]+$) ]]
+}
+
+
+# @description checks if variable name provided exists
+# @arg $1 varName:String
+# @exitcode 1 if variable doesn't exist
+# @exitcode 2 if variable value empty
+# @exitcode 3 if variable name invalid
+# @see Assert::validVariableName
+# @stderr diagnostics information is displayed
+Assert::varExistsAndNotEmpty() {
+  local varName="$1"
+  if ! Assert::validVariableName "${varName}"; then
+    Log::displayError "${varName} - invalid variable name"
+    return 3
+  fi
+  if [[ -z "${!varName+unset}" ]]; then
+    Log::displayError "${varName} - not defined"
+    return 1
+  elif [[ -z "${!varName}" ]]; then
+    Log::displayError "${varName} - please provide a value"
+    return 2
+  fi
+}
+
+
+# @description determine if the script is executed under WSL
+# cspell:disable
+# @example text
+#   uname GitBash windows (with wsl) => MINGW64_NT-10.0 ZOXFL-6619QN2 2.10.0(0.325/5/3) 2018-06-13 23:34 x86_64 Msys
+#   uname GitBash windows (wo wsl)   => MINGW64_NT-10.0 frsa02-j5cbkc2 2.9.0(0.318/5/3) 2018-01-12 23:37 x86_64 Msys
+#   uname wsl => Linux ZOXFL-6619QN2 4.4.0-17134-Microsoft #112-Microsoft Thu Jun 07 22:57:00 PST 2018 x86_64 x86_64 x86_64 GNU/Linux
+# cspell:enable
+#
+# @exitcode 1 on error
+Assert::wsl() {
+  [[ "$(uname -o)" = "GNU/Linux" ]]
+}
+
+
+# @description Backup given file in the same directory or in BACKUP_DIR directory
+# backup file name is composed by following fields separated by -:
+#   - if BACKUP_DIR is not empty then escaped dir name separated by @
+#   - filename(without path)
+#   - date with format %Y%m%d_%H:%M:%S (Eg: 20240326_14:45:08)
+# @arg $1 file:String the file to backup
+# @stderr messages about backup file location
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_DIR if not set backup the file in the same directory as original file
+# @exitcode 1 on copy failure
+Backup::file() {
+  local file="$1"
+  if [[ -f "${file}" ]]; then
+    local backupFile fileDirname escapedDirname
+    fileDirname="${file%/*}"
+    escapedDirname=${fileDirname/\//}      # remove first slash
+    escapedDirname=${escapedDirname//\//@} # replace all slashes by @
+    if [[ -z "${BACKUP_DIR:-}" ]]; then
+      backupFile="${fileDirname}/${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
+    else
+      backupFile="${BACKUP_DIR}/${escapedDirname}@${file##*/}-$(date +"%Y%m%d_%H:%M:%S")"
+    fi
+    Log::displayInfo "Backup file '${file}' to ${backupFile}"
+    ${SUDO:-} cp "${file}" "${backupFile}"
+  fi
+}
+
+
+# @description get property value from file
+# if not present compute it using propertyNotFoundCallback (if provided) and store it in property file
+# @arg $1 propertyFile:String the file in which the property will be searched
+# @arg $2 key:String the property key to search in property file
+# @arg $3 propertyNotFoundCallback:Function (optional) a callback to call if property key is not found in property file
+# @arg $@ args:String[] (optional) the arguments to pass to the propertyNotFoundCallback
+# @exitcode 1 if value is not found
+# @exitcode * if propertyNotFoundCallback fails
+# @stdout the property value given by property file or by the propertyNotFoundCallback
+Cache::getPropertyValue2() {
+  local propertyFile="$1"
+  local -n propertiesMap=$2
+  local -n getPropertyValue2_val=$3
+  local key="$4"
+  local propertyNotFoundCallback=$5
+  shift 5 || true
+  local -a args=("$@")
+
+  if [[ "${#propertiesMap[@]}" = "0" && -s "${propertyFile}" ]]; then
+    local line
+    while IFS="" read -r line; do
+      if [[ "${line}" =~ ^([^=]+)=(.+)$ ]]; then
+        propertiesMap["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}"
+      fi
+    done <"${propertyFile}"
+  fi
+
+  if [[ -n "${propertiesMap[${key}]+abc}" ]]; then
+    getPropertyValue2_val="${propertiesMap[${key}]}"
+    return 0
+  elif [[ "$(type -t "${propertyNotFoundCallback}")" = "function" ]]; then
+    getPropertyValue2_val="$("${propertyNotFoundCallback}" "${args[@]}")" || return $?
+    propertiesMap["${key}"]="${getPropertyValue2_val}"
+    echo "${key}=${getPropertyValue2_val}" >>"${propertyFile}"
+    return 0
+  fi
+  return 1
+}
+
+
+# @description convert base64 encoded back to target dir
+# it is advised to include the md5sum of the binFile in the path of the target dir
+#
+# @arg $1 targetDir:string the directory in which tar archive will be untarred
+# @arg $2 base64:string the base64 encoded tar czf archive
+# @stderr diagnostics information is displayed
+Compiler::Embed::extractDirFromBase64() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireTarCommand has not been loaded"
+    exit 1
+  fi
+
+  local targetDir="$1"
+  local base64="$2"
+
+  if [[ ! -d "${targetDir}" ]]; then
+    mkdir -p "${targetDir}"
+    (
+      cd "${targetDir}" || exit 1
+      base64 -d <<<"${base64}" | tar -xzf - 2>/dev/null || {
+        Log::displayError "untar failure, invalid base64 string"
+        exit 1
+      }
+    ) || return 1
+  fi
+}
+
+
+# @description convert base64 encoded back to target file
+# if target file is executable prepend dir of target
+# file to PATH to make binary available everywhere
+# it is advised to include in the path of the target file
+# the md5sum of the binFile
+#
+# @arg $1 targetFile:String the file to write
+# @arg $2 binFileBase64:String the base64 encoded file
+# @arg $3 fileMode:String the chmod to set on the file
+# @set PATH String prepend target embedded file binary directory to PATH variable if binary executable
+Compiler::Embed::extractFileFromBase64() {
+  local targetFile="$1"
+  local binFileBase64="$2"
+  local fileMode="${3:-+x}"
+  local targetDir="${targetFile%/*}"
+
+  if [[ ! -f "${targetFile}" ]]; then
+    if [[ ! -d "${targetDir}" ]]; then
+      mkdir -p "${targetDir}"
+    fi
+    base64 -d >"${targetFile}" <<<"${binFileBase64}"
+    chmod "${fileMode}" "${targetFile}"
+  fi
+
+  if [[ -x "${targetFile}" ]]; then
+    Env::pathPrepend "${targetDir}"
+  fi
+}
+
+
+# @description copy folder structure to target directory
+# merge embedDir with overridden directory if provided and available
+# @arg $1 embedDir:String the path embedded
+# @arg $2 overrideDir:String the path overridden
+# @arg $3 subDir:String the sub-directory to copy from embedDir and/or overrideDir
+# @arg $4 targetDir:String the target directory (default: ${HOME}/${subDir})
+# @env SUDO String allows to use custom sudo prefix command
+# @env HOME used for default value of targetDir arg
+# @env OVERWRITE_CONFIG_FILES indicates if target directory should be overwritten if it exists
+# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env IGNORE_MISSING_SOURCE_DIR
+Conf::copyStructure() {
+  local embedDir="$1"
+  local overrideDir="$2"
+  local subDir="$3"
+  local targetDir="${4:-${HOME}/${subDir}}"
+
+  local configDir
+  # shellcheck disable=SC2154
+  configDir="$(Conf::getOverriddenDir "${embedDir}" "${overrideDir}")"
+  if [[ -d "${configDir}/${subDir}" ]]; then
+    # shellcheck disable=SC2154
+    OVERWRITE_CONFIG_FILES=${OVERWRITE_CONFIG_FILES:-1} \
+      PRETTY_ROOT_DIR="${embedDir%/*}" \
+      Install::structure "${configDir}/${subDir}" "${targetDir}"
+  elif [[ "${IGNORE_MISSING_SOURCE_DIR:-0}" = "1" ]]; then
+    return 0
+  else
+    Log::displayError "Directory ${subDir} does not exists in '${embedDir}' or '${overrideDir}'"
+    return 1
+  fi
+}
+
+
+# @description generate temp directory where default
+# and overridden directories have been merged
+#   - if overridden dir exists, create a new temp folder
+#     - copy all files from default folder
+#     - overwrite with files from overridden folder
+#     - (Later) delete files listed in .remove$$ file
+#     - return the path of this temp folder
+#   - else just return the default folder path
+# Then it is easier to pick overridden or default files/folders
+#
+# @arg $1 defaultDir:String usually the embed directory
+# @arg $2 overriddenDirPath:String the path to the directory
+#   that could be overridden
+# @exitcode 1 if default dir does not exist
+# @exitcode 2 if error during copy
+Conf::getOverriddenDir() {
+  local -a overriddenDirPaths=("$@")
+  local overriddenDirPath
+
+  local tempDir
+  tempDir="$(mktemp -d)"
+  (
+    shopt -s dotglob
+    for overriddenDirPath in "${overriddenDirPaths[@]}"; do
+      if [[ -d "${overriddenDirPath}" && -n "$(ls -A "${overriddenDirPath}" || true)" ]]; then
+        Log::displayInfo "Conf::getOverriddenDir - use overridden files from ${overriddenDirPath}"
+        cp -R "${overriddenDirPath}/." "${tempDir}"
+      else
+        if [[ -z "${overriddenDirPath}" ]]; then
+          Log::displayError "Conf::getOverriddenDir - empty overridden directory path"
+        else
+          Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist or is empty"
+        fi
+      fi
+    done
+  ) || {
+    Log::displayError "Conf::getOverriddenDir - error during copy"
+    return 2
+  }
+  echo "${tempDir}"
+}
+
+
+# @description list files of dir with given extension and display it as a list one by line
+#
+# @arg $1 dir:String the directory to list
+# @arg $2 prefix:String the profile file prefix (default: "")
+# @arg $3 ext:String the extension
+# @arg $4 findOptions:String find options, eg: -type d (Default value: '-type f')
+# @arg $5 indentStr:String the indentation can be any string compatible with sed not containing any / (Default value: '       - ')
+# @stdout list of files without extension/directory
+# @example text
+#       - default.local
+#       - default.remote
+#       - localhost-root
+# @exitcode 1 if directory does not exists
+Conf::list() {
+  local dir="$1"
+  local prefix="${2:-}"
+  local ext="${3}"
+  local findOptions="${4--type f}"
+  local indentStr="${5-       - }"
+
+  if [[ ! -d "${dir}" ]]; then
+    Log::displayError "Directory ${dir} does not exist"
+  fi
+  if [[ -n "${ext}" && "${ext:0:1}" != "." ]]; then
+    ext=".${ext}"
+  fi
+  (
+    # shellcheck disable=SC2086
+    cd "${dir}" &&
+      find . -maxdepth 1 ${findOptions} -name "${prefix}*${ext}" |
+      sed -E "s#^\./${prefix}##g" |
+        sed -E "s#${ext}\$##g" | sort | sed -E "s#^#${indentStr}#"
+  )
+}
+
+
+# @description Load the nearest config file
+# in next example will search first .framework-config file in "srcDir1"
+# then if not found will go in up directories until /
+# then will search in "srcDir2"
+# then if not found will go in up directories until /
+# source the file if found
+# @example
+#   Conf::loadNearestFile ".framework-config" "srcDir1" "srcDir2"
+#
+# @arg $1 configFileName:String config file name to search
+# @arg $2 loadedFile:String (passed by reference) will return the loaded config file name
+# @arg $@ srcDirs:String[] source directories in which the config file will be searched
+# @exitcode 0 if file found
+# @exitcode 1 if file not found
+Conf::loadNearestFile() {
+  local configFileName="$1"
+  local -n loadedFile="$2"
+  shift 2 || true
+  local -a srcDirs=("$@")
+  for srcDir in "${srcDirs[@]}"; do
+    configFile="$(File::upFind "${srcDir}" "${configFileName}" || true)"
+    if [[ -n "${configFile}" ]]; then
+      # shellcheck source=/.framework-config
+      source "${configFile}" || Log::fatal "error while loading config file '${configFile}'"
+      Log::displayDebug "Config file ${configFile} is loaded"
+      # shellcheck disable=SC2034
+      loadedFile="${configFile}"
+      return 0
+    fi
+  done
+
+  Log::displayDebug "Config file '${configFileName}' not found in any source directories provided"
+  return 1
+}
+
+
+# @description check validity of .env variables
+# @env CHECK_ENV int 0 to avoid checking environment
+# @noargs
+Engine::Config::checkEnv() {
+  local envFile="$1"
+  if [[ "${CHECK_ENV:-1}" = "0" ]]; then
+    return 0
+  fi
+  # avoid checks if .env file didn't changed
+  local envFileMd5Cache="${PERSISTENT_TMPDIR:-/tmp}/bash-dev-env-enf-file-checksum"
+  if md5sum -c "${envFileMd5Cache}" &>/dev/null; then
+    return 0
+  else
+    md5sum "${envFile}" >"${envFileMd5Cache}"
+  fi
+  local errorCount=0 || true
+  checkNotEmpty() {
+    local var="$1"
+    if ! Assert::varExistsAndNotEmpty "${var}"; then
+      ((++errorCount))
+      return 1
+    fi
+  }
+  checkVarAndDir() {
+    local var="$1"
+    local mode="${2:-}"
+    local status=0
+    if checkNotEmpty "${var}"; then
+      if [[ ! -d "${!var}" ]] && ! mkdir -p "${!var}"; then
+        Log::displayError "variable ${var} - impossible to create the directory '${!var}'"
+        ((errorCount++))
+        return 1
+      fi
+      if [[ "${mode}" =~ w && ! -w "${!var}" ]]; then
+        Log::displayError "variable ${var} - directory '${!var}' is not writable"
+        ((status++))
+        ((errorCount++))
+      fi
+      if [[ "${mode}" =~ r && ! -r "${!var}" ]]; then
+        Log::displayError "variable ${var} - directory '${!var}' is not accessible"
+        ((status++))
+        ((errorCount++))
+      fi
+    fi
+
+    return "${status}"
+  }
+  checkValidValues() {
+    local var="$1"
+    shift || true
+    local -a validValues=("$@")
+    if ! Array::contains "${!var}" "${validValues[@]}"; then
+      Log::displayError "variable ${var} - value ${!var} is not part of the following values ${validValues[*]}"
+      ((++errorCount))
+    fi
+  }
+  checkIsArray() {
+    local var="$1"
+    declare -p "${var}" 2>/dev/null | grep -q 'declare \-a'
+  }
+
+  if ! echo "${ID}" | grep -qEw 'debian|ubuntu'; then
+    Log::fatal "This script is built to support only Debian or Ubuntu distributions. You are using ${ID}."
+  fi
+
+  if checkNotEmpty USERNAME && ! getent passwd "${USERNAME}" 2>/dev/null >/dev/null; then
+    Log::displayError "USERNAME - user '${USERNAME}' does not exist"
+    ((errorCount++))
+  fi
+
+  if [[ -n "${SSH_LOGIN:-}" ]] && ! Assert::ldapLogin "${SSH_LOGIN}"; then
+    Log::displayError "SSH_LOGIN - invalid ldap login (format expected firstNameLastName) in ${BASH_DEV_ENV_ROOT_DIR}/.env file"
+    ((errorCount++))
+  fi
+
+  if checkNotEmpty "GIT_USERNAME" && ! Assert::firstNameLastName "${GIT_USERNAME}"; then
+    Log::displayError "GIT_USERNAME - invalid format, expected : firstName lastName"
+    ((errorCount++))
+  fi
+
+  if checkNotEmpty "GIT_USER_MAIL" && ! Assert::emailAddress "${GIT_USER_MAIL}"; then
+    Log::displayError "GIT_USER_MAIL - invalid email address"
+    ((errorCount++))
+  fi
+
+  if checkNotEmpty "AWS_USER_MAIL" && ! Assert::emailAddress "${AWS_USER_MAIL}"; then
+    Log::displayError "AWS_USER_MAIL - invalid email address"
+    ((errorCount++))
+  fi
+
+  if ! checkIsArray "CONF_OVERRIDE_DIRS"; then
+    Log::displayError "CONF_OVERRIDE_DIRS - invalid format, expected : array of strings"
+    ((errorCount++))
+  fi
+  ((i = 0)) || true
+  local dir
+  for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+    if [[ ! -d "${dir}" ]]; then
+      Log::displayError "CONF_OVERRIDE_DIRS[${i}] - directory '${dir}' does not exist"
+      ((errorCount++))
+    fi
+    if [[ ! -r "${dir}" ]]; then
+      Log::displayError "CONF_OVERRIDE_DIRS[${i}] - directory '${dir}' is not readable"
+      ((errorCount++))
+    fi
+    ((++i))
+  done
+  checkVarAndDir PROJECTS_DIR r || true
+  checkVarAndDir BACKUP_DIR rw || true
+  checkVarAndDir LOGS_DIR rw || true
+  checkVarAndDir INSTALL_SCRIPTS_ROOT_DIR r || true
+  checkVarAndDir HOME rw || true
+
+  checkValidValues UPGRADE_UBUNTU_VERSION 0 lts dev
+  checkValidValues PREFERRED_SHELL ShellBash ShellZsh
+  checkValidValues ZSH_PREFERRED_THEME ohmyposh powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
+
+  checkValidValues SHOW_FORTUNES 0 1
+  checkValidValues SHOW_MOTD 0 1
+  checkValidValues OVERWRITE_CONFIG_FILES 0 1
+  checkValidValues CHANGE_WINDOWS_FILES 0 1
+  checkValidValues CAN_TALK_DURING_INSTALLATION 0 1
+  checkValidValues INSTALL_INTERACTIVE 0 1
+
+  checkNotEmpty WSLCONFIG_MAX_MEMORY
+  checkValidValues WSLCONFIG_SWAP 0 1
+  export CHECK_ENV=0
+  return "${errorCount}"
+}
+
+
+# @description if .env does not exist, initialize it with .env.template
+Engine::Config::createEnvFileFromTemplate() {
+  local envFile="$1"
+  local envFileTemplate="$2"
+
+  if [[ ! -f "${envFile}" ]]; then
+    echo "${envFileTemplate}" >"${envFile}"
+    Log::displayError "a default env file has been created, please edit ${envFile}"
+    return 1
+  fi
+}
+
+
+# @description load .env file
+# @arg $1 envFile:String the file to load
+Engine::Config::loadConfig() {
+  if [[ "${BASH_DEV_ENV_CONFIG_LOADED:-0}" = "1" ]]; then
+    return 0
+  fi
+Linux::requireTarCommand
+Compiler::Embed::extractFileFromBase64 \
+  "${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate" \
+  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJGcmFuY29pc0NoYXN0YW5ldCIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBHaXQgJiBTU0ggaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBpZiAxLCBpdCBpbmRpY2F0ZXMgeW91IGFjY2VwdCB0aGF0IHlvdXIgZ2l0IGtleSB3aWxsIGJlIGxvYWRlZC4KIyBpZiAwLCBjb25maWd1cmF0aW9ucyB0aGF0IG5lZWQgdG8gYmUgYXV0aGVudGljYXRlZCB3aWxsIGJlIHNraXBwZWQuCiMgRGlzdHJvIG1vZGU6IGluIGFueSBjYXNlLCB5b3VyIGtleSBpcyBub3QgY29waWVkLgpBVVRIT1JJWkVfU1NIX0tFWV9VU0FHRT0xCgojIHlvdXIgbG9naW4gdG8gY29ubmVjdCB0byBzc2ggc2VydmVycyBpZiBhbnkKU1NIX0xPR0lOPSIiCgojIHlvdXIgZ2l0IGZ1bGwgbmFtZSAnRmlyc3ROYW1lIExhc3ROYW1lJwpHSVRfVVNFUk5BTUU9IiIKCiMgZW1haWwgdXNlZCBmb3IgZ2l0ICdsZGFwQGRvbWFpbi5jb20nCkdJVF9VU0VSX01BSUw9IiIKCiMgZGVmYXVsdCBnaXQgbWVyZ2UgdG9vbCB0byB1c2UKR0lUX01FUkdFX1RPT0w9InZzY29kZSIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBBV1MgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBlbWFpbCB1c2VkIHRvIGNvbm5lY3QgdG8gYXdzCkFXU19VU0VSX01BSUw9ImZjaGFzdGFuZXRAZ21haWwuY29tIgoKIyBhcHAgaWQgdG8gY29ubmVjdCB0byBhd3MgYWNjb3VudApBV1NfQVBQX0lEPSIiCgpBV1NfUFJPRklMRT0iIgpBV1NfREVGQVVMVF9SRUdJT049IiIKQVdTX1RFU1RfU0VDUkVUX0lEPSIiCkFXU19ERUZBVUxUX0RPQ0tFUl9SRUdJU1RSWV9JRD0iIgoKIyB3aWxsIHVzZSBhd3MgY29uZmlndXJlIHNzbyB0byBjb25uZWN0IHRvIGF3cyAoaW5zdGVhZCBvZiBzYW1sMmF3cykKVVNFX0FXU19DT05GSUdVUkVfU1NPPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBLOFMgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBLdWJlRGVmYXVsdENvbmZpZyB+Ly5rdWJlL2NvbmZpZyBnZW5lcmF0aW9uCiMgYXdzIHJlZ2lvbiBvZiB0aGUgY2x1c3RlciAoRWc6IHVzLWVhc3QtMSkKS1VCRV9DT05GSUdfUkVHSU9OX0NPREU9CgojIGF3cyBhcm4gb2YgdGhlIGNsdXN0ZXIuCiMgRWc6IGFybjphd3M6ZWNzOnJlZ2lvbjphd3NfYWNjb3VudF9pZDpjbHVzdGVyL015Q2x1c3RlcgpLVUJFX0NPTkZJR19DTFVTVEVSX0FSTj0KCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBEaXJlY3RvcmllcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIG92ZXJyaWRkZW4gY29uZiBkaXJlY3RvcnkgdGhhdCB3aWxsIGJlIHVzZWQgdG8gb3ZlcnJpZGUKIyB0aGUgZGVmYXVsdCBjb25maWd1cmF0aW9uIHRoYXQgYXJlIGVtYmVkZGVkIGluIGJpbmFyaWVzCkNPTkZfT1ZFUlJJREVfRElSUz0oCiAgIiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9jb25mLm92ZXJyaWRlIgopCgojIHdoZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29uZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lOU1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09UX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBleGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRvIDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBmaWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBjaGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmlsZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNFUlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9XU19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVzaW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5TVEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9uIHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMgdmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBVc2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFja2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0wCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUgY2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1lbmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUgdG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBvaG15cG9zaCwgc2luZHJlc29yaHVzL3B1cmUsIHN0YXJzaGlwL3N0YXJzaGlwClpTSF9QUkVGRVJSRURfVEhFTUU9InBvd2VybGV2ZWwxMGsvcG93ZXJsZXZlbDEwayIKCiMgaWYgcHJlZmVycmVkIHRoZW1lIGlzIG9obXlwb3NoLCB0aGUgcGF0aCB0byB0aGUgdGhlbWUgZmlsZQpQT1NIX1RIRU1FX1BBVEg9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9vaG15cG9zaFRoZW1lcy9qYW5kZWRvYmJlbGVlci55YW1sIgoKIyBpZiBwcmVmZXJyZWQgdGhlbWUgaXMgc3RhcnNoaXAKU1RBUlNISVBfVEhFTUU9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9zdGFyc2hpcFRoZW1lcy9kZWZhdWx0LnRvbWwiClNUQVJTSElQX0NBQ0hFPSIke0hPTUV9Ly5jYWNoZS8uc3RhcnNoaXAiCgojIERpc3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRVTkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMgYXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMgQHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29uZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1lbW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4gb3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBpbW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklHX1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhkIHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhEX1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2MvV2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
+  "755"
+
+declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate"
+
+  local envFile="${BASH_DEV_ENV_ROOT_DIR}/.env"
+  # shellcheck disable=SC2154
+  Engine::Config::createEnvFileFromTemplate \
+    "${envFile}" "${embed_file_envFileTemplate}" || exit 1
+  set -o allexport
+  # shellcheck source=/.env.template
+  source <(echo "${embed_file_envFileTemplate}")
+  # shellcheck source=/.env
+  source "${BASH_DEV_ENV_ROOT_DIR}/.env"
+  set +o allexport
+  export STATS_DIR="${LOGS_DIR}/stats"
+  if [[ ! -d "${STATS_DIR}" ]]; then
+    mkdir -p "${STATS_DIR}" || true
+  fi
+  export LOGS_INSTALL_SCRIPTS_DIR="${LOGS_DIR}/installScripts"
+  if [[ ! -d "${LOGS_INSTALL_SCRIPTS_DIR}" ]]; then
+    mkdir -p "${LOGS_INSTALL_SCRIPTS_DIR}" || true
+  fi
+
+  # load environment variables ID, VERSION_CODENAME
+  Engine::Config::loadOsRelease
+  Engine::Config::loadUserVariables
+
+  if ! Engine::Config::checkEnv "${BASH_DEV_ENV_ROOT_DIR}/.env"; then
+    Log::displayError "one or more variables are invalid, check above logs and fix '${envFile}' file accordingly"
+    return 1
+  fi
+
+  Engine::Config::loadHostIp
+
+  Engine::Config::requireWslu
+
+  #Linux::Wsl::initEnv
+  Engine::Config::loadWslVariables
+
+  Log::requireLoad
+
+  Engine::Config::loadSshKey
+
+  Engine::Config::loadLocaleConfig
+
+  export BASH_DEV_ENV_CONFIG_LOADED=1
+}
+
+
+# @description deduce wsl host ip
+# @set HOST_IP exported env containing the IP
+Engine::Config::loadHostIp() {
+  HOST_IP="$(/sbin/ip route | awk '/default/ { print $3 }')"
+
+  export HOST_IP
+}
+
+
+# @description load locale configuration
+Engine::Config::loadLocaleConfig() {
+  if [[ "${BASH_DEV_ENV_CONFIG_LOADED:-0}" = "1" ]]; then
+    return 0
+  fi
+  if [[ "${LOAD_LOCALE_CONFIG:-1}" = "1" && ! -f "${PERSISTENT_TMPDIR}/localeConfig.initialized" ]]; then
+    Log::displayInfo "Initializing locale en_US.UTF-8"
+    export PATH="${PATH}:${HOME}/.local/bin"
+    sudo sed -E -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+    echo 'LANG="en_US.UTF-8"' | sudo tee /etc/default/locale >/dev/null
+    echo "LANG=en_US.UTF-8" | sudo tee /etc/locale.conf >/dev/null
+    sudo locale-gen en_US.UTF-8
+    sudo dpkg-reconfigure --frontend=noninteractive locales
+    export LC_ALL=C
+    export LANG=en_US.UTF-8
+    export LC_MESSAGES=en_US.UTF-8
+    touch "${PERSISTENT_TMPDIR}/localeConfig.initialized"
+  fi
+}
+
+
+# @description load /etc/os-release file
+# @set NAME
+# @set VERSION
+# @set ID
+# @set ID_LIKE
+# @set PRETTY_NAME
+# @set VERSION_ID
+# @set HOME_URL
+# @set SUPPORT_URL
+# @set BUG_REPORT_URL
+# @set PRIVACY_POLICY_URL
+# @set VERSION_CODENAME
+# @set UBUNTU_CODENAME
+Engine::Config::loadOsRelease() {
+  if [[ ! -f /etc/os-release ]]; then
+    Log::displayError "file /etc/os-release does not exists"
+    return 1
+  fi
+  # This will load environment variables ID, VERSION_CODENAME, ...
+  set -o allexport
+  source /etc/os-release
+  set +o allexport
+}
+
+
+# @description load pageant and ssh key
+# you can provide ssh key by env variable SSH_PRIVATE_KEY
+# or if empty, file ~/.ssh/id_rsa will be used if present
+# @env SSH_PRIVATE_KEY ssh key provided by env variable
+# @env AUTHORIZE_SSH_KEY_USAGE if 0, no ssh key is loaded
+# @env LOAD_SSH_KEY feature flag used in distro mode
+# @env SKIP_REQUIRES ignore loading if set to 1
+Engine::Config::loadSshKey() {
+  if [[ "${LOAD_SSH_KEY:-1}" = "0" || "${SKIP_REQUIRES:-0}" = "1" ]]; then
+    # ignore in distro mode
+    return 0
+  fi
+  if [[ "${AUTHORIZE_SSH_KEY_USAGE:-0}" = "0" ]]; then
+    Log::displaySkipped "Ssh key will not be loaded as you set AUTHORIZE_SSH_KEY_USAGE to 0"
+    return 0
+  fi
+  if [[ -n "${SSH_AUTH_SOCK}" && -n "${SSH_AGENT_PID}" ]]; then
+    Log::displaySkipped "Ssh agent skipped as variables SSH_AUTH_SOCK and SSH_AGENT_PID are set"
+    return 0
+  fi
+
+  if [[ -z "${SSH_PRIVATE_KEY}" && ! -f "${HOME}/.ssh/id_rsa" ]]; then
+    Log::displayError "File '${HOME}/.ssh/id_rsa' is missing and env variable SSH_PRIVATE_KEY is empty"
+    return 1
+  fi
+  local errorCode=0
+  ssh-add -l &>/dev/null || errorCode=$?
+  if [[ "${errorCode}" = "2" ]]; then
+    # ssh agent is not started
+    Log::displayInfo "Starting ssh agent"
+    eval "$(ssh-agent)" || return 2
+    export SSH_AUTH_SOCK
+    export SSH_AGENT_PID
+  fi
+
+  if [[ -n "${SSH_PRIVATE_KEY}" ]]; then
+    base64 -d <<<"${SSH_PRIVATE_KEY}" >"${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to decode SSH_PRIVATE_KEY"
+      return 2
+    }
+    chmod 600 "${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to set permissions on SSH key"
+      return 3
+    }
+  fi
+  ssh-keygen -f ~/.ssh/id_rsa -y >~/.ssh/id_rsa.pub || {
+    Log::displayError "Failed to generate public key from private key"
+    return 4
+  }
+  ssh-add "${HOME}/.ssh/id_rsa" || return 5
+
+  # Check key has been added to ssh agent
+  ssh-add -l &>/dev/null || {
+    Log::displayError "Your ssh key has not been loaded"
+    return 6
+  }
+}
+
+
+# @description deduce HOME, USER_ID, USERGROUP_ID and USERGROUP from USERNAME
+# @env USERNAME String the name of the user
+# @set USER_ID String
+# @set USERGROUP String
+# @set USERGROUP_ID String
+# @set USER_SHELL String current user shell
+# @set HOME String
+# @env REMOTE String prefix command to run commands remotely
+Engine::Config::loadUserVariables() {
+  # deduce user home and group
+  local -a split
+  local IFS=':'
+  # shellcheck disable=SC2207
+  split=($(${REMOTE:-} getent passwd "${USERNAME}"))
+  USER_ID="${split[2]}"
+  USERGROUP_ID="${split[3]}"
+  HOME="${split[5]}"
+  USER_SHELL="${split[6]}"
+  USERGROUP="$(${REMOTE:-} id -gn "${USERNAME}")"
+
+  if [[ -z "${USERGROUP}" || -z "${HOME}" ]]; then
+    Log::displayError "USERNAME - unable to deduce USERGROUP, HOME from USERNAME"
+    return 1
+  fi
+
+  export HOME
+  export USER_ID
+  export USERGROUP_ID
+  export USERGROUP
+  export USER_SHELL
+}
+
+
+# @description load wsl env variables
+# @set BASE_MNT_C
+# @set WINDOWS_DIR
+# @set WINDOWS_PROFILE_DIR
+# @set LOCAL_APP_DATA
+# @set WINDOW_PATH
+# @set WSL_EXE_BIN
+# @set IPCONFIG_BIN
+# @set POWERSHELL_BIN
+# @env WSL_EXE_BIN
+# @env IPCONFIG_BIN
+# @env POWERSHELL_BIN
+Engine::Config::loadWslVariables() {
+  if ! Assert::wsl; then
+    # skip
+    return 0
+  fi
+
+  local IFS=' '
+  local -a split=()
+  # shellcheck disable=SC2207
+  split=($(grep -m 1 -E 'C:\\[^ ]+ ([^ ]+) ' /proc/mounts 2>/dev/null)) || {
+    # probably not wsl after all
+    return 0
+  }
+  # shellcheck disable=SC1003
+  BASE_MNT_C="${split[1]}"
+  export BASE_MNT_C
+
+  Linux::Wsl::cachedWslpathFromWslVar2 WINDOWS_DIR SystemRoot
+  WINDOWS_DIR="${WINDOWS_DIR:-${BASE_MNT_C:-/mnt/c}/Windows}"
+  export WINDOWS_DIR
+
+  Linux::Wsl::cachedWslpathFromWslVar2 WINDOWS_PROFILE_DIR USERPROFILE
+  WINDOWS_PROFILE_DIR="${WINDOWS_PROFILE_DIR:-${BASE_MNT_C:-/mnt/c}/Users/${WINDOWS_USERNAME}}"
+  export WINDOWS_PROFILE_DIR
+
+  Linux::Wsl::cachedWslpathFromWslVar2 LOCAL_APP_DATA LOCALAPPDATA
+  export LOCAL_APP_DATA
+
+  # WINDOW_PATH
+  Linux::Wsl::cachedWslvar2 WINDOW_PATH PATH
+  WINDOW_PATH="${WINDOW_PATH//;/:}"
+  WINDOW_PATH="${WINDOW_PATH//\\//}"
+  WINDOW_PATH="${WINDOW_PATH//C:/${BASE_MNT_C:-/mnt/c}}"
+
+  deduceBin() {
+    local var="$1"
+    local expectedFullPath="$2"
+    local expectedBin="$3"
+    if [[ -z "${!var+xxx}" ]]; then
+      eval "${var}=${expectedFullPath}"
+      if ! command -v "${!var}" >/dev/null 2>&1; then
+        eval "${var}=$(command -v "${expectedBin}" 2>/dev/null)"
+      fi
+    fi
+    if [[ -z "${!var:-}" ]] || ! command -v "${!var}" >/dev/null 2>&1; then
+      Log::fatal "variable ${var} - command ${expectedBin} not found"
+    fi
+    # shellcheck disable=SC2163
+    export "${var}"
+  }
+
+  checkBinary() {
+    local var="$1"
+    if [[ -z "${var}" || ! -x "${!var}" ]]; then
+      Log::displayError "variable ${var} - binary '${!var}' does not exist or not executable"
+      ((errorCount++))
+    fi
+  }
+
+  local errorCount=0
+  # IPCONFIG_BIN - which ipconfig.exe does not work when executed as root
+  deduceBin IPCONFIG_BIN "${WINDOWS_DIR}/System32/ipconfig.exe" "ipconfig.exe"
+  checkBinary IPCONFIG_BIN
+
+  deduceBin WSL_EXE_BIN "${WINDOWS_DIR}/System32/wsl.exe" "wsl.exe"
+  checkBinary WSL_EXE_BIN
+
+  deduceBin POWERSHELL_BIN "${WINDOWS_DIR}/System32/WindowsPowerShell/v1.0/powershell.exe" "powershell.exe"
+  checkBinary POWERSHELL_BIN
+
+  return "${errorCount}"
+}
+
+
+# @description install apt wslu if necessary providing wslvar, wslpath
+Engine::Config::requireWslu() {
+  if [[ "${LOAD_WSLU:-1}" = "0" ]]; then
+    return 0
+  fi
+  if ! command -v wslvar &>/dev/null; then
+    Log::displayInfo "Installing pre-requisite Wslu : wslvar, wslpath, ... commands"
+    Linux::Apt::installIfNecessary --no-install-recommends wslu
+
+    # @see https://github.com/microsoft/WSL/issues/8843#issuecomment-1792256894
+    Log::displayInfo "Fix wsl interoperability due to wsl bug"
+    if [[ ! -f /usr/lib/binfmt.d/WSLInterop.conf &&
+      ! -f /etc/systemd/system/wsl-binfmt.service &&
+      -f /run/systemd/generator.early/wsl-binfmt.service ]]; then
+      sudo sh -c 'echo :WSLInterop:M::MZ::/init:PF > /usr/lib/binfmt.d/WSLInterop.conf'
+      sudo ln -s /run/systemd/generator.early/wsl-binfmt.service /etc/systemd/system/wsl-binfmt.service
+    fi
+  fi
+}
+
+
+# @description default env file with all default values
+# @stdout the default env filepath
+Env::createDefaultEnvFile() {
+  local envFile
+  envFile="$(Framework::createTempFile "createDefaultEnvFileEnvFile")" || return 2
+
+  (
+    echo "BASH_FRAMEWORK_THEME=${BASH_FRAMEWORK_THEME:-default}"
+    echo "BASH_FRAMEWORK_LOG_LEVEL=${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
+    echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+    # shellcheck disable=SC2016
+    echo 'BASH_FRAMEWORK_LOG_FILE="${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"'
+    echo "BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION=${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION:-5}"
+  ) >"${envFile}"
+  echo "${envFile}"
+}
+
+
+# @description prepend directories to the PATH environment variable
+# @arg $@ args:String[] list of directories to prepend
+# @set PATH update PATH with the directories prepended
+Env::pathPrepend() {
+  local arg
+  for arg in "$@"; do
+    if [[ -d "${arg}" && ":${PATH}:" != *":${arg}:"* ]]; then
+      PATH="$(realpath "${arg}"):${PATH}"
+    fi
+  done
+}
+
+
+# @description ensure env files are loaded
+# @arg $@ list of default files to load at the end
+# @exitcode 1 if one of env files fails to load
+# @stderr diagnostics information is displayed
+# shellcheck disable=SC2120
+Env::requireLoad() {
+  export REQUIRE_FUNCTION_ENV_REQUIRE_LOAD_LOADED=1
+
+  local -a defaultFiles=("$@")
+  # get list of possible config files
+  local -a configFiles=()
+  local defaultEnvFile
+  defaultEnvFile="$(Env::createDefaultEnvFile)" || return 1
+  configFiles+=("${defaultEnvFile}")
+  if [[ -n "${BASH_FRAMEWORK_ENV_FILES[0]+1}" ]]; then
+    # BASH_FRAMEWORK_ENV_FILES is an array
+    configFiles+=("${BASH_FRAMEWORK_ENV_FILES[@]}")
+  fi
+  if [[ -f "${FRAMEWORK_ROOT_DIR}/.framework-config" ]]; then
+    configFiles+=("${FRAMEWORK_ROOT_DIR}/.framework-config")
+  fi
+  local localFrameworkConfigFile
+  BASH_FRAMEWORK_DISPLAY_LEVEL="${__LEVEL_INFO}" \
+    BASH_FRAMEWORK_LOG_LEVEL="${__LEVEL_OFF}" \
+    Conf::loadNearestFile ".framework-config" localFrameworkConfigFile "$(pwd)" || true
+  if [[ -f "${localFrameworkConfigFile}" ]]; then
+    configFiles+=("${localFrameworkConfigFile}")
+  fi
+  configFiles+=("${optionEnvFiles[@]}")
+  configFiles+=("${defaultFiles[@]}")
+
+  while IFS='' read -r file; do
+    # shellcheck source=/src/Env/createDefaultEnvFile.sh
+    CURRENT_LOADED_ENV_FILE="${file}" source "${file}" || {
+      Log::displayError "while loading config file: ${file}"
+      return 1
+    }
+  done < <(printf '%s\n' "${configFiles[@]}" | awk '!x[$0]++')
+}
+
+
+# @description get number of seconds since last modification of the file
+# @arg $1 file:String file path
+# @exitcode 1 if file does not exist
+# @stdout number of seconds since last modification of the file
+File::elapsedTimeSinceLastModification() {
+  local file="$1"
+  if [[ ! -f "${file}" ]]; then
+    return 1
+  fi
+  local lastModificationTimeSeconds diff
+  lastModificationTimeSeconds="$(stat -c %Y "${file}")"
+  ((diff = $(date +%s) - lastModificationTimeSeconds))
+  echo -n "${diff}"
+}
+
+
+# @description delete files older than n days in given path
+# @warning use this function with caution as it will delete all files in given path without any prompt
+# @arg $1 path:String the directory in which files will be deleted or the file to delete
+# @arg $2 mtime:String expiration time in days (eg: 1 means 1 day) (default value: 1). Eg: +1 match files that have been accessed at least two days ago (rounding effect)
+# @arg $3 maxdepth:int Descend at most levels (a non-negative integer) levels of directories below the starting-points. (default value: 1)
+# @exitcode 1 if path not provided or empty
+# @exitcode * find command failure code
+# @stderr find output on error or diagnostics logs
+# @see man find atime
+File::garbageCollect() {
+  local path="$1"
+  local mtime="$2"
+  local maxdepth="${3:-1}"
+
+  if [[ -z "${path}" ]]; then
+    return 1
+  fi
+
+  if [[ ! -e "${path}" ]]; then
+    # path already removed
+    return 0
+  fi
+
+  Log::displayInfo "Garbage collect files older than ${mtime} days in path ${path} with max depth ${maxdepth}"
+  find "${path}" -depth -maxdepth "${maxdepth}" -type f -mtime "${mtime}" -print -delete
+}
+
+
+# @description print the resolved path relative to DIR
+# do not check for path existence
+# @arg $1 srcFile:String the file to resolve
+# @arg $2 relativeTo:String the directory
+# @stdout the resolved path relative to DIR
+File::relativeToDir() {
+  local srcFile="$1"
+  local relativeTo="$2"
+
+  realpath -m --relative-to="${relativeTo}" "${srcFile}"
+}
+
+
+# @description search a file in parent directories
+#
+# @arg $1 fromPath:String path
+# @arg $2 fileName:String
+# @arg $3 untilInclusivePath:String (optional) find for given file until reaching this folder (default value: /)
+# @arg $@ untilInclusivePaths:String[] list of untilInclusivePath
+# @stdout The filename if found
+# @exitcode 1 if the command failed or file not found
+File::upFind() {
+  local fromPath="$1"
+  shift || true
+  local fileName="$1"
+  shift || true
+  local untilInclusivePath="${1:-/}"
+  shift || true
+
+  if [[ -f "${fromPath}" ]]; then
+    fromPath="${fromPath%/*}"
+  fi
+  while true; do
+    if [[ -f "${fromPath}/${fileName}" ]]; then
+      echo "${fromPath}/${fileName}"
+      return 0
+    fi
+    if Array::contains "${fromPath}" "${untilInclusivePath}" "$@" "/"; then
+      return 1
+    fi
+    fromPath="$(readlink -f "${fromPath}"/..)"
+  done
+  return 1
+}
+
+# shellcheck disable=SC2120
+
+# @description uniq command need input file to be sorted
+# here We are using awk that do not need file to be sorted
+# to get uniq values
+# iterates over each file and prints (default awk behavior)
+# each unique line; only takes first value and ignores duplicates
+# Note ! be careful of memory usage as each unique $0 is stored in an array
+# @exitcode * if one of the filter command fails
+# @stdin you can use stdin as alternative to str argument
+# @stdout the filtered content
+# shellcheck disable=SC2120
+Filters::uniqUnsorted() {
+  awk '!seen[$0]++' "$@"
+}
+
+
+# @description create a temp file using default TMPDIR variable
+# @env TMPDIR String (default value /tmp)
+# @arg $1 templateName:String template name to use(optional)
+Framework::createTempFile() {
+  mktemp -p "${TMPDIR:-/tmp}" -t "${1:-}.XXXXXXXXXXXX"
+}
+
+
+# @description installs file to given directory
+#
+# callbacks parameters `${fromFile} ${targetFile} $@`
+# @arg $1 fromFile - original file to copy
+# @arg $2 targetFile - target file
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @arg $5 successCallback:Function the callback to call when file is installed successfully, by default setUserRights callback is called
+# @arg $6 failureCallback:Function the callback to call when file installation has failed, by default unableToCopyCallback callback is called
+# @arg $@ callbacksParams:String[] additional parameters passed to callbacks
+# @exitcode 1 if fromFile is not readable
+# @exitcode 2 if backup file failure
+# @exitcode 3 if copy failure
+# @exitcode 0 on success or if OVERWRITE_CONFIG_FILES=0
+# @exitcode 0 on success or if CHANGE_WINDOWS_FILES=0 and target file is a windows file
+# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing directory
+# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target file is in windows file system, overwrite it
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env BASE_MNT_C String windows C drive base PATH
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_BEFORE_INSTALL Boolean (default: 1) backup file before installing the file
+Install::file() {
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+  local successCallback=${5:-Install::setUserRightsCallback}
+  local failureCallback=${6:-Install::unableToCopyCallback}
+  shift 6 || true
+
+  if [[ ! -f "${fromFile}" || ! -r "${fromFile}" ]]; then
+    Log::displayError "cannot read source file '${fromFile}'"
+    return 1
+  fi
+
+  # skip if OVERWRITE_CONFIG_FILES is 0 and target file exists
+  if [[ "${OVERWRITE_CONFIG_FILES}" = "0" && -f "${targetFile}" ]]; then
+    Log::displayWarning "File '${targetFile}' exists - Skip install (because OVERWRITE_CONFIG_FILES=0 in .env file)"
+    return 0
+  fi
+
+  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
+  if [[ "${CHANGE_WINDOWS_FILES}" = "0" && "${targetFile}" =~ ^${BASE_MNT_C} ]]; then
+    Log::displayWarning "File '${targetFile}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
+    return 0
+  fi
+
+  local targetDir="${targetFile%/*}"
+  if ! ${SUDO} test -d "${targetDir}"; then
+    ${SUDO:-} mkdir -p "${targetDir}"
+    ${SUDO:-} chown "${userName}":"${userGroup}" "${targetDir}"
+  fi
+  local fromDir="${fromFile%/*}"
+  local fromFilename="${fromFile##*/}"
+
+  local prettyFromDir
+  # shellcheck disable=SC2295
+  prettyFromDir="${fromDir#${PRETTY_ROOT_DIR:-${FRAMEWORK_ROOT_DIR}}/}"
+  if diff -q "${fromFile}" "${targetFile}" &>/dev/null; then
+    Log::displayStatus "No changes detected. No need to update '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
+    return 0
+  fi
+
+  if [[ "${BACKUP_BEFORE_INSTALL:-1}" = "1" ]]; then
+    Backup::file "${targetFile}" || return 2
+  fi
+
+  if ${SUDO:-} cp "${fromFile}" "${targetFile}"; then
+    # shellcheck disable=SC2295
+    Log::displaySuccess "Installed file '${targetFile}' from '${prettyFromDir}/${fromFilename}'"
+    ${successCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
+  else
+    # shellcheck disable=SC2295
+    Log::displayError "unable to copy file '${targetFile}' from '${fromDir#${FRAMEWORK_ROOT_DIR}/}/${fromFilename}'"
+    ${failureCallback} "${fromFile}" "${targetFile}" "${userName}" "${userGroup}" "${prettyFromDir}" "${fromFilename}"
+    return 3
+  fi
+}
+
+
+# @description install callback
+#   set file with root ownership and execution bit
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @arg $3 userName:String (optional) (default: ${USERNAME}) the user name that will be used to set target files ownership
+# @arg $4 userGroup:String (optional) (default: ${USERNAME}) the group name that will be used to set target files ownership
+# @env USERNAME (default: root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: root) the group name that will be used to set target files ownership
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode 1 on any failure
+# @see Install::file
+Install::setUserRightsCallback() {
+  # shellcheck disable=SC2034 # $1 not used
+  local fromFile="$1"
+  local targetFile="$2"
+  local userName="${3:-${USERNAME:-root}}"
+  local userGroup="${4:-${USERGROUP:-root}}"
+
+  ${SUDO:-} chown "${userName}":"${userGroup}" "${targetFile}"
+}
+
+
+# @description install dir to given directory but backup it before
+# @arg $1 fromDir:String the source base directory
+# @arg $2 toDir:String the target base directory
+# @env OVERWRITE_CONFIG_FILES Boolean (default:0) if 1 will overwrite existing files
+# @env CHANGE_WINDOWS_FILES Boolean (default:0) if 1 and target directory is in windows file system, overwrite it
+# @env USERNAME (default: ${USERNAME} if SUDO empty else root) the user name that will be used to set target files ownership
+# @env USERGROUP (default: ${USERGROUP} if SUDO empty else root) the group name that will be used to set target files ownership
+# @env BASE_MNT_C String windows C drive base PATH
+# @env PRETTY_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @env SUDO String allows to use custom sudo prefix command
+# @env BACKUP_BEFORE_INSTALL Boolean (default:1) backup directory before installing the dir
+# @exitcode 1 if source directory is not readable
+# @exitcode 2 if error during structure replication
+# @exitcode 2 if error during file copy
+# @exitcode 0 if copy successful
+# @exitcode 0 with warning message if CHANGE_WINDOWS_FILES=0 and target directory in C drive
+# @stderr diagnostics information is displayed, skipped information if OVERWRITE_CONFIG_FILES or CHANGE_WINDOWS_FILES are set to 1
+Install::structure() {
+  local fromDir="$1"
+  local toDir="$2"
+  local userName="root"
+  local userGroup="root"
+  if [[ -z "${SUDO:-}" ]]; then
+    userName="${USERNAME:-root}"
+    userGroup="${USERGROUP:-root}"
+  fi
+
+  if [[ ! -d "${fromDir}" || ! -r "${fromDir}" ]]; then
+    Log::displayError "Install::structure - cannot read source directory '${fromDir}'"
+    return 1
+  fi
+
+  # skip if CHANGE_WINDOWS_FILES is 0 and target dir is c drive
+  if [[ "${CHANGE_WINDOWS_FILES:-0}" = "0" && "${toDir}" =~ ^${BASE_MNT_C:-/mnt/c} ]]; then
+    Log::displayWarning "Install::structure - Directory '${fromDir}' - Skip install (because CHANGE_WINDOWS_FILES=0 in .env file)"
+    return 0
+  fi
+
+  # first replicate directory structure
+  # shellcheck disable=SC2317
+  createStructure() {
+    local dir="$1"
+    if ! ${SUDO} test -d "${dir}"; then
+      if ! ${SUDO:-} mkdir -p "${dir}"; then
+        Log::displayError "Install::structure - impossible to create directory '${dir}'"
+        exit 1
+      fi
+    fi
+
+    if ! ${SUDO:-} chown "${userName}":"${userGroup}" "${dir}"; then
+      Log::displayError "Install::structure - impossible to update directory owner '${dir}' with ${userName}:${userGroup}"
+      exit 1
+    fi
+  }
+  local dir
+
+  (
+    local dir
+    shopt -s lastpipe
+    # -links 2 allows to exclude empty directories
+    ${SUDO:-} find "${fromDir}" -depth -type d -links 2 -print0 |
+      while read -rd '' dir; do
+        if ! createStructure "${toDir}/${dir#"${fromDir}"}"; then
+          # error already reported by createStructure
+          exit 1
+        fi
+      done || {
+      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
+        Log::displayError "Install::structure - replicated directory structure - find directories on '${fromDir}' resulted in an error"
+        exit 2
+      fi
+    }
+  ) || return 2
+
+  # for each file, copy it
+  (
+    local file
+    shopt -s lastpipe
+    ${SUDO:-} find "${fromDir}" -depth -type f -print0 |
+      while read -rd '' file; do
+        local localFile="${file#"${fromDir}/"}"
+        if ! Install::file "${fromDir}/${localFile}" "${toDir}/${localFile}"; then
+          # error already reported by Install::file
+          exit 1
+        fi
+      done || {
+      if [[ "${PIPESTATUS[0]}" != "0" ]]; then
+        Log::displayError "Install::structure - replicated file structure - find files on '${fromDir}' resulted in an error"
+        exit 2
+      fi
+    }
+  ) || return 3
+
+  # shellcheck disable=SC2295
+  Log::displaySuccess "Installed directory '${toDir#${PRETTY_ROOT_DIR}/}' from '${fromDir#${PRETTY_ROOT_DIR}/}'"
+}
+
+
+# @description install callback
+#   default callback used called when file copy has failed
+# @arg $1 fromFile:String
+# @arg $2 targetFile:String
+# @env FRAMEWORK_ROOT_DIR used to make paths relative to this directory to reduce length of messages
+# @exitcode 1 always fail
+# @stderr diagnostics information is displayed
+# @see Install::file
+Install::unableToCopyCallback() {
+  local fromDir="$1"
+  local fileName="$2"
+  local targetFile="$3"
+  Log::fatal "unable to copy file '${fromDir#"${FRAMEWORK_ROOT_DIR}/"}/${fileName}' to '${targetFile}'"
+}
+
+
+# @description the command launch different actions(install, configure, test)
+# depending on the options selected
+# @env SKIP_INSTALL
+# @env SKIP_CONFIGURE
+# @env SKIP_TEST
+# @env STATS_DIR
+# @env LOGS_INSTALL_SCRIPTS_DIR
+InstallScripts::command() {
+  local logsDir="${LOGS_INSTALL_SCRIPTS_DIR:-#}"
+  local statsDir="${STATS_DIR:-#}"
+  local fullScriptName
+  fullScriptName="$(fullScriptName)"
+  local scriptName="${fullScriptName//\//@}"
+  rm -f "${statsDir}/${scriptName}-"* || true
+
+  # shellcheck disable=SC2317
+  onInterrupt() {
+    Log::displayError "${scriptName} aborted"
+    exit 1
+  }
+  trap onInterrupt INT TERM ABRT
+
+  local startDate logFile statsFile
+  local installStatus="0"
+  sourceHook() {
+    local hookName="$1"
+    local configDir
+    # shellcheck disable=SC2154
+    local -a overriddenDirs=()
+    # shellcheck disable=SC2154
+    if [[ -d "${embed_dir_hooks_dir}" ]]; then
+      overriddenDirs+=("${embed_dir_hooks_dir}")
+    fi
+    local dir
+    for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+      overriddenDirs+=("${dir}/${scriptName//\//@}")
+    done
+    configDir="$(Conf::getOverriddenDir "${overriddenDirs[@]}")" || return 0
+
+    # ensure necessary functions are imported
+    # Assert::dirExists
+    # Assert::fileExists
+    hook="${configDir}/${hookName}.sh"
+    if [[ -n "${hook}" && -f "${hook}" && -x "${hook}" ]]; then
+      Log::displayInfo "Running hook ${hook}"
+      # shellcheck source=src/_installScripts/_Defaults/SimpleTest-hooks/preInstall.sh
+      source "${hook}" || {
+        Log::displayError "${scriptName} - unable to load hook '${hook}'"
+        exit 1
+      }
+    fi
+  }
+  local globalStatsFile="${statsDir}/${scriptName}-global.stat"
+  local hook
+  if [[ "${SKIP_INSTALL}" = "0" ]] && ! InstallScripts::scriptFunctionEmpty install; then
+    LOG_CONTEXT="${scriptName} - " Log::headLine "INSTALL" "Installing ${scriptName}"
+    logFile="${logsDir}/${scriptName}-install.log"
+    statsFile="${statsDir}/${scriptName}-install.stat"
+
+    # break at first install error
+    (
+      startDate="$(date +%s)"
+      # shellcheck disable=SC2317
+      computeStats() {
+        local rc=$1
+        LOG_CONTEXT="${scriptName} - " Stats::statusLine "${statsFile}" "Installation"
+        Stats::computeFromLog \
+          "${logFile}" "${rc}" "${statsFile}" "${startDate}"
+        Stats::aggregateGlobalStats \
+          "${globalStatsFile}" "1" "${statsFile}"
+        exit "${rc}"
+      }
+      trap 'computeStats "$?"' EXIT INT TERM ABRT
+
+      local -i failures=0
+      sourceHook preInstall || ((++failures))
+      install || ((++failures))
+      sourceHook postInstall || ((++failures))
+      exit "${failures}"
+    ) 2>&1 | tee "${logFile}"
+  fi
+
+  local testInstallStatus="0"
+  if [[ "${SKIP_TEST}" = "0" && "${installStatus}" = "0" ]] &&
+    ! InstallScripts::scriptFunctionEmpty testInstall; then
+    Log::headLine "TEST" "Testing ${scriptName} installation"
+    logFile="${logsDir}/${scriptName}-test-install.log"
+    statsFile="${statsDir}/${scriptName}-test-install.stat"
+    (
+      startDate="$(date +%s)"
+      # shellcheck disable=SC2317
+      computeStats() {
+        local rc=$1
+        Stats::statusLine "${statsFile}" "Test Install ${scriptName}"
+        Stats::computeFromLog \
+          "${logFile}" "${rc}" "${statsFile}" "${startDate}"
+        Stats::aggregateGlobalStats \
+          "${globalStatsFile}" "1" "${statsFile}"
+        exit "${rc}"
+      }
+      trap 'computeStats "$?"' EXIT INT TERM ABRT
+
+      local -i failures=0
+      sourceHook preTestInstall || ((++failures))
+      testInstall || ((++failures))
+      sourceHook postTestInstall || ((++failures))
+      exit "${failures}"
+    ) 2>&1 | tee "${logFile}" || testInstallStatus="$?" || true
+    if [[ "${testInstallStatus}" != "0" ]] && breakOnTestFailure; then
+      # break if test script error
+      exit "${testInstallStatus}"
+    fi
+  fi
+
+  local configStatus="0"
+  if [[ "${SKIP_CONFIGURE}" = "0" && "${installStatus}" = "0" ]] &&
+    ! InstallScripts::scriptFunctionEmpty configure; then
+    Log::headLine "CONFIG" "Configuring ${scriptName}"
+    logFile="${logsDir}/${scriptName}-config.log"
+    statsFile="${statsDir}/${scriptName}-config.stat"
+    (
+      startDate="$(date +%s)"
+      # shellcheck disable=SC2317
+      computeStats() {
+        local rc=$1
+        Stats::statusLine "${statsFile}" "Configuration ${scriptName}"
+        Stats::computeFromLog \
+          "${logFile}" "${rc}" "${statsFile}" "${startDate}"
+        Stats::aggregateGlobalStats \
+          "${globalStatsFile}" "1" "${statsFile}"
+        exit "${rc}"
+      }
+      trap 'computeStats "$?"' EXIT INT TERM ABRT
+
+      local -i failures=0
+      sourceHook preConfigure || ((++failures))
+      configure || ((++failures))
+      sourceHook postConfigure || ((++failures))
+      exit "${failures}"
+    ) 2>&1 | tee "${logFile}" || configStatus="$?" || true
+
+    if [[ "${configStatus}" != "0" ]] && breakOnConfigFailure; then
+      # break if config script error
+      exit "${configStatus}"
+    fi
+  fi
+
+  local testConfigStatus="0"
+  if [[ "${SKIP_TEST}" = "0" && "${installStatus}" = "0" && "${configStatus}" = "0" ]] &&
+    ! InstallScripts::scriptFunctionEmpty configure; then
+    Log::headLine "TEST" "Testing ${scriptName} configuration"
+    logFile="${logsDir}/${scriptName}-test-configuration.log"
+    statsFile="${statsDir}/${scriptName}-test-configuration.stat"
+    (
+      startDate="$(date +%s)"
+      # shellcheck disable=SC2317
+      computeStats() {
+        local rc=$1
+        Stats::statusLine "${statsFile}" "Test Configuration ${scriptName}"
+        Stats::computeFromLog \
+          "${logFile}" "${rc}" "${statsFile}" "${startDate}"
+        Stats::aggregateGlobalStats \
+          "${globalStatsFile}" "1" "${statsFile}"
+        exit "${rc}"
+      }
+      trap 'computeStats "$?"' EXIT INT TERM ABRT
+
+      local -i failures=0
+      sourceHook preTestConfigure || ((++failures))
+      testConfigure || ((++failures))
+      sourceHook postTestConfigure || ((++failures))
+      exit "${failures}"
+    ) 2>&1 | tee "${logFile}" || testConfigStatus="$?" || true
+    if [[ "${testConfigStatus}" != "0" ]] && breakOnTestFailure; then
+      # break if test script error
+      exit "${testConfigStatus}"
+    fi
+  fi
+
+  local cleanBeforeExportStatus="0"
+  if [[ "${PREPARE_EXPORT}" = "1" && "${installStatus}" = "0" ]] &&
+    ! InstallScripts::scriptFunctionEmpty cleanBeforeExport; then
+    Log::headLine "CLEAN" "Cleaning ${scriptName}"
+    logFile="${logsDir}/${scriptName}-clean-before-export.log"
+    statsFile="${statsDir}/${scriptName}-clean-before-export.stat"
+    (
+      startDate="$(date +%s)"
+      # shellcheck disable=SC2317
+      computeStats() {
+        local rc=$1
+        Stats::statusLine "${statsFile}" "Cleaning ${scriptName}"
+        Stats::computeFromLog \
+          "${logFile}" "${rc}" "${statsFile}" "${startDate}"
+        Stats::aggregateGlobalStats \
+          "${globalStatsFile}" "1" "${statsFile}"
+        exit "${rc}"
+      }
+      trap 'computeStats "$?"' EXIT INT TERM ABRT
+
+      local -i failures=0
+      if ! InstallScripts::scriptFunctionEmpty cleanBeforeExport; then
+        cleanBeforeExport || ((++failures))
+        if [[ "${failures}" = "0" ]] && ! InstallScripts::scriptFunctionEmpty testCleanBeforeExport; then
+          testCleanBeforeExport || ((++failures))
+        fi
+      fi
+      exit "${failures}"
+    ) 2>&1 | tee "${logFile}" || cleanBeforeExportStatus="$?" || true
+
+    if [[ "${cleanBeforeExportStatus}" != "0" ]]; then
+      # break if config script error
+      exit "${cleanBeforeExportStatus}"
+    fi
+  fi
+}
+
+
+# @description check that function is implemented
+InstallScripts::isFunctionImplemented() {
+  local functionName="$1"
+  if ! Assert::functionExists "${functionName}"; then
+    Log::displayError "$(scriptName) - Function ${functionName} is not implemented"
+    return 1
+  fi
+}
+
+
+# @description check that all needed functions are implemented
+InstallScripts::isInterfaceMandatoryFunctionImplemented() {
+  local -i failures=0
+  InstallScripts::isFunctionImplemented helpDescription || ((++failures))
+  InstallScripts::isFunctionImplemented helpLongDescription || ((++failures))
+  InstallScripts::isFunctionImplemented scriptName || ((++failures))
+  InstallScripts::isFunctionImplemented dependencies || ((++failures))
+  InstallScripts::isFunctionImplemented listVariables || ((++failures))
+  InstallScripts::isFunctionImplemented fortunes || ((++failures))
+  InstallScripts::isFunctionImplemented helpVariables || ((++failures))
+  InstallScripts::isFunctionImplemented defaultVariables || ((++failures))
+  InstallScripts::isFunctionImplemented checkVariables || ((++failures))
+  InstallScripts::isFunctionImplemented breakOnConfigFailure || ((++failures))
+  InstallScripts::isFunctionImplemented breakOnTestFailure || ((++failures))
+  InstallScripts::isFunctionImplemented install || ((++failures))
+  InstallScripts::isFunctionImplemented testInstall || ((++failures))
+  InstallScripts::isFunctionImplemented configure || ((++failures))
+  InstallScripts::isFunctionImplemented testConfigure || ((++failures))
+  return "${failures}"
+}
+
+
+# @description check if function is empty
+# @arg $1 function:Function
+# @exitcode 0 if function is considered empty (body with : or true)
+InstallScripts::scriptFunctionEmpty() {
+  local pattern="^[ \t]+(:|true)"
+  if ! declare -f "$1" &>/dev/null; then
+    return 0
+  fi
+  local functionBody
+  functionBody=$(declare -f "$1")
+  local line3 line4
+  line3=$(sed '3q;d' <<<"${functionBody}")
+  line4=$(sed '4q;d' <<<"${functionBody}")
+  [[ "${line3}" =~ ${pattern} && "${line4}" = "}" ]]
+}
+
+
+# @description apt-get install
+# @arg $@ softwares:String[] list of softwares to install
+# @feature Retry::default
+# Linux::requireSudoCommand
+# @stdout diagnostics logs
+Linux::Apt::install() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_UBUNTU_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireUbuntu has not been loaded"
+    exit 1
+  fi
+
+  Log::displayInfo "Apt install $*"
+  Retry::default sudo apt-get install -y -q "$@"
+}
+
+
+# @description apt-get install if package is not installed yet
+# @arg $@ packages:String[] list of packages to install
+# @feature Retry::default
+# Linux::requireSudoCommand
+# @env SKIP_APT_GET_UPDATE
+# @stdout diagnostics logs
+Linux::Apt::installIfNecessary() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_UBUNTU_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireUbuntu has not been loaded"
+    exit 1
+  fi
+
+  local -a packages=("$@")
+  local package
+  local -i installNeeded=0
+  for package in "${packages[@]}"; do
+    if [[ "${package}" =~ ^[-]{1,2} ]]; then
+      continue
+    fi
+    if ! Linux::Apt::isPackageInstalled "${package}"; then
+      Log::displayInfo "Package ${package} is not installed"
+      installNeeded=1
+    fi
+  done
+  if ((installNeeded == 1)); then
+    if [[ "${SKIP_APT_GET_UPDATE:-0}" = "0" ]]; then
+      Linux::Apt::update
+    fi
+    Linux::Apt::install "${packages[@]}"
+    for package in "${packages[@]}"; do
+      if [[ "${package}" =~ ^-- ]]; then
+        continue
+      fi
+      if ! Linux::Apt::isPackageInstalled "${package}"; then
+        Log::displayWarning "Package ${package} does not appear to have been installed, check if you could have chosen the wrong package name (Eg: python3.9-distutils instead of python3-distutils)"
+      fi
+    done
+  else
+    Log::displayInfo "Apt install avoided as packages are already installed : ${packages[*]}"
+  fi
+}
+
+
+# @description check if apt package is installed
+# @arg $1 package:String the package name to check
+# @stdout diagnostics logs
+Linux::Apt::isPackageInstalled() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_UBUNTU_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireUbuntu has not been loaded"
+    exit 1
+  fi
+
+  local package="$1"
+  dpkg -l "${package}" | grep -Eq "^ii  ${package}"
+}
+
+
+# @description update apt packages list
+# @feature Retry::default
+# Linux::requireSudoCommand
+# @stdout diagnostics logs
+Linux::Apt::update() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_UBUNTU_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireUbuntu has not been loaded"
+    exit 1
+  fi
+
+  Log::displayInfo "Apt update ..."
+  Retry::default sudo apt-get update -y --fix-missing -o Acquire::ForceIPv4=true
+}
+
+
+declare -Agx bash_tools_wslpath=()
+# @description retrieve wslpath using cache (cache is refreshed every day)
+# @arg $@ args:String[] arguments to pass to wslpath
+# @env WSL_TMPDIR String temp directory to store the wslpath cache (default value: PERSISTENT_TMPDIR), you can use TMPDIR instead
+# @exitcode * if Linux::Wsl::originalWslpath cannot find the path
+# @stderr diagnostics information is displayed
+# @feature cache
+Linux::Wsl::cachedWslpath2() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX__WSL_REQUIRE_WSL_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::Wsl::requireWsl has not been loaded"
+    exit 1
+  fi
+
+  # shellcheck disable=SC2034
+  local -n cachedWslpath2_value=$1
+  shift || true
+  local tempEnvFile key
+  tempEnvFile="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_tools_wslpath"
+
+  key="$(Linux::Wsl::getKeyFromWslpathOptions "$@")"
+  Cache::getPropertyValue2 \
+    "${tempEnvFile}" \
+    bash_tools_wslpath \
+    cachedWslpath2_value \
+    "${key}" \
+    Linux::Wsl::originalWslpath "$@"
+}
+
+
+# @description retrieve path from wslvar and then use wslpath to resolve it
+# using cache (cache is refreshed every day)
+# @arg $1 var:String the var to retrieve using wslvar
+# @arg $@ args:String[] (optional) additional arguments to pass to wslvar
+# @env WSL_TMPDIR String temp directory to store the wslpath cache (default value: PERSISTENT_TMPDIR), you can use TMPDIR instead
+# @exitcode 1 if var cannot be found in cache nor using Linux::Wsl::originalWslvar
+# @exitcode 2 if path cannot be found in cache nor using Linux::Wsl::originalWslpath
+# @stderr diagnostics information is displayed
+# @feature cache
+Linux::Wsl::cachedWslpathFromWslVar2() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX__WSL_REQUIRE_WSL_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::Wsl::requireWsl has not been loaded"
+    exit 1
+  fi
+
+  # shellcheck disable=SC2034
+  local -n cachedWslpathFromWslVar2_value=$1
+  shift || true
+  local value
+  Linux::Wsl::cachedWslvar2 value "$@" || return 1
+  Linux::Wsl::cachedWslpath2 cachedWslpathFromWslVar2_value "${value}" || return 2
+}
+
+
+declare -Agx bash_tools_wslvar=()
+# @description retrieve wslvar using cache (cache is refreshed every day)
+# @arg $1 cachedWslvar2_var:&String the variable to set by reference if the value is found
+# @arg $@ args:String[] arguments to pass to wslvar
+# @env WSL_TMPDIR String temp directory to store the wslvar cache (default value: PERSISTENT_TMPDIR), you can use TMPDIR instead
+# @exitcode * if Linux::Wsl::originalWslvar cannot find the variable
+# @stderr diagnostics information is displayed
+# @feature cache
+Linux::Wsl::cachedWslvar2() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX__WSL_REQUIRE_WSL_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::Wsl::requireWsl has not been loaded"
+    exit 1
+  fi
+
+  # shellcheck disable=SC2034
+  local -n cachedWslvar2_var="$1"
+  shift || true
+  local -a args=("$@")
+  local tempWslvarFile="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_tools_wslvar"
+  local key
+  key="$(Linux::Wsl::getKeyFromWslpathOptions "${args[@]}")"
+  Cache::getPropertyValue2 \
+    "${tempWslvarFile}" \
+    bash_tools_wslvar \
+    cachedWslvar2_var \
+    "${key}" \
+    Linux::Wsl::originalWslvar "${args[@]}"
+}
+
+
+# @description Compute a cache from wslpath options
+# @arg $@ args:String[] arguments passed to wslpath
+# @stderr diagnostics information is displayed
+# @stdout the cache key deduced from the options
+# @feature cache
+# @internal
+Linux::Wsl::getKeyFromWslpathOptions() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX__WSL_REQUIRE_WSL_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::Wsl::requireWsl has not been loaded"
+    exit 1
+  fi
+
+  local options
+  options=$(getopt -o "auwm" -- "$@" 2>/dev/null) || {
+    Log::displayError "invalid options specified"
+    return 1
+  }
+  local key="wslpath"
+  eval set -- "${options}"
+  while true; do
+    case "$1" in
+      -a | -u | -w | -m)
+        key="${key}$1"
+        ;;
+      --)
+        shift || true
+        break
+        ;;
+      *)
+        shift || true
+        Log::displayWarning "Unknown key $1"
+        ;;
+    esac
+    shift || true
+  done
+  key="${key}_$1"
+  # replace some characters \:/
+  key="${key//\\//}"
+  key="${key//:/_}"
+  key="${key////_}"
+  echo "${key}"
+}
+
+
+# @description call simply original wslpath command
+# @arg $@ args:String[] args to pass to wslpath
+# @exitcode * wslpath exit code
+# @stdout wslpath stdout
+Linux::Wsl::originalWslpath() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX__WSL_REQUIRE_WSL_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::Wsl::requireWsl has not been loaded"
+    exit 1
+  fi
+
+  wslpath "$@" | sed -z '$ s/[\r\n]$//'
+}
+
+
+# @description call simply original wslvar command
+# @arg $@ args:String[] args to pass to wslvar
+# @exitcode * wslvar exit code
+# @stdout wslvar stdout
+Linux::Wsl::originalWslvar() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX__WSL_REQUIRE_WSL_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::Wsl::requireWsl has not been loaded"
+    exit 1
+  fi
+
+  wslvar "$@" | sed -z '$ s/[\r\n]$//'
+}
+
+
+# @description ensure linux runs under wsl
+# @env WSL_GARBAGE_COLLECT int 0 to disable garbage collect of cache files
+# @exitcode 1 if linux does not run under wsl
+Linux::Wsl::requireWsl() {
+  export REQUIRE_FUNCTION_LINUX__WSL_REQUIRE_WSL_LOADED=1
+
+  Assert::wsl || return 1
+  if [[ "${WSL_GARBAGE_COLLECT:-1}" = "1" ]]; then
+    local tempEnvDir
+    tempEnvDir="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}"
+    File::garbageCollect "${tempEnvDir}/bash_tools_wslpath_${USER_ID:-$(id -un)}" "1"
+    tempEnvDir="${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}"
+    File::garbageCollect "${tempEnvDir}/bash_tools_wslvar_${USER_ID:-$(id -un)}" "1"
+  fi
+}
+
+
+# @description retrieve linux distributor id
+# @noargs
+# @exitcode 1 if lsb_release fails or not found
+# @stdout the linux distributor id
+Linux::getDistributorId() {
+  (
+    source /etc/os-release
+    echo "${ID}"
+  )
+}
+
+
+# @description ensure command tar is available
+# @exitcode 1 if tar command not available
+# @stderr diagnostics information is displayed
+Linux::requireTarCommand() {
+  export REQUIRE_FUNCTION_LINUX_REQUIRE_TAR_COMMAND_LOADED=1
+
+  Assert::commandExists tar
+}
+
+
+# @description ensure linux distribution is ubuntu
+# @exitcode 1 if linux distribution is not ubuntu
+Linux::requireUbuntu() {
+  export REQUIRE_FUNCTION_LINUX_REQUIRE_UBUNTU_LOADED=1
+
+  if ! Array::contains "$(Linux::getDistributorId)" "ubuntu" "debian"; then
+    Log::fatal "this script should be executed under Ubuntu or Debian OS"
+  fi
+}
+
+
+declare -g FIRST_LOG_DATE LOG_LAST_LOG_DATE LOG_LAST_LOG_DATE_INIT LOG_LAST_DURATION_STR
+FIRST_LOG_DATE="${EPOCHREALTIME/[^0-9]/}"
+LOG_LAST_LOG_DATE="${FIRST_LOG_DATE}"
+LOG_LAST_LOG_DATE_INIT=1
+LOG_LAST_DURATION_STR=""
+
+# @description compute duration since last call to this function
+# the result is set in following env variables.
+# in ss.sss (seconds followed by milliseconds precision 3 decimals)
+# @noargs
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @set LOG_LAST_LOG_DATE_INIT int (default 1) set to 0 at first call, allows to detect reference log
+# @set LOG_LAST_DURATION_STR String the last duration displayed
+# @set LOG_LAST_LOG_DATE String the last log date that will be used to compute next diff
+Log::computeDuration() {
+  if ((${DISPLAY_DURATION:-0} == 1)); then
+    local -i duration=0
+    local -i delta=0
+    local durationStr deltaStr
+    local -i currentLogDate
+    currentLogDate="${EPOCHREALTIME/[^0-9]/}"
+    if ((LOG_LAST_LOG_DATE_INIT == 1)); then
+      LOG_LAST_LOG_DATE_INIT=0
+      LOG_LAST_DURATION_STR="Ref"
+    else
+      duration=$(((currentLogDate - FIRST_LOG_DATE) / 1000000))
+      delta=$(((currentLogDate - LOG_LAST_LOG_DATE) / 1000000))
+      if ((duration > 59)); then
+        durationStr=$(date -ud "@${duration}" +'%H:%M:%S')
+      else
+        durationStr="${duration}s"
+      fi
+      if ((delta > 59)); then
+        deltaStr=$(date -ud "@${delta}" +'%H:%M:%S')
+      else
+        deltaStr="${delta}s"
+      fi
+      LOG_LAST_DURATION_STR="${durationStr}/+${deltaStr}"
+    fi
+    LOG_LAST_LOG_DATE="${currentLogDate}"
+    # shellcheck disable=SC2034
+    local microSeconds="${EPOCHREALTIME#*.}"
+    LOG_LAST_DURATION_STR="$(printf '%(%T)T.%03.0f\n' "${EPOCHSECONDS}" "${microSeconds:0:3}")(${LOG_LAST_DURATION_STR}) - "
+  else
+    # shellcheck disable=SC2034
+    LOG_LAST_DURATION_STR=""
+  fi
+}
+
+
+# @description Display message using debug color (gray)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displayDebug() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_DEBUG)); then
+    Log::computeDuration
+    echo -e "${__DEBUG_COLOR}DEBUG   - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logDebug "$1"
+}
+
+
+# @description Display message using error color (red)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displayError() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_ERROR)); then
+    Log::computeDuration
+    echo -e "${__ERROR_COLOR}ERROR   - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logError "$1"
+}
+
+
+# @description Display message using info color (bg light blue/fg white)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displayInfo() {
+  local type="${2:-INFO}"
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
+    Log::computeDuration
+    echo -e "${__INFO_COLOR}${type}    - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logInfo "$1" "${type}"
+}
+
+
+# @description Display message using skip color (yellow)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displaySkipped() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
+    Log::computeDuration
+    echo -e "${__SKIPPED_COLOR}SKIPPED - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logSkipped "$1"
+}
+
+
+# @description Display message using info color (blue) but warning level
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displayStatus() {
+  local type="${2:-STATUS}"
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
+    Log::computeDuration
+    echo -e "${__INFO_COLOR}${type}  - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logStatus "$1" "${type}"
+}
+
+
+# @description Display message using success color (bg green/fg white)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displaySuccess() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_INFO)); then
+    Log::computeDuration
+    echo -e "${__SUCCESS_COLOR}SUCCESS - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logSuccess "$1"
+}
+
+
+# @description Display message using warning color (yellow)
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::displayWarning() {
+  if ((BASH_FRAMEWORK_DISPLAY_LEVEL >= __LEVEL_WARNING)); then
+    Log::computeDuration
+    echo -e "${__WARNING_COLOR}WARN    - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  fi
+  Log::logWarning "$1"
+}
+
+
+# @description Display message using error color (red) and exit immediately with error status 1
+# @arg $1 message:String the message to display
+# @env DISPLAY_DURATION int (default 0) if 1 display elapsed time information between 2 info logs
+# @env LOG_CONTEXT String allows to contextualize the log
+Log::fatal() {
+  Log::computeDuration
+  echo -e "${__ERROR_COLOR}FATAL   - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}${1}${__RESET_COLOR}" >&2
+  Log::logFatal "$1"
+  exit 1
+}
+
+
+# @description Get the text representation of a log level
+# @arg $1 level:String the log level to convert
+# @exitcode 1 if the level is invalid
+Log::getLevelText() {
+  local level="$1"
+  case "${level}" in
+    "${__LEVEL_OFF}")
+      echo OFF
+      ;;
+    "${__LEVEL_ERROR}")
+      echo ERROR
+      ;;
+    "${__LEVEL_WARNING}")
+      echo WARNING
+      ;;
+    "${__LEVEL_INFO}")
+      echo INFO
+      ;;
+    "${__LEVEL_DEBUG}")
+      echo DEBUG
+      ;;
+    *)
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      return 1
+      ;;
+  esac
+}
+
+
+# @description Display given text on full line with TEST_COLOR style
+# @arg $1 text:String text to display
+Log::headLine() {
+  local type="$1"
+  local text="$2"
+  local message="${type}   - ${text}"
+  if [[ -z "${type}" ]]; then
+    message="${text}"
+  else
+    Log::computeDuration
+    message="$(printf '%-7s - %s%s' "${type}" "${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR:-}" "${text}")"
+  fi
+  echo -e "${__TEST_COLOR}$(UI::textLine "${message}" " ")${__RESET_COLOR}" >&2
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logDebug() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_DEBUG)); then
+    Log::logMessage "${2:-DEBUG}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logError() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_ERROR)); then
+    Log::logMessage "${2:-ERROR}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logFatal() {
+  Log::logMessage "${2:-FATAL}" "$1"
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logInfo() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
+    Log::logMessage "${2:-INFO}" "$1"
+  fi
+}
+
+
+# @description Internal: common log message
+# @example text
+#   [date]|[levelMsg]|message
+#
+# @example text
+#   2020-01-19 19:20:21|ERROR  |log error
+#   2020-01-19 19:20:21|SKIPPED|log skipped
+#
+# @arg $1 levelMsg:String message's level description (eg: STATUS, ERROR, ...)
+# @arg $2 msg:String the message to display
+# @env BASH_FRAMEWORK_LOG_FILE String log file to use, do nothing if empty
+# @env BASH_FRAMEWORK_LOG_LEVEL int log level log only if > OFF or fatal messages
+# @stderr diagnostics information is displayed
+Log::logMessage() {
+
+  if [[ "${REQUIRE_FUNCTION_ENV_REQUIRE_LOAD_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Env::requireLoad has not been loaded"
+    exit 1
+  fi
+
+  if [[ "${REQUIRE_FUNCTION_LOG_REQUIRE_LOAD_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Log::requireLoad has not been loaded"
+    exit 1
+  fi
+
+  local levelMsg="$1"
+  local msg="$2"
+  local date
+
+  if [[ -n "${BASH_FRAMEWORK_LOG_FILE}" ]] && ((BASH_FRAMEWORK_LOG_LEVEL > __LEVEL_OFF)); then
+    date="$(date '+%Y-%m-%d %H:%M:%S')"
+    touch "${BASH_FRAMEWORK_LOG_FILE}"
+    printf "%s|%7s|%s\n" "${date}" "${levelMsg}" "${msg}" >>"${BASH_FRAMEWORK_LOG_FILE}"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logSkipped() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
+    Log::logMessage "${2:-SKIPPED}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logStatus() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
+    Log::logMessage "${2:-STATUS}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logSuccess() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_INFO)); then
+    Log::logMessage "${2:-SUCCESS}" "$1"
+  fi
+}
+
+
+# @description log message to file
+# @arg $1 message:String the message to display
+Log::logWarning() {
+  if ((BASH_FRAMEWORK_LOG_LEVEL >= __LEVEL_WARNING)); then
+    Log::logMessage "${2:-WARNING}" "$1"
+  fi
+}
+
+
+# @description activate or not Log::display* and Log::log* functions
+# based on BASH_FRAMEWORK_DISPLAY_LEVEL and BASH_FRAMEWORK_LOG_LEVEL
+# environment variables loaded by Env::requireLoad
+# try to create log file and rotate it if necessary
+# @noargs
+# @set BASH_FRAMEWORK_LOG_LEVEL int to OFF level if BASH_FRAMEWORK_LOG_FILE is empty or not writable
+# @env BASH_FRAMEWORK_DISPLAY_LEVEL int
+# @env BASH_FRAMEWORK_LOG_LEVEL int
+# @env BASH_FRAMEWORK_LOG_FILE String
+# @env BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION int do log rotation if > 0
+# @exitcode 0 always successful
+# @stderr diagnostics information about log file is displayed
+Log::requireLoad() {
+  export REQUIRE_FUNCTION_LOG_REQUIRE_LOAD_LOADED=1
+
+
+  if [[ "${REQUIRE_FUNCTION_ENV_REQUIRE_LOAD_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Env::requireLoad has not been loaded"
+    exit 1
+  fi
+
+  if [[ "${REQUIRE_FUNCTION_UI_REQUIRE_THEME_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement UI::requireTheme has not been loaded"
+    exit 1
+  fi
+
+  if [[ -z "${BASH_FRAMEWORK_LOG_FILE:-}" ]]; then
+    BASH_FRAMEWORK_LOG_LEVEL=${__LEVEL_OFF}
+    export BASH_FRAMEWORK_LOG_LEVEL
+  fi
+
+  if ((BASH_FRAMEWORK_LOG_LEVEL > __LEVEL_OFF)); then
+    if [[ ! -f "${BASH_FRAMEWORK_LOG_FILE}" ]]; then
+      if [[ ! -d "${BASH_FRAMEWORK_LOG_FILE%/*}" ]]; then
+        if ! mkdir -p "${BASH_FRAMEWORK_LOG_FILE%/*}" 2>/dev/null; then
+          BASH_FRAMEWORK_LOG_LEVEL=${__LEVEL_OFF}
+          echo -e "${__ERROR_COLOR}ERROR   - directory ${BASH_FRAMEWORK_LOG_FILE%/*} is not writable${__RESET_COLOR}" >&2
+        fi
+      elif ! touch --no-create "${BASH_FRAMEWORK_LOG_FILE}" 2>/dev/null; then
+        BASH_FRAMEWORK_LOG_LEVEL=${__LEVEL_OFF}
+        echo -e "${__ERROR_COLOR}ERROR   - File ${BASH_FRAMEWORK_LOG_FILE} is not writable${__RESET_COLOR}" >&2
+      fi
+    elif [[ ! -w "${BASH_FRAMEWORK_LOG_FILE}" ]]; then
+      BASH_FRAMEWORK_LOG_LEVEL=${__LEVEL_OFF}
+      echo -e "${__ERROR_COLOR}ERROR   - File ${BASH_FRAMEWORK_LOG_FILE} is not writable${__RESET_COLOR}" >&2
+    fi
+  fi
+
+  if ((BASH_FRAMEWORK_LOG_LEVEL > __LEVEL_OFF)); then
+    # will always be created even if not in info level
+    Log::logMessage "INFO" "Logging to file ${BASH_FRAMEWORK_LOG_FILE} - Log level ${BASH_FRAMEWORK_LOG_LEVEL}"
+    if ((BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION > 0)); then
+      Log::rotate "${BASH_FRAMEWORK_LOG_FILE}" "${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION}"
+    fi
+  fi
+}
+
+
+# @description To be called before logging in the log file
+# @arg $1 file:string log file name
+# @arg $2 maxLogFilesCount:int maximum number of log files
+Log::rotate() {
+  local file="$1"
+  local maxLogFilesCount="${2:-5}"
+
+  if [[ ! -f "${file}" ]]; then
+    Log::displayDebug "Log file ${file} doesn't exist yet"
+    return 0
+  fi
+  local i
+  for ((i = maxLogFilesCount - 1; i > 0; i--)); do
+    Log::displayInfo "Log rotation ${file}.${i} to ${file}.$((i + 1))"
+    mv "${file}."{"${i}","$((i + 1))"} &>/dev/null || true
+  done
+  if cp "${file}" "${file}.1" &>/dev/null; then
+    echo >"${file}" # reset log file
+    Log::displayInfo "Log rotation ${file} to ${file}.1"
+  fi
+}
+
+
+declare -Ag allDepsResultSeen=()
+declare -ag allDepsResult=()
+
+# @description get recursively all the dependencies of each config from configs arg
+#
+# The parent argument must be set to "your software selection" when you call it,
+# then the value will change when this function will be called recursively with the
+# parent dependency
+#
+# Algorithm
+#   For each config in configs
+#     - load config definition
+#     - mark this config as seen to avoid to recompute it later, in the case where another
+#       definition depends on it
+#     - call installScripts_${config}_dependencies function if exists (skipped if not)
+#     - add these new dependencies if any to current dependencies list
+#     - call recursively Profiles::allDepsRecursive with these dependencies
+#     - add in allDepsResult the current config if it was not seen yet
+#   This has constructed a tree with the most deep dependency present in the first items
+#
+# @warning allDepsResultSeen and allDepsResult global variables have to reset to empty array every time you call this function
+#
+# @arg $1 scriptsDir:String base directory where dependencies can be retrieved
+# @arg $2 parent:String set to "your software selection" when you call it
+# @arg $@ configs:String[] list of configurations to load, each config can depend on an other one
+# @exitcode 1 if one of the dependency cannot be found
+# @exitcode 2 if error while loading one of the dependency definition
+# @exitcode 3 if error while calling dependencies function of the dependency's definition
+# @set allDepsResultSeen String[] list of dependencies already seen
+# @set allDepsResult String[] the final list of dependencies sorted by the most to less dependent
+# @stderr diagnostics information is displayed
+Profiles::allDepsRecursive() {
+  local scriptsDir="$1"
+  local parent="$2"
+  shift 2 || true
+  local i
+  local addDep=0
+  local -a deps=()
+  local -a newDeps
+
+  for i in "$@"; do
+    if [[ "${allDepsResultSeen["${i}"]}" = 'stored' ]]; then
+      continue
+    fi
+    if [[ ! -f "${scriptsDir}/${i}" ]]; then
+      Log::displayError "Dependency ${i} doesn't exist"
+      return 1
+    fi
+
+    if ! readarray -t newDeps < <(SKIP_REQUIRES=1 "${scriptsDir}/${i}" dependencies); then
+      Log::displayError "Dependency ${i} - ${scriptsDir}/${i} dependencies failure"
+      return 3
+    fi
+    if [[ -z "${allDepsResultSeen[${i}]+exists}" ]]; then
+      addDep=1
+      allDepsResultSeen["${i}"]='stored'
+    fi
+    # remove duplicates from deps preserving order
+    mapfile -t deps < <(
+      IFS=$'\n'
+      printf "%s\n" "${deps[@]}" | awk '!x[$0]++'
+    )
+    if ((${#newDeps} > 0)); then
+      Log::displayInfo "${i} depends on ${newDeps[*]}"
+      Profiles::allDepsRecursive "${scriptsDir}" "${i}" "${newDeps[@]}" || return $?
+    fi
+    if [[ "${addDep}" = "1" ]]; then
+      Log::displayInfo "${i} is a dependency of ${parent}"
+      allDepsResult+=("${i}")
+    fi
+    addDep=0
+  done
+}
+
+
+# @description deduce profile path from given profile name
+# if 2 profiles are named identically the first existing profile
+# will be used beginning with srcAlt profiles
+# @arg $1 profileName:String
+# @stdout the path of the profile, no output if profile not found
+# @exitcode 1 if profile not found
+Profiles::getProfilePath() {
+  local profileName="$1"
+  local dir
+  for dir in "${BASH_DEV_ENV_ROOT_DIR}/srcAlt/"*; do
+    profilePath="${dir}/profiles/profile.${profileName}.sh"
+    if [[ -f "${profilePath}" ]]; then
+      echo "${profilePath}"
+      return 0
+    fi
+  done
+  local profilePath="${BASH_DEV_ENV_ROOT_DIR}/profiles/profile.${profileName}.sh"
+  if [[ -f "${profilePath}" ]]; then
+    echo "${profilePath}"
+    return 0
+  fi
+
+  return 1
+}
+
+
+# @description load profile file based on profileFile argument
+# The profile file is profileDir/profile.profile.sh
+# This file should define the variable CONFIG_LIST with array type
+# @arg $1 profileFile:String full profile path
+# @exitcode 1 if argument is not provided
+# @exitcode 2 if profile not found
+# @exitcode 3 if profile found but CONFIG_LIST variable unset
+# @exitcode 4 if profile found but CONFIG_LIST variable empty
+# @exitcode 5 if error occurs during profile loading
+# @stderr diagnostics information is displayed
+# @see Profiles::allDepsRecursive in order to load all the dependencies recursively based on this list
+# @set CONFIG_LIST
+Profiles::loadProfile() {
+  local profileFile="$1"
+
+  if [[ -z "${profileFile}" ]]; then
+    Log::displayError "This method needs exactly 1 parameter"
+    return 1
+  fi
+
+  # load the profile
+  Log::displayInfo "Loading profile '${profileFile}'"
+  if [[ ! -f "${profileFile}" ]]; then
+    Log::displayError "profile ${profileFile} not found"
+    return 2
+  fi
+
+  # shellcheck source=src/Profiles/testsData/profile.test1.sh
+  source "${profileFile}" || return 5
+
+  if [[ ! -v CONFIG_LIST ]]; then
+    Log::displayError "Profile ${profileFile} missing variable CONFIG_LIST"
+    return 3
+  fi
+  if [[ ${#CONFIG_LIST[@]} -eq 0 ]]; then
+    Log::displayError "Profile ${profileFile} variable CONFIG_LIST cannot be empty"
+    return 4
+  fi
+
+  # remove duplicates from profile preserving order
+  mapfile -t CONFIG_LIST < <(
+    IFS=$'\n' printf '%s\n' "${CONFIG_LIST[@]}" | Filters::uniqUnsorted
+  )
+}
+
+
+# @description Retry a command 5 times with a delay of 15 seconds between each attempt
+# @arg $@ command:String[] the command to run
+# @exitcode 0 on success
+# @exitcode 1 if max retries count reached
+# @env RETRY_MAX_RETRY int max retries
+# @env RETRY_DELAY_BETWEEN_RETRIES int delay between attempts
+Retry::default() {
+  Retry::parameterized "${RETRY_MAX_RETRY:-5}" "${RETRY_DELAY_BETWEEN_RETRIES:-15}" "" "$@"
+}
+
+
+# @description Retry a command several times depending on parameters
+# @arg $1 maxRetries:int    $1 max retries
+# @arg $2 delay:int between attempt
+# @arg $3 message:String to display to describe the attempt
+# @arg $@ rest of parameters, the command to run
+# @exitcode 0 on success
+# @exitcode 1 if max retries count reached
+# @exitcode 2 if maxRetries invalid value
+Retry::parameterized() {
+  local maxRetries=$1
+  shift || true
+  local delayBetweenTries=$1
+  shift || true
+  local message="$1"
+  shift || true
+  local retriesCount=1
+  if [[ "${maxRetries}" -lt 1 ]]; then
+    Log::displayError "invalid maxRetry value"
+    return 2
+  fi
+
+  while true; do
+    Log::displayInfo "Attempt ${retriesCount}/${maxRetries}: ${message}"
+    if "$@"; then
+      break
+    elif [[ "${retriesCount}" -lt "${maxRetries}" ]]; then
+      Log::displayDebug "Command failed. Wait for ${delayBetweenTries} seconds"
+      ((retriesCount++))
+      sleep "${delayBetweenTries}"
+    else
+      Log::displayError "The command has failed after ${retriesCount} attempts."
+      return 1
+    fi
+  done
+  return 0
+}
+
+
+# @description aggregate number of skip/error/... log messages
+# and export the result in aggregateStatFile
+# @arg $1 statFile:String the current stat file to add to aggregateStatFile
+# @arg $2 appCount:int number of app requested to be installed
+# @arg $@ statFiles:String[] the files in which each step stats have been aggregated aggregated
+# if it doesn't exist, the file is created with needed variables set to 0
+# stats will be saved
+Stats::aggregateGlobalStats() {
+  local aggregateStatFile="$1"
+  local appCount="$2"
+  shift 2 || true
+  local -a statFiles=("$@")
+
+  (
+    if [[ ! -f "${aggregateStatFile}" ]]; then
+      Stats::aggregateStatsInitialContent "${appCount}" >"${aggregateStatFile}"
+    fi
+    # shellcheck source=src/Stats/aggregateStats.example
+    source "${aggregateStatFile}"
+
+    local -i globalError=0
+    local -i globalWarning=0
+    local -i globalSkipped=0
+    local -i globalHelp=0
+    local -i globalSuccess=0
+    local -i globalStatus=0
+    ((globalDuration = duration)) || true
+    for statFile in "${statFiles[@]}"; do
+      if [[ ! -f "${statFile}" ]]; then
+        continue
+      fi
+      # shellcheck source=src/Stats/logStats.example
+      source "${statFile}"
+
+      # all statuses need to be 0 for global status to be O
+      globalError=$((globalError || error))
+      globalWarning=$((globalWarning || warning))
+      globalSkipped=$((globalSkipped || skipped))
+      globalHelp=$((globalHelp || help))
+      globalSuccess=$((globalSuccess || success))
+      globalStatus=$((globalStatus || status))
+      globalDuration=$((globalDuration + duration))
+    done
+    # shellcheck source=src/Stats/aggregateStats.example
+    source "${aggregateStatFile}"
+    ((count++)) || true
+    if ((globalStatus == 0)); then
+      ((statusSuccess++)) || true
+    fi
+    if ((globalStatus > 0 || globalError > 0)); then
+      ((error++)) || true
+    fi
+    if ((globalWarning > 0)); then
+      ((warning++)) || true
+    fi
+    if ((globalSkipped > 0)); then
+      ((skipped++)) || true
+    fi
+    if ((globalHelp > 0)); then
+      ((help++)) || true
+    fi
+    if ((globalSuccess > 0)); then
+      ((success++)) || true
+    fi
+    (
+      echo "count=${count}"
+      echo "appCount=${appCount}"
+      echo "error=${error}"
+      echo "warning=${warning}"
+      echo "skipped=${skipped}"
+      echo "help=${help}"
+      echo "success=${success}"
+      echo "duration=${globalDuration}"
+      echo "statusSuccess=${statusSuccess}"
+    ) >"${aggregateStatFile}"
+  )
+}
+
+
+# @description default aggregateStats file Content
+Stats::aggregateStatsInitialContent() {
+  local appCount="$1"
+  echo "count=0"
+  echo "appCount=${appCount}"
+  echo "error=0"
+  echo "warning=0"
+  echo "skipped=0"
+  echo "help=0"
+  echo "success=0"
+  echo "duration=0"
+  echo "statusSuccess=0"
+}
+
+
+# @description extract stats form log
+# @arg $1 logFile:String the log file to parse
+# @arg $2 status:int the status of the command associated to that log file
+# @arg $3 statsFile:String where to write stats
+# @arg $4 startDate:String date at which log started
+# @stdout output with the format provided by this example src/Stats/aggregateStats.example
+# @see src/Stats/aggregateStats.example
+Stats::computeFromLog() {
+  local logFile="$1"
+  local status="$2"
+  local statsFile="$3"
+  local startDate="$4"
+  local endDate
+  endDate="$(date +%s)"
+  local duration="$((endDate - startDate))"
+
+  local logStatsAwkScript
+  logStatsAwkScript="$(
+    cat <<'EOF'
+BEGIN {
+  error=0
+  warning=0
+  skipped=0
+  help=0
+  success=0
+}
+{
+  buffer = substr($0, 1, 20)
+  if(match(buffer, /(ERROR)[ ]+- /, arr) != 0) {
+    error+=1
+  } else if(match(buffer, /(WARNING)[ ]+- /, arr) != 0) {
+    warning+=1
+  } else if(match(buffer, /(SKIPPED)[ ]+- /, arr) != 0) {
+    skipped+=1
+  } else if(match(buffer, /(ERROR)[ ]+- /, arr) != 0) {
+    error+=1
+  } else if(match(buffer, /(HELP)[ ]+- /, arr) != 0) {
+    help+=1
+  } else if(match(buffer, /(SUCCESS)[ ]+- /, arr) != 0) {
+    success+=1
+  }
+
+}
+END {
+  error = (stat != 0) || error
+  print "error=" error
+  print "warning=" warning
+  print "skipped=" skipped
+  print "help=" help
+  success = (stat == 0) || success
+  print "success=" success
+}
+
+EOF
+  )"
+
+  (
+    if [[ -f "${logFile}" ]]; then
+      awk -v status="${status}" --source "${logStatsAwkScript}" "${logFile}"
+      echo "status=${status}"
+      echo "duration=${duration}"
+    else
+      # not executed
+      echo "status=-1"
+    fi
+  ) >"${statsFile}"
+}
+
+
+# @description display message to reflect last installation status
+# @arg $1:statFile
+# @arg $2:msg
+Stats::statusLine() {
+  local statFile="$1"
+  local msg="$2"
+  if [[ ! -f "${statFile}" ]]; then
+    return 0
+  fi
+  Log::computeDuration
+  (
+    # shellcheck source=src/Stats/logStats.example
+    source "${statFile}" || exit 1
+
+    local color="${__TEST_ERROR_COLOR}"
+    local statusMsg
+    if [[ "${status}" = "0" ]]; then
+      if [[ "${skipped}" = "0" ]]; then
+        color="${__SUCCESS_COLOR}"
+        statusMsg="SUCCESS - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR}${msg} successful"
+      fi
+    elif [[ "${status}" = "-1" ]]; then
+      statusMsg="ABORTED - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR}${msg} not executed"
+    else
+      statusMsg="ERROR   - ${LOG_CONTEXT:-}${LOG_LAST_DURATION_STR}${msg} in error"
+    fi
+    # overwrite final TEST line
+    echo -e "${color}${statusMsg}${__RESET_COLOR}"
+  )
+}
+
+
+# @description draw a line with the character passed in parameter repeated depending on terminal width
+# @arg $1 character:String character to use as separator (default value #)
+UI::drawLine() {
+  local character="${1:-#}"
+  local -i width=${COLUMNS:-0}
+  if ((width == 0)) && [[ -t 1 ]]; then
+    width=$(tput cols)
+  fi
+  if ((width == 0)); then
+    width=80
+  fi
+  printf -- "${character}%.0s" $(seq "${COLUMNS:-$([[ -t 1 ]] && tput cols || echo '80')}")
+  echo
+}
+
+
+# @description load color theme
+# @noargs
+# @env BASH_FRAMEWORK_THEME String theme to use
+# @env LOAD_THEME int 0 to avoid loading theme
+# @exitcode 0 always successful
+UI::requireTheme() {
+  export REQUIRE_FUNCTION_UI_REQUIRE_THEME_LOADED=1
+
+  if [[ "${LOAD_THEME:-1}" = "1" ]]; then
+    UI::theme "${BASH_FRAMEWORK_THEME-default}"
+  fi
+}
+
+
+# @description Display given text and complete the rest of the line with given character
+# @arg $1 text:String text to display
+# @arg $2 character:String (default:#) character to use to complete the line
+UI::textLine() {
+  local text="$1"
+  local character="${2:-#}"
+  ((textSize = ${#text}))
+  ((fullWith = $(tput cols)))
+  ((remainingWidth = $((fullWith - textSize))))
+  echo -n "${text}"
+  printf '%*s\n' "${remainingWidth}" '' | tr ' ' "${character}"
+}
+
+
+# @description load colors theme constants
+# @warning if tty not opened, noColor theme will be chosen
+# @arg $1 theme:String the theme to use (default, noColor)
+# @arg $@ args:String[]
+# @set __ERROR_COLOR String indicate error status
+# @set __INFO_COLOR String indicate info status
+# @set __SUCCESS_COLOR String indicate success status
+# @set __WARNING_COLOR String indicate warning status
+# @set __SKIPPED_COLOR String indicate skipped status
+# @set __DEBUG_COLOR String indicate debug status
+# @set __HELP_COLOR String indicate help status
+# @set __TEST_COLOR String not used
+# @set __TEST_ERROR_COLOR String not used
+# @set __HELP_TITLE_COLOR String used to display help title in help strings
+# @set __HELP_OPTION_COLOR String used to display highlight options in help strings
+#
+# @set __RESET_COLOR String reset default color
+#
+# @set __HELP_EXAMPLE String to remove
+# @set __HELP_TITLE String to remove
+# @set __HELP_NORMAL String to remove
+# shellcheck disable=SC2034
+UI::theme() {
+  local theme="${1-default}"
+  if [[ ! "${theme}" =~ -force$ ]] && ! Assert::tty; then
+    theme="noColor"
+  fi
+  case "${theme}" in
+    default | default-force)
+      theme="default"
+      ;;
+    noColor) ;;
+    *)
+      Log::fatal "invalid theme provided"
+      ;;
+  esac
+  if [[ "${theme}" = "default" ]]; then
+    BASH_FRAMEWORK_THEME="default"
+    # check colors applicable https://misc.flogisoft.com/bash/tip_colors_and_formatting
+    __ERROR_COLOR='\e[31m'         # Red
+    __INFO_COLOR='\e[44m'          # white on lightBlue
+    __SUCCESS_COLOR='\e[32m'       # Green
+    __WARNING_COLOR='\e[33m'       # Yellow
+    __SKIPPED_COLOR='\e[33m'       # Yellow
+    __DEBUG_COLOR='\e[37m'         # Gray
+    __HELP_COLOR='\e[7;49;33m'     # Black on Gold
+    __TEST_COLOR='\e[100m'         # Light magenta
+    __TEST_ERROR_COLOR='\e[41m'    # white on red
+    __HELP_TITLE_COLOR="\e[1;37m"  # Bold
+    __HELP_OPTION_COLOR="\e[1;34m" # Blue
+    # Internal: reset color
+    __RESET_COLOR='\e[0m' # Reset Color
+    # shellcheck disable=SC2155,SC2034
+    __HELP_EXAMPLE="$(echo -e "\e[2;97m")"
+    # shellcheck disable=SC2155,SC2034
+    __HELP_TITLE="$(echo -e "\e[1;37m")"
+    # shellcheck disable=SC2155,SC2034
+    __HELP_NORMAL="$(echo -e "\033[0m")"
+  else
+    BASH_FRAMEWORK_THEME="noColor"
+    # check colors applicable https://misc.flogisoft.com/bash/tip_colors_and_formatting
+    __ERROR_COLOR=''
+    __INFO_COLOR=''
+    __SUCCESS_COLOR=''
+    __WARNING_COLOR=''
+    __SKIPPED_COLOR=''
+    __DEBUG_COLOR=''
+    __HELP_COLOR=''
+    __TEST_COLOR=''
+    __TEST_ERROR_COLOR=''
+    __HELP_TITLE_COLOR=''
+    __HELP_OPTION_COLOR=''
+    # Internal: reset color
+    __RESET_COLOR=''
+    __HELP_EXAMPLE=''
+    __HELP_TITLE=''
+    __HELP_NORMAL=''
+  fi
+}
+# FUNCTIONS
+
+# shellcheck disable=SC2034
+declare commandFunctionName="installScriptCommand"
+
+defaultBeforeParseCallback() {
+  Env::requireLoad
+  UI::requireTheme
+  Log::requireLoad
+  Linux::requireUbuntu
+  Linux::Wsl::requireWsl
+  InstallScripts::isInterfaceMandatoryFunctionImplemented
+}
+
+scriptName() {
+  echo "Rust"
+}
+
+beforeParseCallback() {
+  defaultBeforeParseCallback
+}
+
+commandHelpFunction() {
+  echo "Available commands:"
+  echo ""
+}
+
+listOrNone() {
+  local string="$1"
+  if [[ -z "${string:-}" ]]; then
+    echo -e "${__HELP_EXAMPLE}None${__HELP_NORMAL}" | sed 's/^/    /'
+  else
+    echo -ne "${__HELP_OPTION_COLOR}"
+    echo -e "${string}" | sed 's/^/    - /'
+    echo -ne "${__HELP_NORMAL}"
+  fi
+}
+
+helpDescriptionFunction() {
+  helpDescription
+  echo
+}
+
+helpLongDescription() {
+  helpDescription
+}
+
+helpLongDescriptionFunction() {
+  helpLongDescription | sed 's/^/  /'
+  echo
+  echo -e "  ${__HELP_TITLE}List of needed variables:${__HELP_NORMAL}"
+  listOrNone "$(listVariables)"
+  echo
+  local variables
+  variables="$(helpVariables)"
+  if [[ -n "${variables}" ]]; then
+    echo -e "${variables}" | sed 's/^/    /'
+    echo
+  fi
+  echo -e "  ${__HELP_TITLE}List of dependencies:${__HELP_NORMAL}"
+  listOrNone "$(dependencies)"
+}
+
+isInstallImplemented() {
+  ! InstallScripts::scriptFunctionEmpty install
+}
+
+isTestInstallImplemented() {
+  ! InstallScripts::scriptFunctionEmpty testInstall
+}
+
+isConfigureImplemented() {
+  ! InstallScripts::scriptFunctionEmpty configure
+}
+
+isTestConfigureImplemented() {
+  ! InstallScripts::scriptFunctionEmpty testConfigure
+}
+
+isCleanBeforeExportImplemented() {
+  ! InstallScripts::scriptFunctionEmpty cleanBeforeExport
+}
+
+fullScriptName() {
+  File::relativeToDir "${REAL_SCRIPT_FILE}" "${BASH_DEV_ENV_ROOT_DIR}"
+}
+
+fullScriptOverrideDir() {
+  local confDir
+  confDir="$(fullScriptName)"
+  local dir
+  for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+    if [[ -d "${dir}/${confDir//\//@}" ]]; then
+      echo "${dir}/${confDir//\//@}"
+      return
+    fi
+  done
+  echo "${CONF_OVERRIDE_DIRS[0]}/${confDir//\//@}"
+}
+
+argsInstallScriptCommandCallback() {
+  if [[ -n "${command}" ]]; then
+    case "${command}" in
+      isInterfaceImplemented)
+        InstallScripts::isInterfaceMandatoryFunctionImplemented
+        exit $?
+        ;;
+      install | testInstall | configure | testConfigure)
+        afterParseCallback
+        ;;
+      *) ;;
+    esac
+    "${command}"
+    exit $?
+  fi
+}
+
+
+
+declare -a BASH_FRAMEWORK_ARGV_FILTERED=()
+
+beforeParseCallback() {
+  Env::requireLoad
+  UI::requireTheme
+  Log::requireLoad
+}
+
+copyrightCallback() {
+  #
+  # shellcheck disable=SC2155,SC2154,SC2250
+  echo "Copyright (c) 2024-now François Chastanet"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListInfoVerboseCallback() {
+  BASH_FRAMEWORK_ARGV_FILTERED+=(--verbose)
+}
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListDebugVerboseCallback() {
+  BASH_FRAMEWORK_ARGV_FILTERED+=(-vv)
+}
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListTraceVerboseCallback() {
+  BASH_FRAMEWORK_ARGV_FILTERED+=(-vvv)
+}
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListEnvFileCallback() { :; }
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListLogLevelCallback() { :; }
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListDisplayLevelCallback() { :; }
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListNoColorCallback() {
+  BASH_FRAMEWORK_ARGV_FILTERED+=(--no-color)
+}
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListThemeCallback() { :; }
+# shellcheck disable=SC2317 # if function is overridden
+updateArgListQuietCallback() { :; }
+
+# shellcheck disable=SC2317 # if function is overridden
+optionHelpCallback() {
+  Log::displayError "optionHelpCallback needs to be overridden"
+  exit 0
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionVersionCallback() {
+  # shellcheck disable=SC2154
+  echo "${SCRIPT_NAME} version 3.0"
+  exit 0
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionInfoVerboseCallback() {
+  BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='--verbose'
+  BASH_FRAMEWORK_ARGS_VERBOSE=${__VERBOSE_LEVEL_INFO}
+  echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${__LEVEL_INFO}" >>"${overrideEnvFile}"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionDebugVerboseCallback() {
+  BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='-vv'
+  BASH_FRAMEWORK_ARGS_VERBOSE=${__VERBOSE_LEVEL_DEBUG}
+  echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${__LEVEL_DEBUG}" >>"${overrideEnvFile}"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionTraceVerboseCallback() {
+  # shellcheck disable=SC2034
+  BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='-vvv'
+  BASH_FRAMEWORK_ARGS_VERBOSE=${__VERBOSE_LEVEL_TRACE}
+  echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${__LEVEL_DEBUG}" >>"${overrideEnvFile}"
+}
+
+getLevel() {
+  local levelName="$1"
+  case "${levelName^^}" in
+    OFF)
+      echo "${__LEVEL_OFF}"
+      ;;
+    ERR | ERROR)
+      echo "${__LEVEL_ERROR}"
+      ;;
+    WARN | WARNING)
+      echo "${__LEVEL_WARNING}"
+      ;;
+    INFO)
+      echo "${__LEVEL_INFO}"
+      ;;
+    DEBUG | TRACE)
+      echo "${__LEVEL_DEBUG}"
+      ;;
+    *)
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${levelName}"
+      return 1
+      ;;
+  esac
+}
+
+getVerboseLevel() {
+  local levelName="$1"
+  case "${levelName^^}" in
+    OFF)
+      echo "${__VERBOSE_LEVEL_OFF}"
+      ;;
+    ERR | ERROR | WARN | WARNING | INFO)
+      echo "${__VERBOSE_LEVEL_INFO}"
+      ;;
+    DEBUG)
+      echo "${__VERBOSE_LEVEL_DEBUG}"
+      ;;
+    TRACE)
+      echo "${__VERBOSE_LEVEL_TRACE}"
+      ;;
+    *)
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      return 1
+      ;;
+  esac
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionDisplayLevelCallback() {
+  local level="$2"
+  local logLevel verboseLevel
+  logLevel="$(getLevel "${level}")"
+  verboseLevel="$(getVerboseLevel "${level}")"
+  BASH_FRAMEWORK_ARGS_VERBOSE=${verboseLevel}
+  echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${logLevel}" >>"${overrideEnvFile}"
+}
+
+optionDisplayLevelDefaultValueFunction() {
+  Log::getLevelText "${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionLogLevelCallback() {
+  local level="$2"
+  local logLevel verboseLevel
+  logLevel="$(getLevel "${level}")"
+  verboseLevel="$(getVerboseLevel "${level}")"
+  # shellcheck disable=SC2034
+  BASH_FRAMEWORK_ARGS_VERBOSE=${verboseLevel}
+  echo "BASH_FRAMEWORK_LOG_LEVEL=${logLevel}" >>"${overrideEnvFile}"
+}
+
+optionLogLevelDefaultValueFunction() {
+  Log::getLevelText "${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionLogFileCallback() {
+  local logFile="$2"
+  echo "BASH_FRAMEWORK_LOG_FILE='${logFile}'" >>"${overrideEnvFile}"
+}
+
+optionLogFileDefaultValueFunction() {
+  # shellcheck disable=SC2016
+  echo "${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionQuietCallback() {
+  echo "BASH_FRAMEWORK_QUIET_MODE=1" >>"${overrideEnvFile}"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionNoColorCallback() {
+  UI::theme "noColor"
+}
+
+# shellcheck disable=SC2317 # if function is overridden
+optionThemeCallback() {
+  UI::theme "$2"
+}
+
+displayConfig() {
+  echo "Config"
+  UI::drawLine "-"
+  local var
+  while read -r var; do
+    printf '%-40s = %s\n' "${var}" "$(declare -p "${var}" | sed -E -e 's/^[^=]+=(.*)/\1/')"
+  done < <(typeset -p | awk 'match($3, "^(BASH_FRAMEWORK_[^=]+)=", m) { print m[1] }' | sort)
+  exit 0
+}
+
+optionBashFrameworkConfigCallback() {
+  if [[ ! -f "$2" ]]; then
+    Log::fatal "Command ${SCRIPT_NAME} - Bash framework config file '$2' does not exists"
+  fi
+}
+
+overrideEnvFile="$(Framework::createTempFile "overrideEnvFile")"
+
+commandOptionParseFinished() {
+  # shellcheck disable=SC2154
+  if [[ -f "${optionBashFrameworkConfig}" ]]; then
+    files+=("${optionBashFrameworkConfig}")
+  fi
+  files+=("${overrideEnvFile}")
+  Env::requireLoad "${files[@]}"
+  Log::requireLoad
+  # shellcheck disable=SC2154
+  if [[ "${optionConfig}" = "1" ]]; then
+    displayConfig
+  fi
+}
+
+
+Linux::requireTarCommand
+Compiler::Embed::extractDirFromBase64 \
+  "${PERSISTENT_TMPDIR:-/tmp}/e93612233e5d594715a2753fef1b87850e4e0d4365a42a0d32852bba98bd53df/conf_dir" \
+  "H4sIAAAAAAAA/9JLSizO0E1JLdNNzSvTLyjKT8vMSdVL0S8qLS7RK85goAYwMDAwMDc1BdMGBgbotIGJuTmcDRY3NDE3N2BQMKCK7QRAaXFJYhGDAcV2oXtuiABlRf3S4iL9pMw8/dS8MgVQauBSpi7gUlZw8Vfw8w9RcHXxDNFRCPHwDFZw8/RxVXB29FNwclUIDXBxDHF1UQj3DPHwDw0BKfV0dqW6M7iioxWsVKoDHEM8aq0UbOsUNOJqrDRVqj38fV1r9fWSE4vS80EBoWFVo6KpEBurUFOjAFJsi6kEZgzXQEffKBgFo2AUkA0AAQAA//81Ox/1AAgAAA=="
+
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e93612233e5d594715a2753fef1b87850e4e0d4365a42a0d32852bba98bd53df/conf_dir"
+
+
+helpDescription() {
+  echo "Rust"
+}
+
+helpLongDescription() {
+  echo "Rust"
+}
+
+# jscpd:ignore-start
+fortunes() { :; }
+dependencies() { :; }
+listVariables() { :; }
+helpVariables() { :; }
+defaultVariables() { :; }
+checkVariables() { :; }
+breakOnConfigFailure() { :; }
+breakOnTestFailure() { :; }
+configure() { :; }
+testConfigure() { :; }
+# jscpd:ignore-end
+
+install() {
+  # shellcheck disable=SC2154
+  Conf::copyStructure \
+    "${embed_dir_conf_dir}" \
+    "$(fullScriptOverrideDir)" \
+    ".bash-dev-env"
+
+  mkdir -p "${HOME}/.cargo/bin"
+  if ! command -v rustup &>/dev/null; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  fi
+  rustup update
+}
+
+testInstall() {
+  Assert::fileExists "${HOME}/.bash-dev-env/profile.d/rust.sh" || return 1
+  # shellcheck source=/dev/null
+  source "${HOME}/.bash-dev-env/profile.d/rust.sh" || return 2
+
+  local -i failures=0
+  Assert::commandExists "rustc" || ((++failures))
+  Assert::commandExists "rustup" || ((++failures))
+
+  return "${failures}"
+}
+
+
+
+softwareArgHelpFunction() {
+  echo "    List of softwares to install (--profile option cannot be used in this case)"
+  echo "    See below for complete list of softwares available"
+}
+
+profileHelpFunction() {
+  echo "    Profile name to use that contains all the softwares to install"
+}
+
+profilesHelpList() {
+  echo -e "  ${__HELP_TITLE_COLOR}Available profiles:${__RESET_COLOR}"
+  (
+    Conf::list "${BASH_DEV_ENV_ROOT_DIR}/profiles" "profile." ".sh" "-type f" "    - "
+    local dir
+    for dir in "${BASH_DEV_ENV_ROOT_DIR}/srcAlt/"*; do
+      if [[ -d "${dir}/profiles" ]]; then
+        Conf::list "${dir}/profiles" "profile." ".sh" "-type f" "    - "
+      fi
+    done
+  ) | sort | uniq
+}
+
+validateProfile() {
+  local profileName="$2"
+  if ! Profiles::getProfilePath "${profileName}" &>/dev/null; then
+    Log::fatal "Profile file profile.${profileName}.sh doesn't exist in any profiles directory"
+  fi
+}
+
+commandCallback() {
+  if ((${#CONFIG_LIST} > 0)); then
+    if [[ -n "${PROFILE}" ]]; then
+      Log::fatal "You cannot combine profile and softwares"
+    fi
+    # check if each Softwares exists
+    local software
+    for software in "${CONFIG_LIST[@]}"; do
+      if [[ ! -f "${BASH_DEV_ENV_ROOT_DIR}/${software}" ]]; then
+        Log::fatal "Software ${software} configuration does not exists"
+      fi
+    done
+  elif [[ -z "${PROFILE}" ]]; then
+    Log::fatal "You must specify either a list of softwares, either a profile name"
+  else
+    # get profile path
+    local profilePath
+    profilePath="$(Profiles::getProfilePath "${PROFILE}")" # should succeed as it was tested by option
+    # load selected profile
+    Profiles::loadProfile "${profilePath}"
+  fi
+  if [[ "${SKIP_DEPENDENCIES:-0}" = "0" ]]; then
+    CONFIG_LIST=("${CONFIG_LIST[@]}")
+
+    declare rootDependency="your software selection"
+    if [[ -n "${PROFILE}" ]]; then
+      rootDependency="profile ${PROFILE}"
+    fi
+    # deduce dependencies
+    declare -ag allDepsResult=()
+    # shellcheck disable=SC2034
+    declare -Ag allDepsResultSeen=()
+    Profiles::allDepsRecursive \
+      "${BASH_DEV_ENV_ROOT_DIR}" "${rootDependency}" "${CONFIG_LIST[@]}"
+
+    CONFIG_LIST=("${allDepsResult[@]}")
+  fi
+  if ((${#CONFIG_LIST} == 0)); then
+    Log::fatal "Softwares list is empty"
+  fi
+}
+
+export CONFIG_LIST
+export PROFILE
+
+
+
+generateSoftwaresList() {
+  local directory="$1"
+  local relativeDir="$2"
+  local description list softName
+
+  list="$(
+    Conf::list "${directory}" "" "" "-type f" "" |
+      grep -v -E '^(_.*|MandatorySoftwares)$' || true
+  )"
+  local -i maxLineLength
+  maxLineLength="$(wc -L <<<"${list}")"
+  ((maxLineLength += 1 + ${#relativeDir}))
+  while read -r soft; do
+    softName="${soft}"
+    description="$(SKIP_REQUIRES=1 "${directory}/${soft}" helpDescription 2>/dev/null)"
+    if [[ -z "${description}" ]]; then
+      description="<No description available>"
+    fi
+    description="$(printf -- '_%.0s' $(seq "$((maxLineLength - ${#softName} - 1 - ${#relativeDir} + 1))")) ${description}"
+    description="  - ${__HELP_TITLE_COLOR}${relativeDir}/${softName} ${__HELP_EXAMPLE}${description}${__RESET_COLOR}"
+    echo -e " ${description}" | sed '2,$s/^/      /'
+  done <<<"${list}"
+}
+
+softwaresListCacheFile() {
+  local relativeDir="$1"
+  directoryName="$(sed -E 's#/#_#g' <<<"${relativeDir}")"
+  echo "${WSL_TMPDIR:-${PERSISTENT_TMPDIR:-/tmp}}/bash_dev_env_${directoryName}_arg_help_cache"
+}
+
+generateSoftwaresListCache() {
+  local directory="$1"
+  local relativeDir="$2"
+  local softwaresListHelpTempFile="$3"
+
+  if [[ ! -f "${softwaresListHelpTempFile}" ]] ||
+    (($(File::elapsedTimeSinceLastModification "${softwaresListHelpTempFile}") > help_cache_max_duration)); then
+    echo >&2 -n "Generating softwares list cache (directory ${relativeDir}) ..."
+    generateSoftwaresList "${directory}" "${relativeDir}" >"${softwaresListHelpTempFile}" || rm -f "${softwaresListHelpTempFile}"
+    echo >&2 -e "\033[2K" # erase line (Generating softwares list cache ...)
+  fi
+}
+
+displayAvailableSoftwares() {
+  local directory="$1"
+
+  local relativeDir
+  relativeDir="$(File::relativeToDir "${directory}" "${BASH_DEV_ENV_ROOT_DIR}")"
+  local softwaresListHelpTempFile
+  softwaresListHelpTempFile="$(softwaresListCacheFile "${relativeDir}")"
+  generateSoftwaresListCache "${directory}" "${relativeDir}" "${softwaresListHelpTempFile}"
+  echo -e "  ${__HELP_TITLE_COLOR}Available Softwares (directory ${relativeDir}):${__RESET_COLOR}"
+  cat "${softwaresListHelpTempFile}"
+}
+
+declare -i help_cache_max_duration=86400
+
+
+
+optionHelpCallback() {
+  "RustCommandHelp"
+  exit 0
+}
+
+defaultBeforeParseCallback() {
+  Env::requireLoad
+  UI::requireTheme
+  Log::requireLoad
+  Linux::requireUbuntu
+  Linux::Wsl::requireWsl
+}
+
+beforeParseCallback() {
+  defaultBeforeParseCallback
+}
+
+defaultAfterParseCallback() {
+  Engine::Config::loadConfig
+}
+
+afterParseCallback() {
+  defaultAfterParseCallback
+}
+
+
+# ------------------------------------------
+# Command RustCommand
+# ------------------------------------------
+
+# options variables initialization
+declare SKIP_CONFIGURE="0"
+declare SKIP_INSTALL="0"
+declare SKIP_TEST="0"
+declare SKIP_DEPENDENCIES="0"
+declare PREPARE_EXPORT="0"
+declare PROFILE=""
+declare optionHelp="0"
+declare optionConfig="0"
+declare optionBashFrameworkConfig=""
+declare optionInfoVerbose="0"
+declare optionDebugVerbose="0"
+declare optionTraceVerbose="0"
+declare optionLogLevel="optionLogLevelDefaultValueFunction"
+declare optionLogFile="optionLogFileDefaultValueFunction"
+declare optionDisplayLevel="optionDisplayLevelDefaultValueFunction"
+declare optionNoColor="0"
+declare optionTheme="default"
+declare optionVersion="0"
+declare optionQuiet="0"
+# arguments variables initialization
+declare command="install"
+# @description parse command options and arguments for RustCommand
+RustCommandParse() {
+  Log::displayDebug "Command ${SCRIPT_NAME} - parse arguments: ${BASH_FRAMEWORK_ARGV[*]}"
+  Log::displayDebug "Command ${SCRIPT_NAME} - parse filtered arguments: ${BASH_FRAMEWORK_ARGV_FILTERED[*]}"
+  SKIP_CONFIGURE="0"
+  local -i options_parse_optionParsedCountSKIP_CONFIGURE
+  ((options_parse_optionParsedCountSKIP_CONFIGURE = 0)) || true
+  SKIP_INSTALL="0"
+  local -i options_parse_optionParsedCountSKIP_INSTALL
+  ((options_parse_optionParsedCountSKIP_INSTALL = 0)) || true
+  SKIP_TEST="0"
+  local -i options_parse_optionParsedCountSKIP_TEST
+  ((options_parse_optionParsedCountSKIP_TEST = 0)) || true
+  SKIP_DEPENDENCIES="0"
+  local -i options_parse_optionParsedCountSKIP_DEPENDENCIES
+  ((options_parse_optionParsedCountSKIP_DEPENDENCIES = 0)) || true
+  PREPARE_EXPORT="0"
+  local -i options_parse_optionParsedCountPREPARE_EXPORT
+  ((options_parse_optionParsedCountPREPARE_EXPORT = 0)) || true
+  PROFILE=""
+  local -i options_parse_optionParsedCountPROFILE
+  ((options_parse_optionParsedCountPROFILE = 0)) || true
+  optionHelp="0"
+  local -i options_parse_optionParsedCountOptionHelp
+  ((options_parse_optionParsedCountOptionHelp = 0)) || true
+  optionConfig="0"
+  local -i options_parse_optionParsedCountOptionConfig
+  ((options_parse_optionParsedCountOptionConfig = 0)) || true
+  optionBashFrameworkConfig=""
+  local -i options_parse_optionParsedCountOptionBashFrameworkConfig
+  ((options_parse_optionParsedCountOptionBashFrameworkConfig = 0)) || true
+  optionInfoVerbose="0"
+  local -i options_parse_optionParsedCountOptionInfoVerbose
+  ((options_parse_optionParsedCountOptionInfoVerbose = 0)) || true
+  optionDebugVerbose="0"
+  local -i options_parse_optionParsedCountOptionDebugVerbose
+  ((options_parse_optionParsedCountOptionDebugVerbose = 0)) || true
+  optionTraceVerbose="0"
+  local -i options_parse_optionParsedCountOptionTraceVerbose
+  ((options_parse_optionParsedCountOptionTraceVerbose = 0)) || true
+  optionLogLevel="optionLogLevelDefaultValueFunction"
+  local -i options_parse_optionParsedCountOptionLogLevel
+  ((options_parse_optionParsedCountOptionLogLevel = 0)) || true
+  optionLogFile="optionLogFileDefaultValueFunction"
+  local -i options_parse_optionParsedCountOptionLogFile
+  ((options_parse_optionParsedCountOptionLogFile = 0)) || true
+  optionDisplayLevel="optionDisplayLevelDefaultValueFunction"
+  local -i options_parse_optionParsedCountOptionDisplayLevel
+  ((options_parse_optionParsedCountOptionDisplayLevel = 0)) || true
+  optionNoColor="0"
+  local -i options_parse_optionParsedCountOptionNoColor
+  ((options_parse_optionParsedCountOptionNoColor = 0)) || true
+  optionTheme="default"
+  local -i options_parse_optionParsedCountOptionTheme
+  ((options_parse_optionParsedCountOptionTheme = 0)) || true
+  optionVersion="0"
+  local -i options_parse_optionParsedCountOptionVersion
+  ((options_parse_optionParsedCountOptionVersion = 0)) || true
+  optionQuiet="0"
+  local -i options_parse_optionParsedCountOptionQuiet
+  ((options_parse_optionParsedCountOptionQuiet = 0)) || true
+
+  command="install"
+
+  local -i options_parse_argParsedCountCommand
+  ((options_parse_argParsedCountCommand = 0)) || true
+
+
+  # shellcheck disable=SC2034
+  local -i options_parse_parsedArgIndex=0
+  while (($# > 0)); do
+    local options_parse_arg="$1"
+    local argOptDefaultBehavior=0
+    case "${options_parse_arg}" in
+      # Option 1/19
+      # SKIP_CONFIGURE alts --skip-config|--skip-configure|--skip-configuration|-sc
+      # type: Boolean min 0 max 1
+      --skip-config | --skip-configure | --skip-configuration | -sc)
+        # shellcheck disable=SC2034
+        SKIP_CONFIGURE="1"
+
+        if ((options_parse_optionParsedCountSKIP_CONFIGURE >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountSKIP_CONFIGURE))
+        ;;
+
+      # Option 2/19
+      # SKIP_INSTALL alts --skip-install|--skip-installation|-si
+      # type: Boolean min 0 max 1
+      --skip-install | --skip-installation | -si)
+        # shellcheck disable=SC2034
+        SKIP_INSTALL="1"
+
+        if ((options_parse_optionParsedCountSKIP_INSTALL >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountSKIP_INSTALL))
+        ;;
+
+      # Option 3/19
+      # SKIP_TEST alts --skip-test|--skip-tests|-st
+      # type: Boolean min 0 max 1
+      --skip-test | --skip-tests | -st)
+        # shellcheck disable=SC2034
+        SKIP_TEST="1"
+
+        if ((options_parse_optionParsedCountSKIP_TEST >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountSKIP_TEST))
+        ;;
+
+      # Option 4/19
+      # SKIP_DEPENDENCIES alts --skip-deps|--skip-dependencies|-sd
+      # type: Boolean min 0 max 1
+      --skip-deps | --skip-dependencies | -sd)
+        # shellcheck disable=SC2034
+        SKIP_DEPENDENCIES="1"
+
+        if ((options_parse_optionParsedCountSKIP_DEPENDENCIES >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountSKIP_DEPENDENCIES))
+        ;;
+
+      # Option 5/19
+      # PREPARE_EXPORT alts --prepare-export|-e
+      # type: Boolean min 0 max 1
+      --prepare-export | -e)
+        # shellcheck disable=SC2034
+        PREPARE_EXPORT="1"
+
+        if ((options_parse_optionParsedCountPREPARE_EXPORT >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountPREPARE_EXPORT))
+        ;;
+
+      # Option 6/19
+      # PROFILE alts --profile|-p
+      # type: String min 0 max 1
+      --profile | -p)
+        shift
+        if (($# == 0)); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
+          return 1
+        fi
+
+        if ((options_parse_optionParsedCountPROFILE >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountPROFILE))
+        # shellcheck disable=SC2034
+        PROFILE="$1"
+        validateProfile "${options_parse_arg}" "${PROFILE}"
+
+        ;;
+
+      # Option 7/19
+      # optionHelp alts --help|-h
+      # type: Boolean min 0 max 1
+      --help | -h)
+        # shellcheck disable=SC2034
+        optionHelp="1"
+
+        if ((options_parse_optionParsedCountOptionHelp >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionHelp))
+        optionHelpCallback "${options_parse_arg}" "${optionHelp}"
+
+        ;;
+
+      # Option 8/19
+      # optionConfig alts --config
+      # type: Boolean min 0 max 1
+      --config)
+        # shellcheck disable=SC2034
+        optionConfig="1"
+
+        if ((options_parse_optionParsedCountOptionConfig >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionConfig))
+        ;;
+
+      # Option 9/19
+      # optionBashFrameworkConfig alts --bash-framework-config
+      # type: String min 0 max 1
+      --bash-framework-config)
+        shift
+        if (($# == 0)); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
+          return 1
+        fi
+
+        if ((options_parse_optionParsedCountOptionBashFrameworkConfig >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionBashFrameworkConfig))
+        # shellcheck disable=SC2034
+        optionBashFrameworkConfig="$1"
+        optionBashFrameworkConfigCallback "${options_parse_arg}" "${optionBashFrameworkConfig}"
+
+        ;;
+
+      # Option 10/19
+      # optionInfoVerbose alts --verbose|-v
+      # type: Boolean min 0 max 1
+      --verbose | -v)
+        # shellcheck disable=SC2034
+        optionInfoVerbose="1"
+
+        if ((options_parse_optionParsedCountOptionInfoVerbose >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionInfoVerbose))
+        optionInfoVerboseCallback "${options_parse_arg}" "${optionInfoVerbose}"
+
+        updateArgListInfoVerboseCallback "${options_parse_arg}" "${optionInfoVerbose}"
+
+        ;;
+
+      # Option 11/19
+      # optionDebugVerbose alts -vv
+      # type: Boolean min 0 max 1
+      -vv)
+        # shellcheck disable=SC2034
+        optionDebugVerbose="1"
+
+        if ((options_parse_optionParsedCountOptionDebugVerbose >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionDebugVerbose))
+        optionDebugVerboseCallback "${options_parse_arg}" "${optionDebugVerbose}"
+
+        updateArgListDebugVerboseCallback "${options_parse_arg}" "${optionDebugVerbose}"
+
+        ;;
+
+      # Option 12/19
+      # optionTraceVerbose alts -vvv
+      # type: Boolean min 0 max 1
+      -vvv)
+        # shellcheck disable=SC2034
+        optionTraceVerbose="1"
+
+        if ((options_parse_optionParsedCountOptionTraceVerbose >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionTraceVerbose))
+        optionTraceVerboseCallback "${options_parse_arg}" "${optionTraceVerbose}"
+
+        updateArgListTraceVerboseCallback "${options_parse_arg}" "${optionTraceVerbose}"
+
+        ;;
+
+      # Option 13/19
+      # optionLogLevel alts --log-level
+      # type: String min 0 max 1
+      # authorizedValues: OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE
+      --log-level)
+        shift
+        if (($# == 0)); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
+          return 1
+        fi
+        if [[ ! "$1" =~ OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE ]]; then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - value '$1' is not part of authorized values(OFF, ERR, ERROR, WARN, WARNING, INFO, DEBUG, TRACE)"
+          return 1
+        fi
+
+        if ((options_parse_optionParsedCountOptionLogLevel >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionLogLevel))
+        # shellcheck disable=SC2034
+        optionLogLevel="$1"
+        optionLogLevelCallback "${options_parse_arg}" "${optionLogLevel}"
+
+        updateArgListLogLevelCallback "${options_parse_arg}" "${optionLogLevel}"
+
+        ;;
+
+      # Option 14/19
+      # optionLogFile alts --log-file
+      # type: String min 0 max 1
+      --log-file)
+        shift
+        if (($# == 0)); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
+          return 1
+        fi
+
+        if ((options_parse_optionParsedCountOptionLogFile >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionLogFile))
+        # shellcheck disable=SC2034
+        optionLogFile="$1"
+        optionLogFileCallback "${options_parse_arg}" "${optionLogFile}"
+
+        updateArgListLogFileCallback "${options_parse_arg}" "${optionLogFile}"
+
+        ;;
+
+      # Option 15/19
+      # optionDisplayLevel alts --display-level
+      # type: String min 0 max 1
+      # authorizedValues: OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE
+      --display-level)
+        shift
+        if (($# == 0)); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
+          return 1
+        fi
+        if [[ ! "$1" =~ OFF|ERR|ERROR|WARN|WARNING|INFO|DEBUG|TRACE ]]; then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - value '$1' is not part of authorized values(OFF, ERR, ERROR, WARN, WARNING, INFO, DEBUG, TRACE)"
+          return 1
+        fi
+
+        if ((options_parse_optionParsedCountOptionDisplayLevel >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionDisplayLevel))
+        # shellcheck disable=SC2034
+        optionDisplayLevel="$1"
+        optionDisplayLevelCallback "${options_parse_arg}" "${optionDisplayLevel}"
+
+        updateArgListDisplayLevelCallback "${options_parse_arg}" "${optionDisplayLevel}"
+
+        ;;
+
+      # Option 16/19
+      # optionNoColor alts --no-color
+      # type: Boolean min 0 max 1
+      --no-color)
+        # shellcheck disable=SC2034
+        optionNoColor="1"
+
+        if ((options_parse_optionParsedCountOptionNoColor >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionNoColor))
+        optionNoColorCallback "${options_parse_arg}" "${optionNoColor}"
+
+        updateArgListNoColorCallback "${options_parse_arg}" "${optionNoColor}"
+
+        ;;
+
+      # Option 17/19
+      # optionTheme alts --theme
+      # type: String min 0 max 1
+      # authorizedValues: default|default-force|noColor
+      --theme)
+        shift
+        if (($# == 0)); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - a value needs to be specified"
+          return 1
+        fi
+        if [[ ! "$1" =~ default|default-force|noColor ]]; then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - value '$1' is not part of authorized values(default, default-force, noColor)"
+          return 1
+        fi
+
+        if ((options_parse_optionParsedCountOptionTheme >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionTheme))
+        # shellcheck disable=SC2034
+        optionTheme="$1"
+        optionThemeCallback "${options_parse_arg}" "${optionTheme}"
+
+        updateArgListThemeCallback "${options_parse_arg}" "${optionTheme}"
+
+        ;;
+
+      # Option 18/19
+      # optionVersion alts --version
+      # type: Boolean min 0 max 1
+      --version)
+        # shellcheck disable=SC2034
+        optionVersion="1"
+
+        if ((options_parse_optionParsedCountOptionVersion >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionVersion))
+        optionVersionCallback "${options_parse_arg}" "${optionVersion}"
+
+        ;;
+
+      # Option 19/19
+      # optionQuiet alts --quiet|-q
+      # type: Boolean min 0 max 1
+      --quiet | -q)
+        # shellcheck disable=SC2034
+        optionQuiet="1"
+
+        if ((options_parse_optionParsedCountOptionQuiet >= 1 )); then
+          Log::displayError "Command ${SCRIPT_NAME} - Option ${options_parse_arg} - Maximum number of option occurrences reached(1)"
+          return 1
+        fi
+        ((++options_parse_optionParsedCountOptionQuiet))
+        optionQuietCallback "${options_parse_arg}" "${optionQuiet}"
+
+        updateArgListQuietCallback "${options_parse_arg}" "${optionQuiet}"
+
+        ;;
+
+      -*)
+        if [[ "${argOptDefaultBehavior}" = "0" ]]; then
+          Log::displayError "Command ${SCRIPT_NAME} - Invalid option ${options_parse_arg}"
+          return 1
+        fi
+        ;;
+      *)
+        ((minParsedArgIndex0 = 0)) || true
+        ((maxParsedArgIndex0 = 0)) || true
+        ((minParsedArgIndex1 = minParsedArgIndex0 + 0)) || true
+        ((maxParsedArgIndex1 = maxParsedArgIndex0 + 1)) || true
+        ((incrementArg = 1 ))
+        if ((0)); then
+          # Technical if - never reached
+          :
+
+        # Argument 1/1 - command
+        # Argument command min 0 max 1
+        # Argument command authorizedValues: isInterfaceImplemented|helpDescription|scriptName|dependencies|listVariables|fortunes|helpVariables|defaultVariables|checkVariables|breakOnConfigFailure|breakOnTestFailure|isInstallImplemented|install|isTestInstallImplemented|testInstall|isConfigureImplemented|configure|isTestConfigureImplemented|testConfigure|isCleanBeforeExportImplemented
+        elif (( options_parse_parsedArgIndex >= minParsedArgIndex0 &&
+          options_parse_parsedArgIndex < maxParsedArgIndex1 )); then
+          if [[ ! "${options_parse_arg}" =~ isInterfaceImplemented|helpDescription|scriptName|dependencies|listVariables|fortunes|helpVariables|defaultVariables|checkVariables|breakOnConfigFailure|breakOnTestFailure|isInstallImplemented|install|isTestInstallImplemented|testInstall|isConfigureImplemented|configure|isTestConfigureImplemented|testConfigure|isCleanBeforeExportImplemented ]]; then
+            Log::displayError "Command ${SCRIPT_NAME} - Argument command - value '${options_parse_arg}' is not part of authorized values(isInterfaceImplemented, helpDescription, scriptName, dependencies, listVariables, fortunes, helpVariables, defaultVariables, checkVariables, breakOnConfigFailure, breakOnTestFailure, isInstallImplemented, install, isTestInstallImplemented, testInstall, isConfigureImplemented, configure, isTestConfigureImplemented, testConfigure, isCleanBeforeExportImplemented)"
+            return 1
+          fi
+          if ((options_parse_argParsedCountCommand >= 1 )); then
+            Log::displayError "Command ${SCRIPT_NAME} - Argument command - Maximum number of argument occurrences reached(1)"
+            return 1
+          fi
+          ((++options_parse_argParsedCountCommand))
+          # shellcheck disable=SC2034
+          command="${options_parse_arg}"
+          argsInstallScriptCommandCallback "${command}" -- "${@:2}"
+
+
+        # else too much args
+        else
+
+
+          if [[ "${argOptDefaultBehavior}" = "0" ]]; then
+            # too much args and no unknownArgumentCallbacks configured
+            Log::displayError "Command ${SCRIPT_NAME} - Argument - too much arguments provided: $*"
+            return 1
+          fi
+
+        fi
+        if ((incrementArg == 1)); then
+          ((++options_parse_parsedArgIndex))
+        fi
+        ;;
+    esac
+    shift || true
+  done || return $?
+
+  commandOptionParseFinished
+
+}
+
+# @description display command options and arguments help for RustCommand
+RustCommandHelp() {
+  echo -e "${__HELP_TITLE_COLOR}SYNOPSIS:${__RESET_COLOR}"
+  helpDescriptionFunction
+
+
+  # ------------------------------------------
+  # usage section
+  # ------------------------------------------
+  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "Rust [OPTIONS] [ARGUMENTS]"
+  echo
+  # ------------------------------------------
+  # usage/options section
+  # ------------------------------------------
+  optionsAltList=("[--skip-config|--skip-configure|--skip-configuration|-sc]" "[--skip-install|--skip-installation|-si]" "[--skip-test|--skip-tests|-st]" "[--skip-deps|--skip-dependencies|-sd]" "[--prepare-export|-e]" "[--profile|-p <profile>]" "[--help|-h]" "[--config]" "[--bash-framework-config <bash-framework-config>]" "[--verbose|-v]" "[-vv]" "[-vvv]" "[--log-level <log-level>]" "[--log-file <log-file>]" "[--display-level <display-level>]" "[--no-color]" "[--theme <theme>]" "[--version]" "[--quiet|-q]"
+  )
+  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" \
+    "Rust" "${optionsAltList[@]}"
+  echo
+
+  # ------------------------------------------
+  # usage/arguments section
+  # ------------------------------------------
+  echo
+  echo -e "${__HELP_TITLE_COLOR}ARGUMENTS:${__RESET_COLOR}"
+
+  Array::wrap2 " " 80 2 "  [${__HELP_OPTION_COLOR}command${__HELP_NORMAL} {single}]"
+  Array::wrap2 ' ' 76 4 "    " "The command to run on this install script."
+  echo
+
+  echo "    Possible values:"
+  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}isInterfaceImplemented:${__RESET_COLOR} Check if all commands below are available"
+  echo
+  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}helpDescription:${__RESET_COLOR} Show help description of this install script."
+  echo
+  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}scriptName:${__RESET_COLOR} Show the internal name of this install script."
+  echo
+  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}dependencies:${__RESET_COLOR} Show this install scripts's dependencies."
+  echo
+  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}listVariables:${__RESET_COLOR} Show the variables needed to execute this
+  install script."
+  echo
+  Array::wrap2 ' ' 76 8 "      - ${__OPTION_COLOR}fortunes:${__RESET_COLOR} Show the fortunes sentences that this
+  install script can generate."
+  echo
+  echo -e "      - ${__OPTION_COLOR}helpVariables${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}defaultVariables${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}checkVariables${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}breakOnConfigFailure${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}breakOnTestFailure${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}isInstallImplemented${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}install${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}isTestInstallImplemented${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}testInstall${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}isConfigureImplemented${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}configure${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}isTestConfigureImplemented${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}testConfigure${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}isCleanBeforeExportImplemented${__RESET_COLOR}"
+
+
+  Array::wrap2 ' ' 76 6 "    Default value: " "install"
+  echo
+
+  # ------------------------------------------
+  # options section
+  # ------------------------------------------
+  echo
+  echo -e "${__HELP_TITLE_COLOR}SKIP OPTIONS:${__RESET_COLOR}"
+  echo -e "  ${__HELP_OPTION_COLOR}--skip-config${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-configure${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-configuration${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-sc${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Skip software configuration."
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--skip-install${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-installation${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-si${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Skip software installation."
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--skip-test${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-tests${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-st${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Skip software installation test."
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--skip-deps${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}--skip-dependencies${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-sd${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Install the software requested without resolving dependencies."
+  echo
+
+  echo
+  echo -e "${__HELP_TITLE_COLOR}EXPORT OPTIONS:${__RESET_COLOR}"
+  echo -e "  ${__HELP_OPTION_COLOR}--prepare-export${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-e${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "prepare the wsl installation for export (remove all sensitive files)"
+  echo
+
+  echo
+  echo -e "${__HELP_TITLE_COLOR}INSTALL OPTIONS:${__RESET_COLOR}"
+  echo -e "  ${__HELP_OPTION_COLOR}--profile${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-p <profile>${__HELP_NORMAL} {single}"
+  profileHelpFunction
+
+
+  echo
+  echo -e "${__HELP_TITLE_COLOR}GLOBAL OPTIONS:${__RESET_COLOR}"
+  echo -e "  ${__HELP_OPTION_COLOR}--help${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-h${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Displays this command help"
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--config${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Displays configuration"
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--bash-framework-config <bash-framework-config>${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Use alternate bash framework configuration."
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--verbose${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-v${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Info level verbose mode (alias of --display-level INFO)"
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}-vv${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Debug level verbose mode (alias of --display-level DEBUG)"
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}-vvv${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Trace level verbose mode (alias of --display-level TRACE)"
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--log-level <log-level>${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Set log level"
+  echo
+
+  echo "    Possible values: "
+  echo -e "      - ${__OPTION_COLOR}OFF${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}ERR${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}ERROR${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}WARN${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}WARNING${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}INFO${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
+
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionLogLevelDefaultValueFunction)"
+  echo
+
+  echo -e "  ${__HELP_OPTION_COLOR}--log-file <log-file>${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Set log file"
+  echo
+
+
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionLogFileDefaultValueFunction)"
+  echo
+
+  echo -e "  ${__HELP_OPTION_COLOR}--display-level <display-level>${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Set display level"
+  echo
+
+  echo "    Possible values: "
+  echo -e "      - ${__OPTION_COLOR}OFF${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}ERR${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}ERROR${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}WARN${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}WARNING${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}INFO${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
+
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionDisplayLevelDefaultValueFunction)"
+  echo
+
+  echo -e "  ${__HELP_OPTION_COLOR}--no-color${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Produce monochrome output. alias of --theme noColor."
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--theme <theme>${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Choose color theme - default-force means colors will be produced even if command is piped."
+  echo
+
+  echo "    Possible values: "
+  echo -e "      - ${__OPTION_COLOR}default${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}default-force${__RESET_COLOR}"
+  echo -e "      - ${__OPTION_COLOR}noColor${__RESET_COLOR}"
+
+  Array::wrap2 ' ' 76 6 "    Default value: " "default"
+  echo
+
+  echo -e "  ${__HELP_OPTION_COLOR}--version${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Print version information and quit."
+  echo
+
+
+  echo -e "  ${__HELP_OPTION_COLOR}--quiet${__HELP_NORMAL}, ${__HELP_OPTION_COLOR}-q${__HELP_NORMAL} {single}"
+  Array::wrap2 ' ' 76 4 "    " "Quiet mode, doesn't display any output."
+  echo
+
+  # ------------------------------------------
+  # longDescription section
+  # ------------------------------------------
+  echo
+  echo
+  echo -e "${__HELP_TITLE_COLOR}DESCRIPTION:${__RESET_COLOR}"
+  helpLongDescriptionFunction
+  # ------------------------------------------
+  # version section
+  # ------------------------------------------
+  echo
+  echo -n -e "${__HELP_TITLE_COLOR}VERSION: ${__RESET_COLOR}"
+  echo "3.0"
+  # ------------------------------------------
+  # author section
+  # ------------------------------------------
+  echo
+  echo -n -e "${__HELP_TITLE_COLOR}AUTHOR: ${__RESET_COLOR}"
+  echo "[François Chastanet](https://github.com/fchastanet)"
+  # ------------------------------------------
+  # sourceFile section
+  # ------------------------------------------
+  echo
+  echo -n -e "${__HELP_TITLE_COLOR}SOURCE FILE: ${__RESET_COLOR}"
+  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/_Defaults/Rust-binary.yaml"
+  # ------------------------------------------
+  # license section
+  # ------------------------------------------
+  echo
+  echo -n -e "${__HELP_TITLE_COLOR}LICENSE: ${__RESET_COLOR}"
+  echo "MIT License"
+  # ------------------------------------------
+  # copyright section
+  # ------------------------------------------
+  Array::wrap2 ' ' 76 0 "$(copyrightCallback)"
+}
+
+
+beforeParseCallback
+
+RustCommandParse "$@"
+MAIN_FUNCTION_NAME="main"
+main() {
+
+afterParseCallback
+InstallScripts::command
+
+}
+
+# if file is sourced avoid calling main function
+# shellcheck disable=SC2178
+BASH_SOURCE=".$0" # cannot be changed in bash
+# shellcheck disable=SC2128
+if test ".$0" == ".${BASH_SOURCE}"; then
+  if [[ "${BASH_FRAMEWORK_QUIET_MODE:-0}" = "1" ]]; then
+    main "$@" &>/dev/null
+  else
+    main "$@"
+  fi
+fi

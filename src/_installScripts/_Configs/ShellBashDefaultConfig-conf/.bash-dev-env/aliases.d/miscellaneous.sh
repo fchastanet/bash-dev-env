@@ -15,3 +15,8 @@ function help() {
   curl "cht.sh/$1"
 }
 alias help='help'
+
+if [[ "$(uname -o)" = "GNU/Linux" ]]; then
+  export BROWSER="/mnt/c/Windows/explorer.exe"
+  alias view='explorer.exe'
+fi

@@ -1,3 +1,6 @@
+[include]
+    path = ~/.bash-tools/.gitconfig
+
 [user]
   name = Francois Chastanet
   email = fchastanet@chastanet.com
@@ -6,6 +9,7 @@
   eol = lf
   autocrlf = false
   excludesFile = ~/.bash-dev-env/GitDefaultConfig/gitignore
+  pager = delta
   # Don't consider trailing space change as a cause for merge conflicts
   whitespace = -trailing-space
   # make .githooks folder as default .git/hooks folder
@@ -14,14 +18,27 @@
   # git config --global core.hooksPath .git/hooks
   #hooksPath = .githooks
 
+[interactive]
+  diffFilter = delta --color-only
+
+[delta]
+  navigate = true  # use n and N to move between diff sections
+  dark = true      # or light = true, or omit for auto-detection
+
 [merge]
   tool = vscode
+  conflictstyle = zdiff3
 
 [mergetool "vscode"]
   cmd = code --wait --merge $BASE $LOCAL $REMOTE $MERGED
 
+# diff default values: https://github.com/git/git/blob/master/Documentation/config/diff.txt
 [diff]
   tool = vscode
+  # The basic greedy diff algorithm. Currently, this is the default.
+  # algorithm = myers
+  # This algorithm extends the patience algorithm to "support low-occurrence common elements".
+  algorithm = histogram
 
 [difftool "vscode"]
   cmd = code --wait --diff $LOCAL $REMOTE
@@ -43,24 +60,25 @@
   default = current
   # https://git-scm.com/docs/git-push#Documentation/git-push.txt---follow-tags
   followTags = true
+	autoSetupRemote = true
+
+[fetch]
+  prune = true
 
 [pull]
   ff = only
   rebase = true
 
-# diff default values: https://github.com/git/git/blob/master/Documentation/config/diff.txt
-[diff]
-  tool = vscode
-  # The basic greedy diff algorithm. Currently, this is the default.
-  # algorithm = myers
-  # This algorithm extends the patience algorithm to "support low-occurrence common elements".
-  algorithm = histogram
+[url "git@github.com:"]
+  insteadOf = https://github.com/
 
-[difftool "vscode"]
-  cmd = code --wait --diff $LOCAL $REMOTE
+[credential "https://github.com"]
+	helper =
+	helper = !/usr/bin/gh auth git-credential
 
-#[url "git@github.com:"]
-# insteadOf = https://github.com/
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/usr/bin/gh auth git-credential
 
 [status]
   # Display submodule rev change summaries in status
@@ -79,65 +97,74 @@
 
 # @see https://www.durdn.com/blog/2012/11/22/must-have-git-aliases-advanced-examples/
 [alias]
-# List all git aliases
-alias = "!git config -l | grep alias | cut -c 7-"
+  # List all git aliases
+  alias = "!git config -l | grep alias | cut -c 7-"
 
-co = checkout
-cob = checkout -b
-st = status
-dt = difftool -d
-# @see https://adamj.eu/tech/2023/10/31/git-force-push-safely
-pf = push --force-with-lease --force-if-includes
-master = !git checkout master && git pull origin
-undoLastNotPushedCommit = reset --soft HEAD~
+  cm = commit -m
+  co = checkout
+  cob = checkout -b
+  st = status
 
-# Remove the file from repository but keeping it as unstaged
-rm-keep = rm --cached
+  dt = difftool -d
 
-# List commits in short form, with colors and branch/tag annotations
-# cspell:disable-next-line
-ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
+  br = branch
+  brd = branch -d
+  brD = branch -D
 
-# List commits showing changed files
-# cspell:disable-next-line
-ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
+  # @see https://adamj.eu/tech/2023/10/31/git-force-push-safely
+  pfl = push --force-with-lease --force-if-includes
+  pft = push --tags
 
-# List one-line commits showing relative dates:
-# cspell:disable-next-line
-ld = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative
+  master = !git checkout master && git pull origin
+  plo = pull origin
 
-# get logs since my last commit
-# cspell:disable-next-line
-lg = "!me=$(git config --get user.name); \
-    git log --since $(git log --pretty=format:'%ct' --author \"$me\" -1)"
+  undoLastNotPushedCommit = reset --soft HEAD~
 
-# get my last commits
-my-logs = "!me=$(git config --get user.name); \
-    git log --author=\"$me\""
+  # Remove the file from repository but keeping it as unstaged
+  rm-keep = rm --cached
 
-# get all modifications from the given branch losing all commits history
-# can be useful to recreate a branch from scratch
-merge-no-history = ! "f() { git checkout $1 -- . ;}; f"
+  # List commits in short form, with colors and branch/tag annotations
+  # cspell:disable-next-line
+  ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
 
-# get all merges into current branch comparing to master
-log-merges-into-current-branch = log master..HEAD --ancestry-path --merges  --oneline
+  # List commits showing changed files
+  ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
 
-# get first commit of a branch comparing to master
-log-get-first-commit-of-current-branch = !git log master..HEAD --oneline | tail -1
+  # List one-line commits showing relative dates:
+  ld = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative
 
-# get list of branches containing a file
-list-branches-containing-file = "!f() { git log --all --source -- $1 | grep -o 'refs/.*' | sort -u ; }; f; unset f;"
+  # get logs since my last commit
+  # cspell:disable-next-line
+  lg = "!me=$(git config --get user.name); \
+      git log --since $(git log --pretty=format:'%ct' --author \"$me\" -1)"
 
-# https://stackoverflow.com/a/43585658/3045926
-# or use git show-branch
-reverse-tree = 'log --graph --decorate --simplify-by-decoration --oneline'
+  # get my last commits
+  my-logs = "!me=$(git config --get user.name); \
+      git log --author=\"$me\""
 
-set-remote-branch = '!f() {git branch --set-upstream-to="origin/$(git branch --show-current)" "$(git branch --show-current)"; }; f; unset f;'
+  # get all modifications form the given branch losing all commits history
+  # can be useful to recreate a branch from scratch
+  merge-no-history = ! "f() { git checkout $1 -- . ;}; f"
 
-remove-local-branches-gone = ! git fetch -p && git branch -vv | awk '/: gone]/{print $1}' | xargs git branch -D
+  # get all merges into current branch comparing to master
+  log-merges-into-current-branch = log master..HEAD --ancestry-path --merges  --oneline
 
-move-tag = '!f() { local tag="$1"; git tag "${tag}" --delete; git push origin --delete "${tag}"; git tag "${tag}" --force; git push --force-with-lease --no-verify --tags; }'
+  # get first commit of a branch comparing to master
+  log-get-first-commit-of-current-branch = !git log master..HEAD --oneline | tail -1
 
-git-safely-remove-local-branch='!f() { local branch="$1"; git tag "${branch}" "${branch}" && git branch -D "${branch}"; }; f; unset f;'
+  # get list of branches containing a file
+  list-branches-containing-file = "!f() { git log --all --source -- $1 | grep -o 'refs/.*' | sort -u ; }; f"
 
-git-list-branches-for-commit='!f(local commit="$1"; git branch -a --contains "${commit}";) {}; f; unset f'
+  # https://stackoverflow.com/a/43585658/3045926
+  # or use git show-branch
+  reverse-tree = 'log --graph --decorate --simplify-by-decoration --oneline'
+
+  set-remote-branch = '!f() {git branch --set-upstream-to="origin/$(git branch --show-current)" "$(git branch --show-current)"; }; f; unset f;'
+
+  remove-local-branches-gone = ! git fetch -p && git branch -vv | awk '/: gone]/{print $1}' | xargs git branch -D
+
+  move-tag = '!f() { local tag="$1"; git tag "${tag}" --delete; git push origin --delete "${tag}"; git tag "${tag}" --force; git push --force-with-lease --no-verify --tags; }'
+
+  git-safely-remove-local-branch='!f() { local branch="$1"; git tag "${branch}" "${branch}" && git branch -D "${branch}"; }; f; unset f;'
+
+  git-list-branches-for-commit='!f(local commit="$1"; git branch -a --contains "${commit}";) {}; f; unset f'
