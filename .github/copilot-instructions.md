@@ -5,8 +5,8 @@
 **bash-dev-env** is a comprehensive Bash-based development environment
 installation and configuration system for Ubuntu-based distributions (WSL,
 VirtualBox, or native). It uses
-[bash-tools-framework](https://github.com/fchastanet/bash-tools-framework) and
-a custom bash compiler to generate self-contained installation scripts.
+[bash-tools-framework](https://github.com/fchastanet/bash-tools-framework) and a
+custom bash compiler to generate self-contained installation scripts.
 
 **Key Concepts:**
 
@@ -58,8 +58,8 @@ a custom bash compiler to generate self-contained installation scripts.
 - **Default Branch**: Always use `master` (not `main`)
 - **Generated Files**: Files in `bin/` and `installScripts/` are auto-generated
   by bash-compiler (DO NOT edit directly)
-- **Commit Messages**: See [Commit Message
-  Instructions](#commit-message-instructions)
+- **Commit Messages**: See
+  [Commit Message Instructions](#commit-message-instructions)
 
 ## Working with Install Scripts
 
@@ -113,7 +113,7 @@ breakOnTestFailure()
 
    ```bash
    CONFIG_LIST+=(
-     "installScripts/ScriptName"
+   	"installScripts/ScriptName"
    )
    ```
 
@@ -127,7 +127,7 @@ breakOnTestFailure()
 ```bash
 # Use upgradeGithubRelease.yaml as base
 extends:
-  - "${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/upgradeGithubRelease.yaml"
+- "${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/upgradeGithubRelease.yaml"
 ```
 
 **Config File Deployment:**
@@ -148,8 +148,8 @@ Version::checkMinimal "binary-name" --version "1.2.3" || return 1
 
 ```bash
 dependencies() {
-  echo "installScripts/ParentScript"
-  echo "installScripts/AnotherDependency"
+	echo "installScripts/ParentScript"
+	echo "installScripts/AnotherDependency"
 }
 ```
 
@@ -159,20 +159,20 @@ Every script needs a `-binary.yaml` file for compilation:
 
 ```yaml
 extends:
-  - "${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/installScript.yaml"
+  - ${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/installScript.yaml
 
 vars:
   SRC_FILE_PATH: src/_installScripts/Category/Name-binary.yaml
 
 compilerConfig:
-  targetFile: "${BASH_DEV_ENV_ROOT_DIR}/installScripts/Name"
+  targetFile: ${BASH_DEV_ENV_ROOT_DIR}/installScripts/Name
   relativeRootDirBasedOnTargetDir: ..
 
 binData:
   commands:
     default:
       functionName: NameCommand
-      version: "3.0"
+      version: '3.0'
       copyrightBeginYear: 2024
       definitionFiles:
         11: ${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/Category/Name.sh
@@ -234,21 +234,21 @@ Tests use BATS and load framework modules via `src/batsHeaders.sh`.
 ```bash
 # Use #@test annotation
 function MyFunction::testCase { #@test
-  run MyFunction::someFunction "arg"
-  assert_success
-  assert_output "expected output"
+	run MyFunction::someFunction "arg"
+	assert_success
+	assert_output "expected output"
 }
 
 # Setup/teardown
 setup() {
-  export TMPDIR="${BATS_TEST_TMPDIR}"
-  logFile="$(mktemp -p "${TMPDIR}" -t bats-$$-XXXXXX)"
-  export BASH_FRAMEWORK_LOG_FILE="${logFile}"
+	export TMPDIR="${BATS_TEST_TMPDIR}"
+	logFile="$(mktemp -p "${TMPDIR}" -t bats-$$-XXXXXX)"
+	export BASH_FRAMEWORK_LOG_FILE="${logFile}"
 }
 
 teardown() {
-  unstub_all  # Clean up mocks
-  rm -f "${logFile}"
+	unstub_all # Clean up mocks
+	rm -f "${logFile}"
 }
 ```
 
@@ -298,15 +298,15 @@ MegaLinter runs in CI and provides comprehensive validation:
 
 ### Linter Configuration Files
 
-| File                     | Purpose               |
-| ------------------------ | --------------------- |
-| `.shellcheckrc`          | Bash linting rules    |
-| `.prettierrc.yaml`       | Code formatting       |
-| `.eslintrc.js`           | JavaScript/JSON rules |
-| `.yamllint.yml`          | YAML validation       |
-| `.markdownlint.json`     | Markdown rules        |
-| `.mega-linter.yml`       | MegaLinter config     |
-| `.pre-commit-config.yaml`| Pre-commit hooks      |
+| File                      | Purpose               |
+| ------------------------- | --------------------- |
+| `.shellcheckrc`           | Bash linting rules    |
+| `.prettierrc.yaml`        | Code formatting       |
+| `.eslintrc.js`            | JavaScript/JSON rules |
+| `.yamllint.yml`           | YAML validation       |
+| `.markdownlint.json`      | Markdown rules        |
+| `.mega-linter.yml`        | MegaLinter config     |
+| `.pre-commit-config.yaml` | Pre-commit hooks      |
 
 **Key Settings:**
 
@@ -324,7 +324,7 @@ git add .
 git commit -m "Your message"
 # Pre-commit auto-fixes files
 git add .
-git commit -m "Your message"  # Commit with fixes
+git commit -m "Your message" # Commit with fixes
 ```
 
 ## Bash Compiler Workflow
@@ -588,25 +588,25 @@ Changes:
 ### Do's
 
 ✅ Use framework functions (`Log::`, `Assert::`, `Conf::`) instead of raw Bash
-commands  
-✅ Write tests for all new functions  
-✅ Follow naming conventions (PascalCase for install scripts)  
-✅ Validate versions before installation (`Version::checkMinimal`)  
-✅ Use `@embed` directives for config file deployment  
-✅ Document dependencies in `dependencies()` function  
-✅ Run `pre-commit run -a` before committing  
-✅ Use emojis extensively in commit messages  
+commands\
+✅ Write tests for all new functions\
+✅ Follow naming conventions (PascalCase for install scripts)\
+✅ Validate versions before installation (`Version::checkMinimal`)\
+✅ Use `@embed` directives for config file deployment\
+✅ Document dependencies in `dependencies()` function\
+✅ Run `pre-commit run -a` before committing\
+✅ Use emojis extensively in commit messages\
 ✅ Check CI/CD status after pushing
 
 ### Don'ts
 
-❌ Don't edit files in `bin/` or `installScripts/` directly (they're generated)  
-❌ Don't commit without running pre-commit hooks  
-❌ Don't create install scripts without tests  
-❌ Don't use plain `echo` for logging (use `Log::displayInfo`, etc.)  
-❌ Don't hardcode paths (use variables from `.framework-config`)  
-❌ Don't skip interface function implementation (even if empty, define stubs)  
-❌ Don't forget to update `profile.*.sh` when adding new scripts  
+❌ Don't edit files in `bin/` or `installScripts/` directly (they're generated)\
+❌ Don't commit without running pre-commit hooks\
+❌ Don't create install scripts without tests\
+❌ Don't use plain `echo` for logging (use `Log::displayInfo`, etc.)\
+❌ Don't hardcode paths (use variables from `.framework-config`)\
+❌ Don't skip interface function implementation (even if empty, define stubs)\
+❌ Don't forget to update `profile.*.sh` when adding new scripts\
 ❌ Don't commit secrets or sensitive data
 
 ## Additional Resources
@@ -659,7 +659,7 @@ docsify serve pages
 - `BASH_FRAMEWORK_LOG_FILE`: Log file location
 - `BASH_FRAMEWORK_DISPLAY_LEVEL`: Log verbosity (0-4)
 
----
+______________________________________________________________________
 
 **Remember**: This is a complex project with many moving parts. Take time to
 understand the patterns before making changes. When in doubt, check existing
