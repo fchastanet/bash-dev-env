@@ -10,6 +10,7 @@
   autocrlf = false
   excludesFile = ~/.bash-dev-env/GitDefaultConfig/gitignore
   pager = delta
+  editor = vim
   # Don't consider trailing space change as a cause for merge conflicts
   whitespace = -trailing-space
   # make .githooks folder as default .git/hooks folder
