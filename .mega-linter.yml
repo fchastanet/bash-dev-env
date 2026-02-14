@@ -8,6 +8,8 @@ APPLY_FIXES: all # all, none, or list of linter keys
 DISABLE:
   - SQL
 DISABLE_LINTERS:
+  - SPELL_CSPELL # already included in pre-commit
+  - YAML_V8R # already included in pre-commit
   - JAVASCRIPT_ES
   - JAVASCRIPT_PRETTIER
   - RUBY_RUBOCOP
@@ -43,7 +45,7 @@ FILEIO_REPORTER: false
 PRE_COMMANDS:
   - command: env
     cwd: "workspace"
-  - command: yarn add eslint-plugin-json eslint-config-prettier
+  - command: npm install eslint-plugin-json eslint-config-prettier
     cwd: "workspace"
 POST_COMMANDS:
   # FIX files set as root user
@@ -111,15 +113,6 @@ JSON_JSONLINT_FILTER_REGEX_EXCLUDE: |
     ^src/_installScripts/_Configs/VsCodeConfig-conf/settings.json$
   )
 
-SPELL_CSPELL_CONFIG_FILE: cspell.yaml
-SPELL_CSPELL_FILTER_REGEX_EXCLUDE: |
-  (?x)(
-    \.git/|
-    ^\.history/|
-    IDE/.*/\.idea|
-    ^.*-megalinter_file_names_cspell.txt|
-    ^megalinter-reports/
-  )
 SPELL_FILTER_REGEX_EXCLUDE: |
   (?x)(
     \.git/|
@@ -135,12 +128,4 @@ MARKDOWN_MARKDOWN_LINK_CHECK_FILTER_REGEX_EXCLUDE: |
 ACTION_ACTIONLINT_FILTER_REGEX_EXCLUDE: |
   (?x)(
     ^\.github/workflows/dependabot\.yml$
-  )
-
-YAML_V8R_FILTER_REGEX_EXCLUDE: |
-  (?x)(
-    ^\.vscode/\.checkov\.yml|
-    ^\.github/workflows/.*\.yml$|
-    ^\.secretlintrc\.yml|
-    ^\.grype\.yaml
   )

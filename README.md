@@ -340,11 +340,14 @@ sudo rsync --info=progress2 --no-compress -W -ax /var/lib/docker /mnt/wsl/Ubuntu
 
 # alternatively, you can sync all the necessary directories at once
 sudo rsync --info=progress2 --no-compress -W -ax \
-  --include=/home/wsl/.history
---include=/home/wsl/projects \
+  --include=/home/wsl/.history \
+  --include=/home/wsl/projects \
   --include=/home/wsl/fchastanet \
   --include=/var/lib/docker \
   --exclude='*' / /mnt/wsl/UbuntuTest
+
+# on target distribution, don't forget to restart docker daemon when the sync is done
+sudo service docker restart
 ```
 
 ## 8. Acknowledgements

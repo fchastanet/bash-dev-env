@@ -121,6 +121,7 @@ tarignore
 tempdir
 TERM
 textmate
+tlsv
 TMPDIR
 tput
 unalias

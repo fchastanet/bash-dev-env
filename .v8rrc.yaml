@@ -16,8 +16,16 @@ cacheTtl: 86400
 # - default = false
 ignoreErrors: true
 
+plugins:
+  # Plugins installed from NPM (or JSR) must be prefixed by "package:"
+  - "package:v8r-plugin-emoji-output"
+
 customCatalog:
   schemas:
+    - name: ohmyposhThemes
+      description: ohmyposhThemes
+      fileMatch: ["**/ohmyposhThemes/**/*.json"]
+      location: https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json
     - name: prettier
       description: prettier
       fileMatch: [".prettierrc.yaml"]
@@ -25,7 +33,7 @@ customCatalog:
     - name: megalinter
       description: megalinter
       fileMatch: [".mega-linter*.yml"]
-      location: https://raw.githubusercontent.com/megalinter/megalinter/main/megalinter/descriptors/schemas/megalinter-configuration.jsonschema.json
+      location: https://raw.githubusercontent.com/megalinter/megalinter/v8.8.0/megalinter/descriptors/schemas/megalinter-configuration.jsonschema.json
     - name: pre-commit
       description: pre-commit
       fileMatch: [".pre-commit-config*.yml", ".pre-commit-config*.yaml"]
@@ -34,3 +42,16 @@ customCatalog:
       description: eslint-json
       fileMatch: [".eslintrc-json.json"]
       location: https://json.schemastore.org/eslintrc.json
+    - name: bash-tools-framework
+      description: "bash-tools-framework command definition"
+      fileMatch:
+        - "src/_commandDefinitions/*.{yml,yaml}"
+        - "src/_commandDefinitions/**/*-binary.{yml,yaml}"
+        - "src/_installScripts/**/*-binary.{yml,yaml}"
+        - "src/_tools/**/*-binary.{yml,yaml}"
+        - "srcAlt/DependencySample/src/_installScripts/DependencySample/DependencySample-binary.yaml"
+      location: https://raw.githubusercontent.com/fchastanet/bash-tools-framework/master/bash-tools-framework-schema.json
+    - name: dependabot
+      description: dependabot
+      fileMatch: [".github/workflows/dependabot.yml"]
+      location: https://www.schemastore.org/dependabot-2.0.json
