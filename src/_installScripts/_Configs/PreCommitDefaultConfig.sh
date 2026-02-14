@@ -102,12 +102,12 @@ testConfigure() {
     ) || return 1
   }
   Log::displayInfo "check that git init sets hooks automatically"
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   gitInit() { git init "$1"; }
   checkGitHooksCreatedOn gitInit || ((++failures))
 
   Log::displayInfo "check that git clone sets hooks automatically"
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   gitClone() {
     git clone https://github.com/fchastanet/repo-test.git "$1"
   }

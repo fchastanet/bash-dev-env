@@ -245,7 +245,6 @@ personal like `.bashrc` but don't worry these files are backed up in the
 
 - [Contribute](docs/Contribute.md)
 - [How does it work ?](docs/HowDoesItWork.md)
-- [TODO](docs/TODO.md)
 
 ## 5. github page
 

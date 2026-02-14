@@ -30,15 +30,15 @@ zstyle ':omz:update' frequency 14
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(
-	# zsh-syntax-highlighting
-	zsh-autosuggestions
+  # zsh-syntax-highlighting
+  zsh-autosuggestions
   ssh-agent
-	git
-	docker-compose
-	docker
-	dirhistory
-	kubectl
-	kube-ps1
+  git
+  docker-compose
+  docker
+  dirhistory
+  kubectl
+  kube-ps1
 )
 
 RPROMPT='$(kube_ps1)'

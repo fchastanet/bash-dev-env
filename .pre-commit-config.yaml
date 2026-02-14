@@ -31,6 +31,7 @@ repos:
           (?x)(
             ^\.?secretlintrc\.yml$|
             ^\.vscode/|
+            ^\.?mega-linter\.yml$|
             ^\.?checkov\.yml$|
             ^\.?secretlintrc\.json$|
             ^\.?grype\.yaml$|
@@ -49,10 +50,16 @@ repos:
           )
       - id: cspell
         name: cspell
-        entry: npx -y cspell lint .
+        entry: npx -y cspell lint --quiet --verbose --dot .
         language: system
         pass_filenames: false
-        stages: [pre-commit, pre-push, manual]
+        stages: [pre-commit, manual]
+      - id: lychee
+        name: lychee
+        entry: bash -c "lychee --config lychee.toml --root-dir $(pwd) ."
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
 
   - repo: https://github.com/executablebooks/mdformat
     # Do this before other tools "fixing" the line endings
@@ -190,13 +197,13 @@ repos:
       - id: awkLint
       - id: shellcheckLint
       - id: shellcheckLintGithubAction
-      # - id: megalinterCheckVersion
-      #   args:
-      #     [
-      #       --image,
-      #       "oxsecurity/megalinter-terraform:v8.8.0",
-      #       --check-megalinter-version,
-      #     ]
+      - id: megalinterCheckVersion
+        args:
+          [
+            --image,
+            "oxsecurity/megalinter-terraform:v9.3.0",
+            --check-megalinter-version,
+          ]
       - id: frameworkLint
         args:
           [

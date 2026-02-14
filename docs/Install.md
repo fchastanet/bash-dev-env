@@ -110,6 +110,9 @@ Using Powershell in admin mode, you can run the following commands to set up
 port forwarding for WSL:
 
 ```powershell
-$HOST_IP = Get-NetIPAddress -InterfaceAlias "vEthernet (WSL*" | Where-Object { $_.AddressFamily -eq "IPv4" } | Select-Object -ExpandProperty IPAddress
-netsh interface portproxy add v4tov4 listenport=9000 connectaddress="${HOST_IP}" connectport=9000
+$HOST_IP = Get-NetIPAddress -InterfaceAlias "vEthernet (WSL*" |`
+  Where-Object { $_.AddressFamily -eq "IPv4" } | `
+  Select-Object -ExpandProperty IPAddress
+netsh interface portproxy add v4tov4 `
+  listenport=9000 connectaddress="${HOST_IP}" connectport=9000
 ```

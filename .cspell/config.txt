@@ -253,9 +253,12 @@ usbfs
 usefontcolor
 vimrc
 Vsbycmmq
+Wayback
+wayback
 wddx
 wekyb
 widthtype
+wikilinks
 WORKON
 wslconfig
 WSLENV

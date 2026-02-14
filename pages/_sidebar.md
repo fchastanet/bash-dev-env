@@ -4,7 +4,6 @@
 - [Install](/docs/Install.md)
 - [HowDoesItWork](/docs/HowDoesItWork.md)
 - [Contribute](/docs/Contribute.md)
-- [TODO](/docs/TODO.md)
 - Bash suite projects
   - [My documents](https://fchastanet.github.io/my-documents/)
   - [Bash Tools Framework](https://fchastanet.github.io/bash-tools-framework/)

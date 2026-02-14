@@ -6,7 +6,7 @@
 ###############################################################################
 
 # If running in VSCode terminal, load the VSCode shell integration for zsh
-[[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path zsh)"
+[[ "${TERM_PROGRAM}" == "vscode" ]] && . "$(code --locate-shell-integration-path zsh)"
 
 LC_CTYPE=en_US.UTF-8
 LC_ALL=en_US.UTF-8

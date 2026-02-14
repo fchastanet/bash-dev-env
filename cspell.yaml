@@ -130,6 +130,7 @@ overrides:
       - .secretlintignore
       - .tarignore
       - .ecrc
+      - lychee.toml
       - src/_installScripts/UI/Font-conf/.Xresources
       - src/_installScripts/_Configs/GitDefaultConfig-conf/home/.gitconfig
       - src/_installScripts/Anacron/Anacron-conf/etc/anacrontab

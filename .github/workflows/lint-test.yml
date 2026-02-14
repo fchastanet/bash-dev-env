@@ -109,6 +109,10 @@ jobs:
           name: build-bash-dev-env
           status: pending
 
+      # install npm dependencies for pre-commit hooks
+      - name: Install npm dependencies for pre-commit hooks
+        run: npm ci --no-audit --no-fund
+
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
         id: preCommit
@@ -121,7 +125,7 @@ jobs:
         if: ${{ always() }}
         # You can override MegaLinter flavor used to have faster performances
         # More info at https://megalinter.io/flavors/
-        uses: oxsecurity/megalinter/flavors/terraform@v8
+        uses: oxsecurity/megalinter/flavors/terraform@v9.3.0
         # All available variables are described in documentation
         # https://megalinter.io/configuration/
         env:

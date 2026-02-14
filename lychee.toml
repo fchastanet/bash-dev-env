@@ -1,0 +1,47 @@
+#############################  Display  #############################
+
+# Verbose program output
+# Accepts log level: "error", "warn", "info", "debug", "trace"
+verbose = "debug"
+
+# Output format
+format = "detailed"
+
+# Output display mode
+mode = "emoji"
+
+# Don't show interactive progress bar while checking links.
+no_progress = false
+
+#############################  Exclusions  ##########################
+
+# Exclude URLs and mail addresses from checking. The values are treated as regular expressions
+exclude = [
+    '^http://localhost:3000/',                    # local URL
+    '^/?docs/.*'                                  #
+]
+
+# Exclude paths from getting checked. The values are treated as regular expressions
+exclude_path = [
+    "TODO.local.md",# skip specific file
+]
+
+# Exclude link-local IP address range from checking.
+exclude_link_local = true
+
+# Exclude loopback IP address range and localhost from checking.
+exclude_loopback = true
+
+# Check mail addresses
+include_mail = true
+
+# Check WikiLinks in Markdown files
+#include_wikilinks = true
+
+#############################  Other  #############################
+
+# Use the Wayback Machine as web archive
+archive = "wayback"
+
+# Search and suggest link replacements for all broken links
+suggest = true

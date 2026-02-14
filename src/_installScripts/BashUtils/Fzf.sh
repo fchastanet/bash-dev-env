@@ -58,7 +58,7 @@ install() {
   )
   Linux::Apt::installIfNecessary --no-install-recommends "${packages[@]}"
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   installFzf() {
     rm -f \
       "${HOME}/.fzf/bin/fzf" \

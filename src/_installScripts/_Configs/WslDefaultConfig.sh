@@ -55,7 +55,7 @@ configure() {
   # shellcheck disable=SC2154
   configDir="$(Conf::getOverriddenDir "${embed_dir_wsl_conf}" "$(fullScriptOverrideDir)")"
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   updateWslConfig() {
     local targetFile="${2}"
     sed -i -E \

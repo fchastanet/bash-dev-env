@@ -1759,7 +1759,7 @@ InstallScripts::command() {
   local scriptName="${fullScriptName//\//@}"
   rm -f "${statsDir}/${scriptName}-"* || true
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   onInterrupt() {
     Log::displayError "${scriptName} aborted"
     exit 1
@@ -1806,7 +1806,7 @@ InstallScripts::command() {
     # break at first install error
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         LOG_CONTEXT="${scriptName} - " Stats::statusLine "${statsFile}" "Installation"
@@ -1834,7 +1834,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-install.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Install ${scriptName}"
@@ -1866,7 +1866,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-config.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Configuration ${scriptName}"
@@ -1899,7 +1899,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-configuration.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Configuration ${scriptName}"
@@ -1931,7 +1931,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-clean-before-export.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Cleaning ${scriptName}"
@@ -3652,68 +3652,68 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/9caf413c13a775195f3c0c21686fac5bf2a633e223121c7fa78552ed8ace59d2/conf_dir" \
-  "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 \
-BgAA//+gs2cnACwAAA=="
+  "${PERSISTENT_TMPDIR:-/tmp}/e7c623ec3bc9b23472c955222ae97a968286f4ac953d6e7ccb8a3d6eda9b5a4b/conf_dir" \
+  "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 \
+B96IhwAsAAA="
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/9caf413c13a775195f3c0c21686fac5bf2a633e223121c7fa78552ed8ace59d2/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e7c623ec3bc9b23472c955222ae97a968286f4ac953d6e7ccb8a3d6eda9b5a4b/conf_dir"
 
 # include functions for postConfigure.sh scripts
 # Assert::dirExists

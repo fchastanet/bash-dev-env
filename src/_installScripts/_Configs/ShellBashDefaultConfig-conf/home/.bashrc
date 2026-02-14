@@ -13,7 +13,8 @@
 # for examples
 
 # If running in VSCode terminal, load the VSCode shell integration for bash
-[[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
+#shellcheck source=/dev/null
+[[ "${TERM_PROGRAM}" == "vscode" ]] && . "$(code --locate-shell-integration-path bash)"
 
 # If running interactively
 if [[ "$-" =~ .*i.* ]]; then

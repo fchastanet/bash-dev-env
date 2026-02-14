@@ -11,6 +11,7 @@ Linux::createSudoerFile() {
     # sudoerFile probably already managed by parent script
     true
   else
+    # shellcheck disable=SC2329
     cleanSudoer() {
       local rc=$?
       if [[ -f "${sudoerFile}" ]]; then
