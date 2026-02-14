@@ -1,4 +1,12 @@
 #!/usr/bin/env zsh
+###############################################################################
+# AVOID EDITING THIS FILE
+# PREFER to add files in dedicated sections of ~/.bash-dev-env
+# CHECK ~/.bash-dev-env/README.md
+###############################################################################
+
+# If running in VSCode terminal, load the VSCode shell integration for zsh
+[[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path zsh)"
 
 LC_CTYPE=en_US.UTF-8
 LC_ALL=en_US.UTF-8
@@ -6,6 +14,12 @@ LC_ALL=en_US.UTF-8
 # skip if non interactive mode
 if [[ $- != *i* ]]; then
   return 0
+fi
+
+# load bash-tools variables
+if [[ -f "${HOME}/.bash-tools/.env" ]]; then
+  #shellcheck source=/dev/null
+  source "${HOME}/.bash-tools/.env"
 fi
 
 source "${HOME}/fchastanet/bash-dev-env/.env" || {
@@ -33,6 +47,7 @@ loadConfigFiles() {
   done < <("${HOME}/.bash-dev-env/findConfigFiles" "${dir}" sh zsh || echo)
 }
 
+loadConfigFiles "${HOME}/.bash-dev-env/profile.d"
 loadConfigFiles "${HOME}/.bash-dev-env/themes.d"
 loadConfigFiles "${HOME}/.bash-dev-env/interactive.d"
 loadConfigFiles "${HOME}/.bash-dev-env/aliases.d"
