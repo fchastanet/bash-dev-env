@@ -129,7 +129,7 @@ overrides:
       - .htmlhintrc
       - .secretlintignore
       - .tarignore
-      - .ecrc
+      - .editorconfig-checker.json
       - lychee.toml
       - src/_installScripts/UI/Font-conf/.Xresources
       - src/_installScripts/_Configs/GitDefaultConfig-conf/home/.gitconfig
@@ -188,6 +188,19 @@ overrides:
     dictionaries:
       - vsCodeSettings
       - mySoftwares
+
+  - filename:
+      - ".github/copilot-instructions.md"
+      - ".github/instructions/**"
+      - ".github/skills/**"
+      - ".github/agents/**"
+      - ".github/commit-message.instructions.md"
+    dictionaries:
+      - readme
+      - mySoftwares
+      - bash
+      - myBash
+      - softwareTerms
 
   - filename:
       - src/_installScripts/_Configs/VsCodeConfig-conf/vsCode-conf/Python.code-profile

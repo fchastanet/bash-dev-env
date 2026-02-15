@@ -20,7 +20,7 @@ custom bash compiler to generate self-contained installation scripts.
 
 ## Repository Structure
 
-```
+```text
 .
 ├── .github/
 │   ├── copilot-instructions.md     # This file
@@ -70,55 +70,54 @@ All install scripts must implement the `InstallScripts` interface:
 **Required Functions:**
 
 ```bash
-helpDescription()        # One-line description
-install()               # Installation logic
-testInstall()          # Verify installation (return 0=success)
-configure()            # Configuration after install
-testConfigure()        # Verify configuration
+helpDescription() { :; } # One-line description
+install() { :; }         # Installation logic
+testInstall() { :; }     # Verify installation (return 0=success)
+configure() { :; }       # Configuration after install
+testConfigure() { :; }   # Verify configuration
 ```
 
 **Optional Functions:**
 
 ```bash
-helpLongDescription()
-dependencies()         # Return "installScripts/DependencyName"
-fortunes()            # Post-install tips (% separated)
-cleanBeforeExport()
-testCleanBeforeExport()
-listVariables()
-helpVariables()
-defaultVariables()
-checkVariables()
-breakOnConfigFailure()
-breakOnTestFailure()
+helpLongDescription() { :; } # Detailed description
+dependencies() { :; }        # Return "installScripts/DependencyName"
+fortunes() { :; }            # Post-install tips (% separated)
+cleanBeforeExport() { :; }
+testCleanBeforeExport() { :; }
+listVariables() { :; }
+helpVariables() { :; }
+defaultVariables() { :; }
+checkVariables() { :; }
+breakOnConfigFailure() { :; }
+breakOnTestFailure() { :; }
 ```
 
 ### Creating a New Install Script
 
 1. **Create directory structure:**
 
-   ```
-   src/_installScripts/Category/ScriptName/
-   ├── ScriptName.sh                # Main implementation
-   ├── ScriptName-binary.yaml       # Compiler configuration
-   ├── ScriptName-conf/             # Optional: config files to deploy
-   └── ScriptName-hooks/            # Optional: lifecycle hooks
-   ```
+```text
+src/_installScripts/Category/ScriptName/
+├── ScriptName.sh                # Main implementation
+├── ScriptName-binary.yaml       # Compiler configuration
+├── ScriptName-conf/             # Optional: config files to deploy
+└── ScriptName-hooks/            # Optional: lifecycle hooks
+```
 
 2. **Implement required functions** in `ScriptName.sh`
 
-3. **Configure binary.yaml** (see [Binary Configuration](#binary-yaml-files))
+3. **Configure binary.yaml** (see [Binary yaml Files](#binary-yaml-files))
 
 4. **Add to profile** in `profiles/profile.*.sh`:
 
-   ```bash
-   CONFIG_LIST+=(
-   	"installScripts/ScriptName"
-   )
-   ```
+```bash
+CONFIG_LIST+=(
+  "installScripts/ScriptName"
+)
+```
 
-5. **Compile**: Run `pre-commit run bash-compiler -a` or let pre-commit handle
-   it
+5. **Compile**: Run `pre-commit run bash-compiler -a`
 
 ### Install Script Patterns
 
@@ -148,12 +147,12 @@ Version::checkMinimal "binary-name" --version "1.2.3" || return 1
 
 ```bash
 dependencies() {
-	echo "installScripts/ParentScript"
-	echo "installScripts/AnotherDependency"
+  echo "installScripts/ParentScript"
+  echo "installScripts/AnotherDependency"
 }
 ```
 
-### Binary.yaml Files
+### Binary yaml Files
 
 Every script needs a `-binary.yaml` file for compilation:
 
@@ -234,21 +233,21 @@ Tests use BATS and load framework modules via `src/batsHeaders.sh`.
 ```bash
 # Use #@test annotation
 function MyFunction::testCase { #@test
-	run MyFunction::someFunction "arg"
-	assert_success
-	assert_output "expected output"
+  run MyFunction::someFunction "arg"
+  assert_success
+  assert_output "expected output"
 }
 
 # Setup/teardown
 setup() {
-	export TMPDIR="${BATS_TEST_TMPDIR}"
-	logFile="$(mktemp -p "${TMPDIR}" -t bats-$$-XXXXXX)"
-	export BASH_FRAMEWORK_LOG_FILE="${logFile}"
+  export TMPDIR="${BATS_TEST_TMPDIR}"
+  logFile="$(mktemp -p "${TMPDIR}" -t bats-$$-XXXXXX)"
+  export BASH_FRAMEWORK_LOG_FILE="${logFile}"
 }
 
 teardown() {
-	unstub_all # Clean up mocks
-	rm -f "${logFile}"
+  unstub_all # Clean up mocks
+  rm -f "${logFile}"
 }
 ```
 
@@ -397,13 +396,13 @@ Example:
 
 ```yaml
 # Good
-run: |
+good: |
   some-command \
     --long-option value \
     --another-option value
 
 # Bad
-run: some-command --long-option value --another-option value --another-option value --yet-another value
+bad: some-command --long-option value --another-option value --another-option
 ```
 
 ## Common Workflows
@@ -439,13 +438,17 @@ run: some-command --long-option value --another-option value --another-option va
 
 1. **Check CI logs**: GitHub Actions → Failed job → Test Results
 2. **Run locally**:
-   ```bash
-   ./test.sh scrasnups/build:bash-tools-ubuntu-5.3 path/to/failing.bats
-   ```
+
+```bash
+./test.sh scrasnups/build:bash-tools-ubuntu-5.3 path/to/failing.bats
+```
+
 3. **Enable debug**:
-   ```bash
-   KEEP_TEMP_FILES=1 ./test.sh ... # Keep temp files
-   ```
+
+```bash
+KEEP_TEMP_FILES=1 ./test.sh ... # Keep temp files
+```
+
 4. **Fix issues** and re-run
 5. **Commit** fixes
 
@@ -460,24 +463,27 @@ run: some-command --long-option value --another-option value --another-option va
 **Issue**: Pre-commit hook fails with "bash-compiler not found"
 
 - **Solution**: Ensure pre-commit is installed and hooks are set up:
-  ```bash
-  pre-commit install
-  pre-commit install --hook-type pre-push
-  ```
+
+```bash
+pre-commit install
+pre-commit install --hook-type pre-push
+```
 
 **Issue**: Tests fail in Docker
 
 - **Solution**: Ensure Docker image exists:
-  ```bash
-  docker pull scrasnups/build:bash-tools-ubuntu-5.3
-  ```
+
+```bash
+docker pull scrasnups/build:bash-tools-ubuntu-5.3
+```
 
 **Issue**: Generated files out of sync
 
 - **Solution**: Recompile all binaries:
-  ```bash
-  pre-commit run bash-compiler -a
-  ```
+
+```bash
+pre-commit run bash-compiler -a
+```
 
 **Issue**: MegaLinter creates unwanted fix PRs
 
