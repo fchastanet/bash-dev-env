@@ -23,3 +23,5 @@ src/_commandDefinitions/generated
 
 .env.distro.*
 !.env.distro.*.template
+
+megalinter-reports/
