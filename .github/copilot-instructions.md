@@ -59,7 +59,7 @@ custom bash compiler to generate self-contained installation scripts.
 - **Generated Files**: Files in `bin/` and `installScripts/` are auto-generated
   by bash-compiler (DO NOT edit directly)
 - **Commit Messages**: See
-  [Commit Message Instructions](#commit-message-instructions)
+  [Commit Message Instructions](.github/commit-message.instructions.md)
 
 ## Working with Install Scripts
 
