@@ -16,7 +16,7 @@ dependencies() {
   echo "installScripts/Python"
 }
 
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 listVariables() {
   echo "HOME"
   echo "USERNAME"
@@ -66,7 +66,7 @@ configure() {
   # shellcheck disable=SC2154
   configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
   # install default configuration
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   configureAwsumeConfig() {
     local targetFile="$2"
     sed -i -E \

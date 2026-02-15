@@ -56,7 +56,7 @@ configure() {
   # shellcheck disable=SC2154
   configDir="$(Conf::getOverriddenDir "${embed_dir_conf_dir}" "$(fullScriptOverrideDir)")"
   # install default configuration
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   configureAwsConfig() {
     sed -i -E \
       -e "s#azure_default_username=.+\$#azure_default_username=${AWS_USER_MAIL}#" \

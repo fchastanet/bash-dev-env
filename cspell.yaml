@@ -10,6 +10,8 @@ ignorePaths:
   - "**/testsData/**"
   - "installScripts/**"
   - "srcAlt/DependencySample/installScripts/**"
+  - "src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/themes.d/ohmyposhThemes/jandedobbeleer.json"
+  - "src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/themes.d/starshipThemes/default.toml"
   - distro
   - install
   - .vscode
@@ -121,9 +123,35 @@ overrides:
     dictionaries:
       - lintersConfig
 
-  - filename: "*.conf"
+  - filename:
+      - "*.conf"
+      - .gitleaks.toml
+      - .htmlhintrc
+      - .secretlintignore
+      - .tarignore
+      - .ecrc
+      - lychee.toml
+      - src/_installScripts/UI/Font-conf/.Xresources
+      - src/_installScripts/_Configs/GitDefaultConfig-conf/home/.gitconfig
+      - src/_installScripts/Anacron/Anacron-conf/etc/anacrontab
+      - src/_installScripts/BashUtils/Tig-conf/home/.config/tig/config
+      - src/_installScripts/BashUtils/Tig-conf/home/.tigrc
+      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.Xresources
+      - src/_installScripts/_Configs/GitDefaultConfig-conf/home/.config/tig/config
+      - src/_installScripts/_Configs/GitDefaultConfig-conf/.gitconfig
+      - src/_installScripts/_Configs/GitDefaultConfig-conf/.tigrc
+      - src/_installScripts/_Configs/WslDefaultConfig-conf/settings.json
+      - src/_installScripts/BashUtils/Mlocate-conf/etc/updatedb.conf
+      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.vimrc
+      - src/_installScripts/Java/JavaSdkManager-conf/.sdkman/etc/config
+      - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-compinstall.zsh
+      - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-key-bindings.zsh
+      - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-omz.zsh
+      - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-syntax-complete-suggest.zsh
+      - "src/_installScripts/_Configs/MotdDefaultConfig-conf/.bash-dev-env/interactive.d/motd.zsh"
     dictionaries:
       - config
+      - mySoftwares
 
   - filename: "**/*.html"
     dictionaries:
@@ -137,26 +165,26 @@ overrides:
     dictionaries:
       - readme
 
-  - filename: "**/update-motd.d/**"
-    languageId: shellscript
-
-  - filename:
-      - .github/**
-      - .*
+  - languageId: shellscript
+    filename:
+      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.bashrc
+      - .gitattributes
+      - .gitignore
+      - "**/update-motd.d/**"
+      - .framework-config
+      - .github/**/*.{yml,yaml}
+      - \..*
       - "*.{yaml,yml}"
-      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.Xresources
-      - src/_installScripts/_Configs/GitDefaultConfig-conf/home/.config/tig/config
-      - src/_installScripts/_Configs/GitDefaultConfig-conf/.gitconfig
-      - src/_installScripts/_Configs/GitDefaultConfig-conf/.tigrc
-      - src/_installScripts/_Configs/WslDefaultConfig-conf/settings.json
-      - src/_installScripts/BashUtils/Mlocate-conf/etc/updatedb.conf
+      - "*.sh"
+      - "*.bash"
       - src/_installScripts/Aws/Awsume-conf/.bash-dev-env/profile.d/awsume.zsh
-    languageId: shellscript
     dictionaries:
       - config
+      - mySoftwares
 
   - filename:
       - "**/settings.json"
+      - "VsCodeConfig-profiles/convert-vscode-profiles.js"
     dictionaries:
       - vsCodeSettings
       - mySoftwares
@@ -184,6 +212,7 @@ overrides:
       - "**/*.zsh"
       - "**/.zshrc"
       - "**/.zprofile"
+      - "src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-compinstall.zsh"
     languageId: zshScript
 
   - filename: "**/*.ps1"

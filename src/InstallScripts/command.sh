@@ -15,7 +15,7 @@ InstallScripts::command() {
   local scriptName="${fullScriptName//\//@}"
   rm -f "${statsDir}/${scriptName}-"* || true
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   onInterrupt() {
     Log::displayError "${scriptName} aborted"
     exit 1
@@ -62,7 +62,7 @@ InstallScripts::command() {
     # break at first install error
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         LOG_CONTEXT="${scriptName} - " Stats::statusLine "${statsFile}" "Installation"
@@ -90,7 +90,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-install.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Install ${scriptName}"
@@ -122,7 +122,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-config.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Configuration ${scriptName}"
@@ -155,7 +155,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-configuration.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Configuration ${scriptName}"
@@ -187,7 +187,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-clean-before-export.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Cleaning ${scriptName}"

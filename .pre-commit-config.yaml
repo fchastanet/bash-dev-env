@@ -17,6 +17,49 @@ repos:
         always_run: true
         require_serial: true
         stages: [pre-commit, pre-push, manual]
+      - id: v8r
+        name: v8r
+        entry: npx -y v8r --ci .v8rrc.yaml
+        language: system
+        pass_filenames: true
+        stages: [pre-commit, pre-push, manual]
+        files: |
+          (?x)(
+            \.(yaml|yml|json)$
+          )
+        exclude: |
+          (?x)(
+            ^\.?secretlintrc\.yml$|
+            ^\.vscode/|
+            ^\.?mega-linter\.yml$|
+            ^\.?checkov\.yml$|
+            ^\.?secretlintrc\.json$|
+            ^\.?grype\.yaml$|
+            ^\.?trivy\.yaml$|
+            ^\.proselintrc.json$|
+            ^package-lock.json$|
+            ^src/_commandDefinitions/frameworkConfig.yaml$|
+            ^src/_installScripts/_Configs/PreCommitDefaultConfig-conf/.pre-commit-config-test.yaml$|
+            ^src/_installScripts/Aws/Awsume-conf/.config/awsume/config.yaml$|
+            ^src/_installScripts/_Configs/ShellBashDefaultConfig-conf/.vscode/settings.json$|
+            ^src/_installScripts/_Configs/WslDefaultConfig-conf/settings.json$|
+            ^src/_installScripts/_Configs/VsCodeConfig-conf/keybindings.json$|
+            ^src/_installScripts/_Configs/ShellBashDefaultConfig-conf/.vscode/argv.json$|
+            ^src/_installScripts/_Configs/VsCodeConfig-conf/settings.json$|
+            /testsData/
+          )
+      - id: cspell
+        name: cspell
+        entry: npx -y cspell lint --quiet --verbose --dot .
+        language: system
+        pass_filenames: false
+        stages: [pre-commit, manual]
+      - id: lychee
+        name: lychee
+        entry: bash -c "lychee --config lychee.toml --root-dir $(pwd) ."
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
 
   - repo: https://github.com/executablebooks/mdformat
     # Do this before other tools "fixing" the line endings
@@ -37,11 +80,12 @@ repos:
           - mdformat-gfm
         exclude: |
           (?x)(
-            src/_installScripts/_Configs/VsCodeConfig-conf/vscode-extensions-by-profile/
+            src/_installScripts/_Configs/VsCodeConfig-conf/vscode-extensions-by-profile/|
+            .github/commit-message.instructions.md
           )
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: mixed-line-ending
       - id: end-of-file-fixer
@@ -77,7 +121,7 @@ repos:
           )
 
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.11
     hooks:
       - id: actionlint
         stages: [pre-commit, pre-push, manual]
@@ -107,12 +151,13 @@ repos:
             ^install$|
             ^distro$|
             ^srcAlt|
+            ^package-lock.json$|
             ^.cspell/codespellrc-.*.txt$|
             ^src/_installScripts/_Configs/VsCodeConfig-conf/profiles/
           )
 
   - repo: https://github.com/ComPWA/prettier-pre-commit
-    rev: v3.4.2
+    rev: v3.8.1
     hooks:
       - id: prettier
         args: [--cache]
@@ -146,7 +191,7 @@ repos:
         exclude: /testsData/
 
   - repo: https://github.com/fchastanet/bash-tools-framework
-    rev: 6.2.3
+    rev: 6.2.4
     hooks:
       - id: fixShebangExecutionBit
       - id: awkLint
@@ -156,7 +201,7 @@ repos:
         args:
           [
             --image,
-            "oxsecurity/megalinter-terraform:v8.8.0",
+            "oxsecurity/megalinter-terraform:v9.3.0",
             --check-megalinter-version,
           ]
       - id: frameworkLint
@@ -186,7 +231,7 @@ repos:
       - id: plantuml
 
   - repo: https://github.com/fchastanet/bash-compiler
-    rev: 3.1.4
+    rev: 3.2.0
     hooks:
       - id: buildBashBinaries
 

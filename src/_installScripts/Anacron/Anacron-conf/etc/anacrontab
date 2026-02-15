@@ -1,0 +1,17 @@
+# /etc/anacrontab: configuration file for anacron
+
+# See anacron(8) and anacrontab(5) for details.
+# see https://man7.org/linux/man-pages/man5/anacrontab.5.html
+
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+HOME=/root
+LOGNAME=root
+MAILTO=""
+NO_MAIL_OUTPUT=1
+
+# These replace cron's entries
+# period in days   delay in minutes   job-identifier   command
+1                  5                  cron.daily       run-parts --report /etc/cron.daily >>/var/log/anacron.log 2>&1
+7                  10                 cron.weekly      run-parts --report /etc/cron.weekly >>/var/log/anacron.log 2>&1
+@monthly           15                 cron.monthly     run-parts --report /etc/cron.monthly >>/var/log/anacron.log 2>&1

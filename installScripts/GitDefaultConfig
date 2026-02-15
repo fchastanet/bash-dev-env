@@ -382,6 +382,35 @@ Assert::ldapLogin() {
 }
 
 
+# @description Assert that a command version is greater than or equal to a minimal version
+#
+# @arg $1 command name
+# @arg $2 command version
+# @arg $3 minimal version
+#
+# @exitcode 0 if version is greater than or equal to minimal version, 1 if not
+# @exitcode 2 if version is not valid
+Assert::minimalVersion() {
+  local commandName="$1"
+  local version="$2"
+  local minimalVersion="$3"
+
+  Version::compare "${version}" "${minimalVersion}" || result=$?
+  case "${result}" in
+    1)
+      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
+      ;;
+    2)
+      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
+      return 1
+      ;;
+    *)
+      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
+      ;;
+  esac
+}
+
+
 # @description asserts that first argument is link to a file
 # that exists
 # @arg $1 link:String expected link
@@ -502,40 +531,6 @@ Backup::file() {
 }
 
 
-# @description ignore exit code 141 from simple command pipes
-# @example use with:
-#   local resultingStatus=0
-#   local -a originalPipeStatus=()
-#   cmd1 | cmd2 || Bash::handlePipelineFailure resultingStatus originalPipeStatus || true
-#   [[ "${resultingStatus}" = "0" ]]
-# @arg $1 resultingStatusCode:&int (passed by reference) (optional) resulting status code
-# @arg $2 originalStatus:int[] (passed by reference) (optional) copy of original PIPESTATUS array
-# @env PIPESTATUS assuming that this function is called like in the example provided
-# @see https://unix.stackexchange.com/a/709880/582856
-# @see https://gitlab.alpinelinux.org/alpine/aports/-/issues/11152
-# @warning alpine does not support PIPESTATUS very well as execution order of piped process is
-# not guaranteed
-Bash::handlePipelineFailure() {
-  local -a pipeStatusBackup=("${PIPESTATUS[@]}")
-  local -n handlePipelineFailure_resultingStatusCode=$1
-  local -n handlePipelineFailure_originalStatus=$2
-  # shellcheck disable=SC2034
-  handlePipelineFailure_originalStatus=("${pipeStatusBackup[@]}")
-  handlePipelineFailure_resultingStatusCode=0
-  local statusCode
-  for statusCode in "${pipeStatusBackup[@]}"; do
-    if ((statusCode == 141)); then
-      continue
-    elif ((statusCode > 0)); then
-      # shellcheck disable=SC2034
-      handlePipelineFailure_resultingStatusCode="${statusCode}"
-      break
-    fi
-  done
-  return "${handlePipelineFailure_resultingStatusCode}"
-}
-
-
 # @description get property value from file
 # if not present compute it using propertyNotFoundCallback (if provided) and store it in property file
 # @arg $1 propertyFile:String the file in which the property will be searched
@@ -596,7 +591,7 @@ Compiler::Embed::extractDirFromBase64() {
     mkdir -p "${targetDir}"
     (
       cd "${targetDir}" || exit 1
-      base64 -d <<<"${base64}" | tar -xzf - 2>/dev/null || {
+      tr -d '\n ' <<<"${base64}" | base64 -d | tar -xzf - 2>/dev/null || {
         Log::displayError "untar failure, invalid base64 string"
         exit 1
       }
@@ -625,7 +620,7 @@ Compiler::Embed::extractFileFromBase64() {
     if [[ ! -d "${targetDir}" ]]; then
       mkdir -p "${targetDir}"
     fi
-    base64 -d >"${targetFile}" <<<"${binFileBase64}"
+    tr -d '\n ' <<<"${binFileBase64}" | base64 -d >"${targetFile}"
     chmod "${fileMode}" "${targetFile}"
   fi
 
@@ -937,7 +932,115 @@ Engine::Config::loadConfig() {
 Linux::requireTarCommand
 Compiler::Embed::extractFileFromBase64 \
   "${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate" \
-  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJGcmFuY29pc0NoYXN0YW5ldCIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBHaXQgJiBTU0ggaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBpZiAxLCBpdCBpbmRpY2F0ZXMgeW91IGFjY2VwdCB0aGF0IHlvdXIgZ2l0IGtleSB3aWxsIGJlIGxvYWRlZC4KIyBpZiAwLCBjb25maWd1cmF0aW9ucyB0aGF0IG5lZWQgdG8gYmUgYXV0aGVudGljYXRlZCB3aWxsIGJlIHNraXBwZWQuCiMgRGlzdHJvIG1vZGU6IGluIGFueSBjYXNlLCB5b3VyIGtleSBpcyBub3QgY29waWVkLgpBVVRIT1JJWkVfU1NIX0tFWV9VU0FHRT0xCgojIHlvdXIgbG9naW4gdG8gY29ubmVjdCB0byBzc2ggc2VydmVycyBpZiBhbnkKU1NIX0xPR0lOPSIiCgojIHlvdXIgZ2l0IGZ1bGwgbmFtZSAnRmlyc3ROYW1lIExhc3ROYW1lJwpHSVRfVVNFUk5BTUU9IiIKCiMgZW1haWwgdXNlZCBmb3IgZ2l0ICdsZGFwQGRvbWFpbi5jb20nCkdJVF9VU0VSX01BSUw9IiIKCiMgZGVmYXVsdCBnaXQgbWVyZ2UgdG9vbCB0byB1c2UKR0lUX01FUkdFX1RPT0w9InZzY29kZSIKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBBV1MgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBlbWFpbCB1c2VkIHRvIGNvbm5lY3QgdG8gYXdzCkFXU19VU0VSX01BSUw9ImZjaGFzdGFuZXRAZ21haWwuY29tIgoKIyBhcHAgaWQgdG8gY29ubmVjdCB0byBhd3MgYWNjb3VudApBV1NfQVBQX0lEPSIiCgpBV1NfUFJPRklMRT0iIgpBV1NfREVGQVVMVF9SRUdJT049IiIKQVdTX1RFU1RfU0VDUkVUX0lEPSIiCkFXU19ERUZBVUxUX0RPQ0tFUl9SRUdJU1RSWV9JRD0iIgoKIyB3aWxsIHVzZSBhd3MgY29uZmlndXJlIHNzbyB0byBjb25uZWN0IHRvIGF3cyAoaW5zdGVhZCBvZiBzYW1sMmF3cykKVVNFX0FXU19DT05GSUdVUkVfU1NPPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBLOFMgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBLdWJlRGVmYXVsdENvbmZpZyB+Ly5rdWJlL2NvbmZpZyBnZW5lcmF0aW9uCiMgYXdzIHJlZ2lvbiBvZiB0aGUgY2x1c3RlciAoRWc6IHVzLWVhc3QtMSkKS1VCRV9DT05GSUdfUkVHSU9OX0NPREU9CgojIGF3cyBhcm4gb2YgdGhlIGNsdXN0ZXIuCiMgRWc6IGFybjphd3M6ZWNzOnJlZ2lvbjphd3NfYWNjb3VudF9pZDpjbHVzdGVyL015Q2x1c3RlcgpLVUJFX0NPTkZJR19DTFVTVEVSX0FSTj0KCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBEaXJlY3RvcmllcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIG92ZXJyaWRkZW4gY29uZiBkaXJlY3RvcnkgdGhhdCB3aWxsIGJlIHVzZWQgdG8gb3ZlcnJpZGUKIyB0aGUgZGVmYXVsdCBjb25maWd1cmF0aW9uIHRoYXQgYXJlIGVtYmVkZGVkIGluIGJpbmFyaWVzCkNPTkZfT1ZFUlJJREVfRElSUz0oCiAgIiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9jb25mLm92ZXJyaWRlIgopCgojIHdoZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29uZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lOU1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09UX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBleGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRvIDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBmaWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBjaGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmlsZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNFUlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9XU19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVzaW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5TVEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9uIHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMgdmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBVc2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFja2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0wCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUgY2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1lbmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUgdG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBvaG15cG9zaCwgc2luZHJlc29yaHVzL3B1cmUsIHN0YXJzaGlwL3N0YXJzaGlwClpTSF9QUkVGRVJSRURfVEhFTUU9InBvd2VybGV2ZWwxMGsvcG93ZXJsZXZlbDEwayIKCiMgaWYgcHJlZmVycmVkIHRoZW1lIGlzIG9obXlwb3NoLCB0aGUgcGF0aCB0byB0aGUgdGhlbWUgZmlsZQpQT1NIX1RIRU1FX1BBVEg9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9vaG15cG9zaFRoZW1lcy9qYW5kZWRvYmJlbGVlci55YW1sIgoKIyBpZiBwcmVmZXJyZWQgdGhlbWUgaXMgc3RhcnNoaXAKU1RBUlNISVBfVEhFTUU9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9zdGFyc2hpcFRoZW1lcy9kZWZhdWx0LnRvbWwiClNUQVJTSElQX0NBQ0hFPSIke0hPTUV9Ly5jYWNoZS8uc3RhcnNoaXAiCgojIERpc3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRVTkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMgYXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMgQHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29uZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1lbW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4gb3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBpbW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklHX1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhkIHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhEX1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2MvV2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
+  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdz \
+bCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01F \
+PSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJGcmFuY29pc0NoYXN0YW5ldCIKCiMgLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0KIyBHaXQgJiBTU0ggaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLQoKIyBpZiAxLCBpdCBpbmRpY2F0ZXMgeW91IGFjY2VwdCB0aGF0IHlvdXIgZ2l0IGtl \
+eSB3aWxsIGJlIGxvYWRlZC4KIyBpZiAwLCBjb25maWd1cmF0aW9ucyB0aGF0IG5lZWQgdG8gYmUg \
+YXV0aGVudGljYXRlZCB3aWxsIGJlIHNraXBwZWQuCiMgRGlzdHJvIG1vZGU6IGluIGFueSBjYXNl \
+LCB5b3VyIGtleSBpcyBub3QgY29waWVkLgpBVVRIT1JJWkVfU1NIX0tFWV9VU0FHRT0xCgojIHlv \
+dXIgbG9naW4gdG8gY29ubmVjdCB0byBzc2ggc2VydmVycyBpZiBhbnkKU1NIX0xPR0lOPSIiCgoj \
+IHlvdXIgZ2l0IGZ1bGwgbmFtZSAnRmlyc3ROYW1lIExhc3ROYW1lJwpHSVRfVVNFUk5BTUU9IiIK \
+CiMgZW1haWwgdXNlZCBmb3IgZ2l0ICdsZGFwQGRvbWFpbi5jb20nCkdJVF9VU0VSX01BSUw9IiIK \
+CiMgZGVmYXVsdCBnaXQgbWVyZ2UgdG9vbCB0byB1c2UKR0lUX01FUkdFX1RPT0w9InZzY29kZSIK \
+CiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBBV1MgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLQoKIyBlbWFpbCB1c2VkIHRvIGNvbm5lY3QgdG8gYXdzCkFXU19VU0VSX01BSUw9ImZj \
+aGFzdGFuZXRAZ21haWwuY29tIgoKIyBhcHAgaWQgdG8gY29ubmVjdCB0byBhd3MgYWNjb3VudApB \
+V1NfQVBQX0lEPSIiCgpBV1NfUFJPRklMRT0iIgpBV1NfREVGQVVMVF9SRUdJT049IiIKQVdTX1RF \
+U1RfU0VDUkVUX0lEPSIiCkFXU19ERUZBVUxUX0RPQ0tFUl9SRUdJU1RSWV9JRD0iIgoKIyB3aWxs \
+IHVzZSBhd3MgY29uZmlndXJlIHNzbyB0byBjb25uZWN0IHRvIGF3cyAoaW5zdGVhZCBvZiBzYW1s \
+MmF3cykKVVNFX0FXU19DT05GSUdVUkVfU1NPPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBL \
+OFMgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBLdWJlRGVmYXVsdENvbmZp \
+ZyB+Ly5rdWJlL2NvbmZpZyBnZW5lcmF0aW9uCiMgYXdzIHJlZ2lvbiBvZiB0aGUgY2x1c3RlciAo \
+RWc6IHVzLWVhc3QtMSkKS1VCRV9DT05GSUdfUkVHSU9OX0NPREU9CgojIGF3cyBhcm4gb2YgdGhl \
+IGNsdXN0ZXIuCiMgRWc6IGFybjphd3M6ZWNzOnJlZ2lvbjphd3NfYWNjb3VudF9pZDpjbHVzdGVy \
+L015Q2x1c3RlcgpLVUJFX0NPTkZJR19DTFVTVEVSX0FSTj0KCiMgLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0KIyBEaXJlY3RvcmllcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIG92ZXJyaWRkZW4gY29u \
+ZiBkaXJlY3RvcnkgdGhhdCB3aWxsIGJlIHVzZWQgdG8gb3ZlcnJpZGUKIyB0aGUgZGVmYXVsdCBj \
+b25maWd1cmF0aW9uIHRoYXQgYXJlIGVtYmVkZGVkIGluIGJpbmFyaWVzCkNPTkZfT1ZFUlJJREVf \
+RElSUz0oCiAgIiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9jb25mLm92ZXJyaWRlIgopCgojIHdo \
+ZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1 \
+MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29u \
+ZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JP \
+T1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3 \
+IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lO \
+U1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9E \
+SVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09U \
+X0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBl \
+eGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRv \
+IDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0 \
+cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJ \
+ZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBm \
+aWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBj \
+aGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmls \
+ZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNF \
+UlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9X \
+U19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVz \
+aW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5T \
+VEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0 \
+aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9u \
+IHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5 \
+IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+ \
+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMg \
+dmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBV \
+c2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFj \
+a2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0w \
+CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUg \
+Y2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1l \
+bmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUg \
+dG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBv \
+aG15cG9zaCwgc2luZHJlc29yaHVzL3B1cmUsIHN0YXJzaGlwL3N0YXJzaGlwClpTSF9QUkVGRVJS \
+RURfVEhFTUU9InBvd2VybGV2ZWwxMGsvcG93ZXJsZXZlbDEwayIKCiMgaWYgcHJlZmVycmVkIHRo \
+ZW1lIGlzIG9obXlwb3NoLCB0aGUgcGF0aCB0byB0aGUgdGhlbWUgZmlsZQpQT1NIX1RIRU1FX1BB \
+VEg9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9vaG15cG9zaFRoZW1lcy9qYW5kZWRv \
+YmJlbGVlci55YW1sIgoKIyBpZiBwcmVmZXJyZWQgdGhlbWUgaXMgc3RhcnNoaXAKU1RBUlNISVBf \
+VEhFTUU9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9zdGFyc2hpcFRoZW1lcy9kZWZh \
+dWx0LnRvbWwiClNUQVJTSElQX0NBQ0hFPSIke0hPTUV9Ly5jYWNoZS8uc3RhcnNoaXAiCgojIERp \
+c3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRV \
+TkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9 \
+MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMg \
+YXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMg \
+QHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29u \
+ZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1l \
+bW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4g \
+b3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBp \
+bW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklH \
+X1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhk \
+IHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3 \
+aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhE \
+X1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1 \
+cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMg \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0 \
+ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49 \
+L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2Mv \
+V2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJh \
+bCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0 \
+bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
   "755"
 
 declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate"
@@ -1229,14 +1332,10 @@ Engine::Config::requireWslu() {
     Log::displayInfo "Installing pre-requisite Wslu : wslvar, wslpath, ... commands"
     Linux::Apt::installIfNecessary --no-install-recommends wslu
 
-    # @see https://github.com/microsoft/WSL/issues/8843#issuecomment-1792256894
-    Log::displayInfo "Fix wsl interoperability due to wsl bug"
-    if [[ ! -f /usr/lib/binfmt.d/WSLInterop.conf &&
-      ! -f /etc/systemd/system/wsl-binfmt.service &&
-      -f /run/systemd/generator.early/wsl-binfmt.service ]]; then
-      sudo sh -c 'echo :WSLInterop:M::MZ::/init:PF > /usr/lib/binfmt.d/WSLInterop.conf'
-      sudo ln -s /run/systemd/generator.early/wsl-binfmt.service /etc/systemd/system/wsl-binfmt.service
-    fi
+    # Fix WSL2 interop issue
+    # @see https://github.com/microsoft/WSL/issues/7181
+    sudo systemctl mask systemd-binfmt.service
+    sudo update-binfmts --enable
   fi
 }
 
@@ -1660,7 +1759,7 @@ InstallScripts::command() {
   local scriptName="${fullScriptName//\//@}"
   rm -f "${statsDir}/${scriptName}-"* || true
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   onInterrupt() {
     Log::displayError "${scriptName} aborted"
     exit 1
@@ -1707,7 +1806,7 @@ InstallScripts::command() {
     # break at first install error
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         LOG_CONTEXT="${scriptName} - " Stats::statusLine "${statsFile}" "Installation"
@@ -1735,7 +1834,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-install.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Install ${scriptName}"
@@ -1767,7 +1866,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-config.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Configuration ${scriptName}"
@@ -1800,7 +1899,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-configuration.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Configuration ${scriptName}"
@@ -1832,7 +1931,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-clean-before-export.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Cleaning ${scriptName}"
@@ -3190,52 +3289,6 @@ UI::theme() {
 }
 
 
-# @description Check that command version is greater than expected minimal version
-# display warning if command version greater than expected minimal version
-# display error if command version less than expected minimal version and exit 1
-# @arg $1 commandName:String command path
-# @arg $2 argVersion:String command line parameters to launch to get command version
-# @arg $3 minimalVersion:String expected minimal command version
-# @arg $4 parseVersionCallback:Function
-# @arg $5 help:String optional help message to display if command does not exist
-# @exitcode 0 if command version greater or equal to expected minimal version
-# @exitcode 1 if command version less than expected minimal version
-# @exitcode 2 if command does not exist
-Version::checkMinimal() {
-  local commandName="$1"
-  local argVersion="$2"
-  local minimalVersion="$3"
-  local parseVersionCallback=${4:-Version::parse}
-  local help="${5:-}"
-
-  Assert::commandExists "${commandName}" "${help}" || return 2
-
-  # shellcheck disable=SC2034
-  local status=0
-  # shellcheck disable=SC2034
-  local -a pipeStatus=()
-  local version
-  version="$("${commandName}" "${argVersion}" 2>&1 | ${parseVersionCallback} || Bash::handlePipelineFailure status pipeStatus)"
-
-  Log::displayDebug "check ${commandName} version ${version} against minimal ${minimalVersion}"
-
-  local result=0
-  Version::compare "${version}" "${minimalVersion}" || result=$?
-  case "${result}" in
-    1)
-      Log::displayInfo "${commandName} version is ${version} greater than ${minimalVersion}"
-      ;;
-    2)
-      Log::displayError "${commandName} minimal version is ${minimalVersion}, your version is ${version}"
-      return 1
-      ;;
-    *)
-      Log::displaySuccess "${commandName} version is matching exactly the expected minimal version ${version}"
-      ;;
-  esac
-}
-
-
 # @description compare 2 version numbers
 # @arg $1 version1:String version 1
 # @arg $2 version2:String version 2
@@ -3266,22 +3319,6 @@ Version::compare() {
     fi
   done
   return 0
-}
-
-
-# @description filter to keep only version number from a string
-# @arg $@ files:String[] the files to filter
-# @exitcode * if one of the filter command fails
-# @stdin you can use stdin as alternative to files argument
-# @stdout the filtered content
-# shellcheck disable=SC2120
-Version::parse() {
-  # match anything, print(p), exit on first match(Q)
-  sed -En \
-    -e 's/\x1b\[[0-9;]*[mGKHF]//g' \
-    -e 's/[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/' \
-    -e '//{p;Q}' \
-    "$@"
 }
 # FUNCTIONS
 
@@ -3615,11 +3652,71 @@ commandOptionParseFinished() {
 
 Linux::requireTarCommand
 Compiler::Embed::extractDirFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/f0903aac78e97f4c07adb90f1534ad0c2484a9081bdff67d7eb19bc4d15f176f/conf_dir" \
-  "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"
+  "${PERSISTENT_TMPDIR:-/tmp}/e7c623ec3bc9b23472c955222ae97a968286f4ac953d6e7ccb8a3d6eda9b5a4b/conf_dir" \
+  "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 \
+B96IhwAsAAA="
 
-declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/f0903aac78e97f4c07adb90f1534ad0c2484a9081bdff67d7eb19bc4d15f176f/conf_dir"
+declare -gx embed_dir_conf_dir="${PERSISTENT_TMPDIR:-/tmp}/e7c623ec3bc9b23472c955222ae97a968286f4ac953d6e7ccb8a3d6eda9b5a4b/conf_dir"
 
+# include functions for postConfigure.sh scripts
+# Assert::dirExists
 
 gitDefaultConfigBeforeParseCallback() {
   Ssh::requireSshKeygenCommand
@@ -3735,6 +3832,7 @@ configure() {
   # add github.com to the list of known hosts
   HOME="${HOME}" Ssh::fixAuthenticityOfHostCantBeEstablished "github.com"
 
+  echo "${GH_TOKEN}" | gh auth login --with-token
   gh extension install github/gh-copilot
 }
 
@@ -3771,11 +3869,18 @@ testConfigure() {
     Log::displayWarning "git user email is not the same as GIT_USER_MAIL in ${BASH_DEV_ENV_ROOT_DIR}/.env"
   fi
 
+  echo "${GH_TOKEN}" | gh auth login --with-token
   if ! gh extension list | grep -q 'github/gh-copilot'; then
     Log::displayError "gh-copilot extension is not installed"
     ((++failures))
   fi
-  Version::checkMinimal "gh copilot" "--version" "1.1.1" || ((++failures))
+  Assert::commandExists "gh" || ((++failures))
+  local ghCopilotVersion
+  ghCopilotVersion="$(gh copilot --version | awk '{print $2}')" || {
+    Log::displayError "gh copilot command failed to run"
+    ((++failures))
+  }
+  Assert::minimalVersion "gh copilot" "${ghCopilotVersion}" "1.1.1" || ((++failures))
 
   return "${failures}"
 }

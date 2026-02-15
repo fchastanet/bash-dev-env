@@ -245,7 +245,6 @@ personal like `.bashrc` but don't worry these files are backed up in the
 
 - [Contribute](docs/Contribute.md)
 - [How does it work ?](docs/HowDoesItWork.md)
-- [TODO](docs/TODO.md)
 
 ## 5. github page
 
@@ -340,11 +339,14 @@ sudo rsync --info=progress2 --no-compress -W -ax /var/lib/docker /mnt/wsl/Ubuntu
 
 # alternatively, you can sync all the necessary directories at once
 sudo rsync --info=progress2 --no-compress -W -ax \
-  --include=/home/wsl/.history
---include=/home/wsl/projects \
+  --include=/home/wsl/.history \
+  --include=/home/wsl/projects \
   --include=/home/wsl/fchastanet \
   --include=/var/lib/docker \
   --exclude='*' / /mnt/wsl/UbuntuTest
+
+# on target distribution, don't forget to restart docker daemon when the sync is done
+sudo service docker restart
 ```
 
 ## 8. Acknowledgements

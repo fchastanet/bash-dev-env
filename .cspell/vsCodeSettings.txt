@@ -5,6 +5,7 @@ matt
 Meslo
 meyers
 mtxr
+ority
 Overtype
 phpstorm
 phpunit
@@ -13,4 +14,5 @@ Pylance
 redhat
 sqltools
 strictssl
+stringifying
 vetur

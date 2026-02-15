@@ -7,12 +7,14 @@ autocd
 autoload
 bindkey
 blockf
+bpick
 clrs
 compinit
 compinstall
 dircolors
 DUPS
 HISTDUP
+newuser
 nocd
 nocompile
 OMZL
@@ -25,4 +27,5 @@ unsetopt
 zhistory
 zicdreplay
 zicompinit
+ZPFX
 zstyle

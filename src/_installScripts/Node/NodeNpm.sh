@@ -53,7 +53,8 @@ install() {
   # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
   source "${HOME}/.bash-dev-env/profile.d/n_path.sh"
   # Install yarn globally
-  N_PREFIX="${HOME}/n" "${HOME}/n/bin/npm" install -g yarn
+  npm install -g corepack
+  corepack prepare yarn@stable --activate
 }
 
 testInstall() {
@@ -61,10 +62,10 @@ testInstall() {
   Assert::fileExists "${HOME}/.bash-dev-env/profile.d/n_path.sh" || ((++failures))
   # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
   source "${HOME}/.bash-dev-env/profile.d/n_path.sh" || ((++failures))
-  Version::checkMinimal "n" "--version" "10.1.0" || ((++failures))
-  Version::checkMinimal "node" "-v" "23.5.0" || ((++failures))
-  Version::checkMinimal "npm" "-v" "10.9.2" || ((++failures))
-  Version::checkMinimal "yarn" "--version" "1.22.22" || ((++failures))
+  Version::checkMinimal "n" "--version" "10.2.0" || ((++failures))
+  Version::checkMinimal "node" "-v" "24.4.1" || ((++failures))
+  Version::checkMinimal "npm" "-v" "11.4.2" || ((++failures))
+  Version::checkMinimal "yarn" "--version" "4.9.2" || ((++failures))
   return "${failures}"
 }
 

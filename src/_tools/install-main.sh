@@ -147,6 +147,7 @@ executeScripts() {
     (
       local installStatus="0"
       (
+        # shellcheck disable=SC2329
         aggregateStat() {
           local rc="$1"
           local -a statFiles=()
@@ -243,7 +244,7 @@ executeScriptsCleanBeforeExport() {
     (
       local cleanStatus="0"
       (
-        # shellcheck disable=SC2317
+        # shellcheck disable=SC2317,SC2329
         aggregateCleanBeforeExportStat() {
           local rc="$1"
           local -a statFiles=()

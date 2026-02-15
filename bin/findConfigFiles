@@ -344,7 +344,7 @@ Compiler::Embed::extractFileFromBase64() {
     if [[ ! -d "${targetDir}" ]]; then
       mkdir -p "${targetDir}"
     fi
-    base64 -d >"${targetFile}" <<<"${binFileBase64}"
+    tr -d '\n ' <<<"${binFileBase64}" | base64 -d >"${targetFile}"
     chmod "${fileMode}" "${targetFile}"
   fi
 
@@ -1152,7 +1152,12 @@ main() {
 Linux::requireTarCommand
 Compiler::Embed::extractFileFromBase64 \
   "${PERSISTENT_TMPDIR:-/tmp}/4e7e8552ed2add5b9486b76eac151b56262eb241c302953faec7216d7330984f/findConfigFilesAwk" \
-  "QkVHSU4gewogIEZTPSIuIjsKICBzcGxpdChleHQsIGV4dEFyciwgInwiKTsKICBmb3IgKGkgaW4gZXh0QXJyKSB7CiAgICBleHRJbmRleFtleHRBcnJbaV1dID0gaTsKICB9Cn0KZnVuY3Rpb24gYmFzZW5hbWVXaXRob3V0RXh0ZW5zaW9uKGZpbGUpIHsKICBzdWIoIi4qLyIsICIiLCBmaWxlKQogIHN1YigvXC5bXi5dKyQvLCAiIiwgZmlsZSkKICByZXR1cm4gZmlsZQp9CnsKICBpZiAoJE5GIGluIGV4dEluZGV4KSB7CiAgICBmaWxlQmFzZT1iYXNlbmFtZVdpdGhvdXRFeHRlbnNpb24oJDApCiAgICBwcmludCBmaWxlQmFzZSAiXHQiIGV4dEluZGV4WyRORl0gIlx0IiAkMDsKICB9Cn0K" \
+  "QkVHSU4gewogIEZTPSIuIjsKICBzcGxpdChleHQsIGV4dEFyciwgInwiKTsKICBmb3IgKGkgaW4g \
+ZXh0QXJyKSB7CiAgICBleHRJbmRleFtleHRBcnJbaV1dID0gaTsKICB9Cn0KZnVuY3Rpb24gYmFz \
+ZW5hbWVXaXRob3V0RXh0ZW5zaW9uKGZpbGUpIHsKICBzdWIoIi4qLyIsICIiLCBmaWxlKQogIHN1 \
+YigvXC5bXi5dKyQvLCAiIiwgZmlsZSkKICByZXR1cm4gZmlsZQp9CnsKICBpZiAoJE5GIGluIGV4 \
+dEluZGV4KSB7CiAgICBmaWxlQmFzZT1iYXNlbmFtZVdpdGhvdXRFeHRlbnNpb24oJDApCiAgICBw \
+cmludCBmaWxlQmFzZSAiXHQiIGV4dEluZGV4WyRORl0gIlx0IiAkMDsKICB9Cn0K" \
   "644"
 
 declare -gx embed_file_findConfigFilesAwk="${PERSISTENT_TMPDIR:-/tmp}/4e7e8552ed2add5b9486b76eac151b56262eb241c302953faec7216d7330984f/findConfigFilesAwk"
