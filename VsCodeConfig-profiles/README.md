@@ -1,11 +1,11 @@
 # VsCode profiles
 
-Before exporting your profiles, make sur to open the file
-`VsCodeConfig-profiles/src/.gitignore` in VsCode so when exporting the profiles,
+Before exporting your profiles, make sure to open the file
+`VsCodeConfig-profiles/src/.gitignore` in VSCode so when exporting the profiles,
 the profiles will be proposed to be saved in the same directory as this
 `.gitignore` file.
 
-Export manually each of your vsCode profiles to a file named
+Export manually each of your VSCode profiles to a file named
 `<yourProfileName>.json` in `VsCodeConfig-profiles/src` directory.
 
 Launch sanitizer to remove any sensitive data from the profiles:

@@ -44,7 +44,7 @@ install() {
     openssh-server \
     popularity-contest
 
-  sudo rm /etc/cron.daily/popularity-contest
+  sudo rm -f /etc/cron.daily/popularity-contest
 
   Log::displayInfo "configure language support"
   Linux::Apt::installIfNecessary --no-install-recommends \
