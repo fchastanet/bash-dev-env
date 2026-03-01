@@ -11,16 +11,15 @@
 
 ## 1. Formatting rules
 
-before committing, be sure that pre-commit hooks are installed in the
-repository. It will ensure during commit to:
+before committing, be sure that pre-commit hooks are installed in the repository. It will ensure during commit to:
 
 - format the files
 - check for errors
 
 ## 2. How to prepare an new image
 
-Here the solution to test this solution without impacting your current
-distribution or in order to generate a wsl distribution
+Here the solution to test this solution without impacting your current distribution or in order to generate a wsl
+distribution
 
 ### 2.1. Prepare distribution
 
@@ -41,8 +40,7 @@ Expand-Archive ./ubuntu-2004.zip ./Ubuntu-2004
 
 - Else you have to import tar file
 
-2 Optional steps: you can manually extract ./Ubuntu-2004/install.tar.gz to
-./Ubuntu-2004/install.tar from 7Zip App.
+2 Optional steps: you can manually extract ./Ubuntu-2004/install.tar.gz to ./Ubuntu-2004/install.tar from 7Zip App.
 
 (optional) first install 7zip for powershell using powershell as Administrator
 
@@ -79,8 +77,8 @@ passwd wslTest
 
 - Finally launching distro will always launch terminal using root user
 
-to use wsl as default, I suggest to create a terminal profile with the following
-command `wsl.exe -d UbuntuTest -u wslTest`
+to use wsl as default, I suggest to create a terminal profile with the following command
+`wsl.exe -d UbuntuTest -u wslTest`
 
 ### 2.2. install the project
 
@@ -119,5 +117,5 @@ wsl.exe --import WslDevEnv C:\Programs\WslDevEnv C:\Programs\WslDevEnv.tar.gz
 
 ### 3.3. run again the installation
 
-Follow [Install instruction](Install.md#3-wsl-install-script) it will build
-docker images and copy missing files on the new computer
+Follow [Install instruction](Install.md#3-wsl-install-script) it will build docker images and copy missing files on the
+new computer

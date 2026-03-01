@@ -2,8 +2,7 @@
 
 <!-- remove -->
 
-> **_NOTE:_** Documentation is best viewed on
-> [github-pages](https://fchastanet.github.io/bash-dev-env/)
+> **_NOTE:_** Documentation is best viewed on [github-pages](https://fchastanet.github.io/bash-dev-env/)
 
 <!-- endRemove -->
 
@@ -44,18 +43,15 @@
 
 ## 1. Excerpt
 
-Allows to install, upgrade, configure and automatically maintain main softwares
-used by developers. You can use this script under wsl or virtualbox ubuntu based
-images.
+Allows to install, upgrade, configure and automatically maintain main softwares used by developers. You can use this
+script under wsl or virtualbox ubuntu based images.
 
-Follow these indications to [Install & Configure](#2-install--configuration).
-You can see a non exhaustive list of features provided by this tool in this
-chapter [Features presentation](#3-features-presentation).
+Follow these indications to [Install & Configure](#2-install--configuration). You can see a non exhaustive list of
+features provided by this tool in this chapter [Features presentation](#3-features-presentation).
 
 This is a collection of several bash installation scripts using
-[bash tools framework](https://fchastanet.github.io/bash-tools-framework/)
-allowing to easily install several softwares on ubuntu based image (under wsl or
-virtual box or native installation).
+[bash tools framework](https://fchastanet.github.io/bash-tools-framework/) allowing to easily install several softwares
+on ubuntu based image (under wsl or virtual box or native installation).
 
 ## 2. Install & Configuration
 
@@ -65,8 +61,7 @@ please follow [Dev-env Installation instructions](docs/Install.md)
 
 ## 3. Features presentation
 
-This project will install, update and configure these non exhaustive
-dependencies:
+This project will install, update and configure these non exhaustive dependencies:
 
 - [Awsume](https://awsu.me/) (alternative to Saml2Aws)
 
@@ -83,8 +78,7 @@ dependencies:
   - fasd jump easily to directories/files
   - Kubectx + Kubeps1
 
-- [BashTools](https://github.com/fchastanet/bash-tools) provides some useful
-  bash tools:
+- [BashTools](https://github.com/fchastanet/bash-tools) provides some useful bash tools:
 
   - cli -- tool to easily connect to your containers
   - dbImport -- tool to import database from aws or Mizar
@@ -117,24 +111,19 @@ dependencies:
   - zinit plugins/themes manager
   - Fzf (search history)
 
-- Fortune (display help message at each bash/zsh login based on the installed
-  softwares)
+- Fortune (display help message at each bash/zsh login based on the installed softwares)
 
-- [Fzf](https://github.com/junegunn/fzf) - fzf is a general-purpose command-line
-  fuzzy finder. It's an interactive Unix filter for command-line that can be
-  used with any list; files, command history, processes, hostNames, bookmarks,
-  git commits, etc. Fzf configuration comes with
-  [fd](https://github.com/sharkdp/fd), fd is a program to find entries in your
-  filesystem. It is a simple, fast and user-friendly alternative to find. While
-  it does not aim to support all of find's powerful functionality, it provides
-  sensible (opinionated) defaults for a majority of use cases.
+- [Fzf](https://github.com/junegunn/fzf) - fzf is a general-purpose command-line fuzzy finder. It's an interactive Unix
+  filter for command-line that can be used with any list; files, command history, processes, hostNames, bookmarks, git
+  commits, etc. Fzf configuration comes with [fd](https://github.com/sharkdp/fd), fd is a program to find entries in
+  your filesystem. It is a simple, fast and user-friendly alternative to find. While it does not aim to support all of
+  find's powerful functionality, it provides sensible (opinionated) defaults for a majority of use cases.
 
 - Git (default ~/.gitconfig with main branch, email, name, default aliases, ...)
 
 - GitHook
 
-  - configure [pre-commit](https://pre-commit.com/) to provide default commit
-    linter
+  - configure [pre-commit](https://pre-commit.com/) to provide default commit linter
   - hook for default commit message prefix based on branch name
 
 - [Hadolint](https://github.com/hadolint/hadolint) (docker linter)
@@ -165,9 +154,8 @@ dependencies:
 
 - MLocate (command locate + indexing configuration) -
 
-  - Mlocate deprecated in favor of fd (installed with Fzf dependency of
-    ShellBash and ShellZsh) contrary to Mlocate, fd does not need to maintain a
-    db of files
+  - Mlocate deprecated in favor of fd (installed with Fzf dependency of ShellBash and ShellZsh) contrary to Mlocate, fd
+    does not need to maintain a db of files
 
 - Node (install n + nodejs)
 
@@ -192,8 +180,7 @@ dependencies:
 - VsCodeExtensionProfiles
 
   - install some useful extensions
-  - configure VsCode with extensions profiles that can be activated
-    independently in VsCode
+  - configure VsCode with extensions profiles that can be activated independently in VsCode
     - Mandatory
     - Bash-Bats-Shellcheck-jq
     - Design API-UML
@@ -202,21 +189,17 @@ dependencies:
     - PHP-HTML-JS-twig-Vue
     - SQL
 
-- Xvfb (not used in any profile for now, used to launch headless chrome by aws
-  cli)
+- Xvfb (not used in any profile for now, used to launch headless chrome by aws cli)
 
 - Dependencies for WSL only
 
-  - Anacron ability to run cron asynchronously (useful for wsl that has no
-    systemd)
-    - configured with a default weekly cron to run this install script for
-      updating softwares
-  - Dns (use with caution, beta version, use it if dns not working anymore on
-    wsl)
+  - Anacron ability to run cron asynchronously (useful for wsl that has no systemd)
+    - configured with a default weekly cron to run this install script for updating softwares
+  - Dns (use with caution, beta version, use it if dns not working anymore on wsl)
   - DockerWslDefaultConfig (mainly configure /etc/wsl.conf)
   - Font install fonts that allows to displays special icons in zsh/bash prompts
-  - **Note** VsCode is not needed in wsl, it has to be installed on windows and
-    then accessible via `code` command from wsl prompt.
+  - **Note** VsCode is not needed in wsl, it has to be installed on windows and then accessible via `code` command from
+    wsl prompt.
   - WslProfile (currently deactivated) - ability to configure windows terminal
 
 - Dependencies for virtual box only
@@ -232,14 +215,13 @@ dependencies:
 
 ### 3.1. Periodical updates
 
-`install` script has been designed to be executed several times over the time.
-Anacron dependency configures a periodical execution of this script.
+`install` script has been designed to be executed several times over the time. Anacron dependency configures a
+periodical execution of this script.
 
 ### 3.2. config files backup
 
-`install` script can update or completely rewrite config files that can be
-personal like `.bashrc` but don't worry these files are backed up in the
-`backup` directory of this project.
+`install` script can update or completely rewrite config files that can be personal like `.bashrc` but don't worry these
+files are backed up in the `backup` directory of this project.
 
 ## 4. Additional documentation
 
@@ -248,11 +230,9 @@ personal like `.bashrc` but don't worry these files are backed up in the
 
 ## 5. github page
 
-The web page uses [Docsify](https://docsify.js.org/) to generate a static web
-site.
+The web page uses [Docsify](https://docsify.js.org/) to generate a static web site.
 
-It is recommended to install docsify-cli globally, which helps initializing and
-previewing the website locally.
+It is recommended to install docsify-cli globally, which helps initializing and previewing the website locally.
 
 `yarn i docsify-cli -g`
 
@@ -283,8 +263,8 @@ hostname NewName
 sed -i -E -e 's/${oldName}/${newName}/' /etc/hosts
 ```
 
-The folder /mnt/wsl is shared between all the distro, we simply mount / in a
-given folder each time we launch a shell if necessary:
+The folder /mnt/wsl is shared between all the distro, we simply mount / in a given folder each time we launch a shell if
+necessary:
 
 - From UbuntuTest
 
@@ -310,10 +290,9 @@ if [[ ! -d "/mnt/wsl/${WSL_DISTRO_NAME}" ]]; then
 fi
 ```
 
-- from UbuntuTest distro, add these lines to .bashrc or .zshrc The last command
-  will link main distro home/wsl/fchastanet/bash-dev-env into this distro
-  ~/projects/bash-dev-env folder every changes into ~/projects/bash-dev-env will
-  be reflected into main distro and vice-versa
+- from UbuntuTest distro, add these lines to .bashrc or .zshrc The last command will link main distro
+  home/wsl/fchastanet/bash-dev-env into this distro ~/projects/bash-dev-env folder every changes into
+  ~/projects/bash-dev-env will be reflected into main distro and vice-versa
 
 ```bash
 if [[ ! -d "/mnt/wsl/${WSL_DISTRO_NAME}" ]]; then
@@ -354,7 +333,6 @@ sudo service docker restart
 Like so many projects, this effort has roots in many places.
 
 I would like to thank particularly Bazyli Brzóska for his work on the project
-[Bash Infinity](https://github.com/niieani/bash-oo-framework). Framework part of
-this project is largely inspired by his work(some parts copied). You can see his
-[blog](https://invent.life/project/bash-infinity-framework) too that is really
+[Bash Infinity](https://github.com/niieani/bash-oo-framework). Framework part of this project is largely inspired by his
+work(some parts copied). You can see his [blog](https://invent.life/project/bash-infinity-framework) too that is really
 interesting

@@ -1,28 +1,28 @@
 # Jenkins/Docker/Helm
 
-## JQ
+## 1. JQ
 
 davidnussio.vscode-jq-playground
 petli-full.jq-vscode
 jq-syntax-highlighting.jq-syntax-highlighting
 
-## Docker
+## 2. Docker
 
 ms-azuretools.vscode-docker
 exiasr.hadolint
 
-## Jenkins
+## 3. Jenkins
 
 ivory-lab.jenkinsfile-support
 janjoerke.jenkins-pipeline-linter-connector
 jmmeessen.jenkins-declarative-support
 secanis.jenkinsfile-support
 
-## Groovy
+## 4. Groovy
 
 argylewolflabs.vscode-groovy
 marlon407.code-groovy
 
-## Helm
+## 5. Helm
 
 tim-koehler.helm-intellisense

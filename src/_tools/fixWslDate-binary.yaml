@@ -13,6 +13,5 @@ binData:
       version: "3.0"
       copyrightBeginYear: 2024
       help: "Fix linux date using google"
-      longDescription:
-        "Can be useful on wsl when date is not synchronized with host"
+      longDescription: "Can be useful on wsl when date is not synchronized with host"
       mainFile: ${BASH_DEV_ENV_ROOT_DIR}/src/_tools/fixWslDate-main.sh

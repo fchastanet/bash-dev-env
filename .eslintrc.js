@@ -25,11 +25,7 @@ module.exports = {
     node: true,
   },
   plugins: ["json"],
-  extends: [
-    "eslint:recommended",
-    "plugin:json/recommended",
-    "eslint-config-prettier",
-  ],
+  extends: ["eslint:recommended", "plugin:json/recommended", "eslint-config-prettier"],
   rules: {
     "json/*": ["error", {allowComments: false}],
   },

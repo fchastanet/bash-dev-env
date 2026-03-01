@@ -14,12 +14,7 @@
   "diffEditor.ignoreTrimWhitespace": false,
   "diffEditor.codeLens": true,
   "local-history.treeLocation": "localHistory",
-  "compareFolders.excludeFilter": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/.history/**",
-    "**/logs/**"
-  ],
+  "compareFolders.excludeFilter": ["**/node_modules/**", "**/dist/**", "**/.history/**", "**/logs/**"],
   "search.exclude": {
     "**/node_modules": true,
     "**/bower_components": true,

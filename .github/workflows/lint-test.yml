@@ -84,7 +84,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: 3.12
 
       - uses: fchastanet/github-action-setup-shfmt@v4.0.0
 
@@ -109,7 +109,7 @@ jobs:
         if: ${{ always() }}
         # You can override MegaLinter flavor used to have faster performances
         # More info at https://megalinter.io/flavors/
-        uses: oxsecurity/megalinter/flavors/terraform@v9.3.0
+        uses: oxsecurity/megalinter/flavors/terraform@v9
         # All available variables are described in documentation
         # https://megalinter.io/configuration/
         env:

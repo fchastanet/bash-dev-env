@@ -134,9 +134,7 @@ function getErrorSuggestion(errorCode) {
 }
 
 function logParseErrors(errors, path) {
-  console.warn(
-    `\nWarning: JSONC parsing at ${path} had ${errors.length} errors but continued`
-  );
+  console.warn(`\nWarning: JSONC parsing at ${path} had ${errors.length} errors but continued`);
 
   // Display a more comprehensive error message with code snippets
   errors.forEach((error, index) => {
@@ -161,8 +159,7 @@ function logParseErrors(errors, path) {
         snippet.substring(markerPos + errorLength);
 
       // Add a caret indicator below the error
-      const caretLine =
-        " ".repeat(markerPos) + colors.yellow + "^" + colors.reset;
+      const caretLine = " ".repeat(markerPos) + colors.yellow + "^" + colors.reset;
       snippet += "\n" + caretLine;
     }
 
@@ -184,9 +181,7 @@ function logParseErrors(errors, path) {
 
     // Show the specific line with error
     if (lineContent) {
-      console.warn(
-        `${colors.blue}Line ${lineNum}:${colors.reset} ${lineContent.replace(/\n/g, "")}`
-      );
+      console.warn(`${colors.blue}Line ${lineNum}:${colors.reset} ${lineContent.replace(/\n/g, "")}`);
     }
 
     console.warn(`${colors.yellow}↓ Context around error ↓${colors.reset}`);
@@ -259,19 +254,14 @@ function recursivelyDecodeJsonc(obj, path = "") {
 
   // If it's an array, recursively process each element
   if (Array.isArray(obj)) {
-    return obj.map((item, index) =>
-      recursivelyDecodeJsonc(item, `${path}[${index}]`)
-    );
+    return obj.map((item, index) => recursivelyDecodeJsonc(item, `${path}[${index}]`));
   }
 
   // If it's an object, recursively process each property
   if (typeof obj === "object") {
     const result = {};
     for (const key of Object.keys(obj)) {
-      result[key] = recursivelyDecodeJsonc(
-        obj[key],
-        path ? `${path}.${key}` : key
-      );
+      result[key] = recursivelyDecodeJsonc(obj[key], path ? `${path}.${key}` : key);
     }
     return result;
   }
@@ -379,20 +369,13 @@ function maskSensitiveInfo(profile, currentPath = "", filePath = "") {
         if (Array.isArray(value)) {
           // Replace with empty array
           result[key] = [];
-          console.log(
-            `${colors.green}INFO:${colors.reset} Cleared ${keyPath} in ${filePath}`
-          );
+          console.log(`${colors.green}INFO:${colors.reset} Cleared ${keyPath} in ${filePath}`);
           continue;
-        } else if (
-          keyPath.includes("commandPalette.mru.cache") &&
-          Object.hasOwnProperty.call(value, "entries")
-        ) {
+        } else if (keyPath.includes("commandPalette.mru.cache") && Object.hasOwnProperty.call(value, "entries")) {
           // Special case for commandPalette.mru.cache.entries
           value.entries = [];
           result[key] = value;
-          console.log(
-            `${colors.green}INFO:${colors.reset} Cleared ${keyPath}.entries in ${filePath}`
-          );
+          console.log(`${colors.green}INFO:${colors.reset} Cleared ${keyPath}.entries in ${filePath}`);
           continue;
         }
       }
@@ -457,17 +440,7 @@ function looksLikeSecret(value) {
   }
 
   // Skip common non-secret values
-  const nonSecretValues = [
-    "true",
-    "false",
-    "null",
-    "undefined",
-    "none",
-    "off",
-    "on",
-    "0",
-    "1",
-  ];
+  const nonSecretValues = ["true", "false", "null", "undefined", "none", "off", "on", "0", "1"];
   if (nonSecretValues.includes(value.toLowerCase())) {
     return false;
   }
@@ -489,11 +462,7 @@ function encodeProfile(profile) {
   if (encodedProfile.settings && typeof encodedProfile.settings === "object") {
     try {
       // Format settings nicely but comments will be lost
-      encodedProfile.settings = JSON.stringify(
-        encodedProfile.settings,
-        null,
-        2
-      );
+      encodedProfile.settings = JSON.stringify(encodedProfile.settings, null, 2);
     } catch (e) {
       console.warn(
         `${colors.yellow}Warning:${colors.reset} Error stringifying settings, using simpler approach:`,
@@ -534,10 +503,7 @@ async function writeFileContent(filePath, content) {
       `${colors.yellow}Note:${colors.reset} Comments in the original file cannot be fully preserved in the decoded output`
     );
   } catch (e) {
-    console.warn(
-      `${colors.yellow}Warning:${colors.reset} Error while trying to encode json:`,
-      e.message
-    );
+    console.warn(`${colors.yellow}Warning:${colors.reset} Error while trying to encode json:`, e.message);
   }
 
   // Write the decoded file with pretty formatting
@@ -598,10 +564,7 @@ async function processFile(filePath, profilesDir) {
 
     // Create output filename for sanitized version
     const outputSanitizedFileName = baseFileName + ".jsonc";
-    const outputSanitizedPath = path.join(
-      sanitizedDir,
-      outputSanitizedFileName
-    );
+    const outputSanitizedPath = path.join(sanitizedDir, outputSanitizedFileName);
     await writeFileContent(outputSanitizedPath, sanitizedProfile);
 
     // Create output filename for re-encoded version
@@ -674,9 +637,7 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length !== 2) {
-    console.error(
-      "Usage: node convert-vscode-profiles.js <profiles-directory-path> <target-directory-path>"
-    );
+    console.error("Usage: node convert-vscode-profiles.js <profiles-directory-path> <target-directory-path>");
     process.exit(1);
   }
 
@@ -685,9 +646,7 @@ async function main() {
 
   // Validate source and target directories
   if (!profilesDir || !targetDir) {
-    console.error(
-      "Both profiles directory and target directory paths must be provided"
-    );
+    console.error("Both profiles directory and target directory paths must be provided");
     process.exit(1);
   }
   const profilesDirStats = fs.statSync(profilesDir);
@@ -714,9 +673,7 @@ async function main() {
   try {
     fs.accessSync(targetDir, fs.constants.W_OK);
   } catch (error) {
-    console.error(
-      `Target directory ${targetDir} is not writable: ${error.message}`
-    );
+    console.error(`Target directory ${targetDir} is not writable: ${error.message}`);
     process.exit(1);
   }
   try {
@@ -745,9 +702,7 @@ async function main() {
     if (fs.existsSync(srcDir)) {
       await processDirectory(srcDir, profilesDir);
     } else {
-      console.warn(
-        `${colors.yellow}Warning:${colors.reset} Source directory ${srcDir} does not exist`
-      );
+      console.warn(`${colors.yellow}Warning:${colors.reset} Source directory ${srcDir} does not exist`);
     }
 
     // At the end of the process:
@@ -769,13 +724,9 @@ async function main() {
           profilesCount++;
         }
       }
-      console.log(
-        `Copied ${profilesCount} profile files from ${reEncodedDir} to ${targetDir}`
-      );
+      console.log(`Copied ${profilesCount} profile files from ${reEncodedDir} to ${targetDir}`);
     } else {
-      console.warn(
-        `${colors.yellow}Warning:${colors.reset} directory ${reEncodedDir} does not exist`
-      );
+      console.warn(`${colors.yellow}Warning:${colors.reset} directory ${reEncodedDir} does not exist`);
     }
 
     // Show summary of password detection
@@ -788,9 +739,7 @@ async function main() {
       passwordsFound.paths.forEach((path) => {
         console.log(`- ${colors.cyan}${path}${colors.reset}`);
       });
-      console.log(
-        'All sensitive data has been replaced by "[SECURED]" string in the output files.'
-      );
+      console.log('All sensitive data has been replaced by "[SECURED]" string in the output files.');
       console.log("=".repeat(80) + "\n");
     }
   } catch (error) {

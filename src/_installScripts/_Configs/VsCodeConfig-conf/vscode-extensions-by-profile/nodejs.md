@@ -5,15 +5,15 @@ xabikos.javascriptsnippets
 christian-kohler.npm-intellisense
 ajuvercr.jsonld-lsp
 
-## Linters
+## 1. Linters
 
 dbaeumer.vscode-eslint
 stylelint.vscode-stylelint
 
-## css/less/sass/scss
+## 2. css/less/sass/scss
 
 michelemelluso.code-beautifier
 
-## JavaScript Standard Style
+## 3. JavaScript Standard Style
 
 standard.vscode-standard

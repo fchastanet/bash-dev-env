@@ -1,6 +1,6 @@
 # Common extensions
 
-## Common tools
+## 1. Common tools
 
 ms-vscode-remote.remote-wsl
 
@@ -22,7 +22,7 @@ ms-vscode.vscode-websearchforcopilot
 
 streetsidesoftware.code-spell-checker
 
-## Common languages
+## 2. Common languages
 
 shd101wyy.markdown-preview-enhanced
 yzhang.markdown-all-in-one
@@ -31,18 +31,18 @@ appler.pretty-json-preview
 
 redhat.vscode-yaml
 
-## Linters
+## 3. Linters
 
 davidanson.vscode-markdownlint
 wekex.jsonlint
 timonwong.shellcheck
 
-## Compare
+## 4. Compare
 
 moshfeu.compare-folders
 moshfeu.diff-merge
 
-## Git related
+## 5. Git related
 
 otard.copy-reference
 phil294.git-log--graph
@@ -50,6 +50,6 @@ waderyan.gitblame
 donjayamanne.githistory
 mhutchie.git-graph
 
-## Test
+## 6. Test
 
 ms-vscode.test-adapter-converter

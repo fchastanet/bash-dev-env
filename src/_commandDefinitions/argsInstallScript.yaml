@@ -28,9 +28,7 @@ binData:
               value: dependencies
             - help: "Show the variables needed to execute this\ninstall script."
               value: listVariables
-            - help:
-                "Show the fortunes sentences that this\ninstall script can
-                generate."
+            - help: "Show the fortunes sentences that this\ninstall script can generate."
               value: fortunes
             - help: helpVariables
               value: helpVariables

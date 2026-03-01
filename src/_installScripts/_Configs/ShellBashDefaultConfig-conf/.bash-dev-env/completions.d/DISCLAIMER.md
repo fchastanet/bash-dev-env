@@ -1,7 +1,7 @@
 # Disclaimer
 
-The files in this directory can be upgraded **without notice**. You can create
-your own files but think about suffixing them with `-perso`.
+The files in this directory can be upgraded **without notice**. You can create your own files but think about suffixing
+them with `-perso`.
 
 Order of loading can be manage by prefixing the files with :
 

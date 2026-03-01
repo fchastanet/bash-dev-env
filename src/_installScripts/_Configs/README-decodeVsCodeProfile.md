@@ -1,13 +1,11 @@
 # VSCode Profile Decoder
 
-This script allows you to decode VS Code profile files (`.code-profile`) into
-readable JSONC format.
+This script allows you to decode VS Code profile files (`.code-profile`) into readable JSONC format.
 
-VS Code profiles contain nested JSONC strings that need to be parsed multiple
-times to reveal their actual content. This tool handles the decoding and
-produces a more readable representation of the profile.
+VS Code profiles contain nested JSONC strings that need to be parsed multiple times to reveal their actual content. This
+tool handles the decoding and produces a more readable representation of the profile.
 
-## Usage
+## 1. Usage
 
 ```bash
 # Decode a single file
@@ -17,10 +15,10 @@ node decodeVsCodeProfile.js /path/to/profile.code-profile
 node decodeVsCodeProfile.js /path/to/directory
 ```
 
-For each `.code-profile` file processed, the script will create a corresponding
-`.code-profile.decoded.jsonc` file in the same location.
+For each `.code-profile` file processed, the script will create a corresponding `.code-profile.decoded.jsonc` file in
+the same location.
 
-## Security Features
+## 2. Security Features
 
 The script automatically detects and redacts sensitive information:
 
@@ -29,10 +27,9 @@ The script automatically detects and redacts sensitive information:
 - A security warning is shown when sensitive data is detected
 - All sensitive paths are listed in the summary report
 
-## What gets decoded
+## 3. What gets decoded
 
-The script recursively decodes all JSON and JSONC (JSON with comments) strings
-found in the profile file, including:
+The script recursively decodes all JSON and JSONC (JSON with comments) strings found in the profile file, including:
 
 - Settings (including nested settings)
 - Keybindings
@@ -41,20 +38,17 @@ found in the profile file, including:
 - Extensions
 - Any other nested JSON/JSONC string properties
 
-## Notes
+## 4. Notes
 
 - The script properly handles JSONC (JSON with comments) format
 - Properties are recursively decoded at any depth
-- Some parts of the profile may not be valid JSON/JSONC and will be kept as
-  strings
-- The script handles errors gracefully and continues processing other files if
-  one fails
+- Some parts of the profile may not be valid JSON/JSONC and will be kept as strings
+- The script handles errors gracefully and continues processing other files if one fails
 - Passwords and sensitive data (like API tokens) are automatically redacted
 
-## Error Reporting
+## 5. Error Reporting
 
-When parsing issues are encountered, the script provides detailed error
-information:
+When parsing issues are encountered, the script provides detailed error information:
 
 - Exact error location (line and column)
 - Full line content where the error occurs
