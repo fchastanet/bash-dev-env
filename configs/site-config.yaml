@@ -1,0 +1,43 @@
+# Site-specific configuration for bash-dev-env
+title: Bash Dev Env Documentation
+baseURL: https://fchastanet.github.io/bash-dev-env/
+
+params:
+  description: 'Bash Dev Env - Comprehensive Bash-based development environment installation and configuration system for Ubuntu-based distributions'
+  keywords: 'bash, tools, installation, ubuntu, wsl, development, environment, automation, configuration'
+
+  # Repository configuration
+  github_repo: https://github.com/fchastanet/bash-dev-env
+  github_project_repo: https://github.com/fchastanet/bash-dev-env
+
+  # UI Configuration - Blue theme
+  ui:
+    navbar_bg_color: '#007bff'
+
+  # Links
+  links:
+    user:
+      - name: GitHub
+        url: https://github.com/fchastanet/bash-dev-env
+        icon: fab fa-github
+        desc: bash-dev-env repository
+      - name: Issues
+        url: https://github.com/fchastanet/bash-dev-env/issues
+        icon: fas fa-bug
+        desc: Report issues
+
+  # SEO
+  meta:
+    description: 'Bash Dev Env documentation - Comprehensive Bash-based development environment installation and configuration system'
+    keywords: 'bash, tools, installation, ubuntu, wsl, development, environment, automation, configuration'
+
+menu:
+  site:
+    - name: GitHub
+      url: https://github.com/fchastanet/bash-dev-env
+      weight: 10
+      post: <sup><i class="ps-1 fa-solid fa-up-right-from-square fa-xs" aria-hidden="true"></i></sup>
+    - name: Release Notes
+      url: https://github.com/fchastanet/bash-dev-env/releases
+      weight: 20
+      post: <sup><i class="ps-1 fa-solid fa-up-right-from-square fa-xs" aria-hidden="true"></i></sup>

@@ -25,3 +25,11 @@ src/_commandDefinitions/generated
 !.env.distro.*.template
 
 megalinter-reports/
+
+# Hugo generated files
+build/
+public/
+sites/
+resources/
+.hugo_build.lock
+hugo.yaml
