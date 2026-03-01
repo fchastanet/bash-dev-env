@@ -36,7 +36,15 @@ custom bash compiler to generate self-contained installation scripts.
 │   ├── Profiles/                  # Profile management
 │   └── */                         # Framework modules (Log, Assert, UI, etc.)
 ├── profiles/                       # Profile definitions
-├── docs/                          # Documentation
+├── docs/                          # Old documentation (kept for reference)
+├── content/                       # Hugo documentation content
+│   ├── _index.md                  # Site home page
+│   └── docs/                      # Documentation pages
+├── configs/                       # Hugo configuration
+│   └── site-config.yaml          # Site-specific config
+├── assets/                        # Hugo assets
+│   └── scss/                     # Custom SCSS
+├── static/                        # Static files (images, etc.)
 ├── vendor/                        # External dependencies (git submodule)
 │   └── bash-tools-framework/     # Framework (not committed)
 ├── .framework-config              # Framework configuration
@@ -494,16 +502,33 @@ pre-commit run bash-compiler -a
 ### Key Documents
 
 - **README.md**: Project overview and features
-- **docs/Install.md**: Installation instructions
-- **docs/Contribute.md**: Contribution guidelines
-- **docs/HowDoesItWork.md**: Architecture and internals
+- **content/docs/install.md**: Installation instructions
+- **content/docs/contribute.md**: Contribution guidelines
+- **content/docs/how-does-it-work.md**: Architecture and internals
 
-### GitHub Pages
+### Hugo Documentation Site
 
-- **Docsify-based**: `pages/` directory
-- **Local preview**: `docsify serve pages` (navigate to
-  <http://localhost:3000/>)
-- **Published**: <https://fchastanet.github.io/bash-dev-env/>
+The project uses Hugo with the Docsy theme for documentation:
+
+- **Configuration**: `configs/site-config.yaml` - Site-specific Hugo configuration
+- **Content**: `content/` - Hugo-structured markdown documentation
+- **Theme Override**: `assets/scss/_variables_project_override.scss` - Custom styling
+- **Deployment**: `.github/workflows/build-site.yml` - Automated build and deployment
+
+#### Local Preview
+
+```bash
+# Install Hugo Extended: https://gohugo.io/installation/
+hugo mod get -u
+hugo server -D
+# Navigate to http://localhost:1313/bash-dev-env/
+```
+
+#### GitHub Pages
+
+- Documentation site: https://fchastanet.github.io/bash-dev-env/
+- Deployed via GitHub Actions using reusable workflow from fchastanet/my-documents
+- See `DEPLOYMENT.md` for GitHub Pages configuration instructions
 
 ## Best Practices
 

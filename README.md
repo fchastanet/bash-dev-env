@@ -57,7 +57,7 @@ on ubuntu based image (under wsl or virtual box or native installation).
 
 ### 2.1. Dev-env install
 
-please follow [Dev-env Installation instructions](docs/Install.md)
+please follow [Dev-env Installation instructions](https://fchastanet.github.io/bash-dev-env/docs/install/)
 
 ## 3. Features presentation
 
@@ -225,22 +225,19 @@ files are backed up in the `backup` directory of this project.
 
 ## 4. Additional documentation
 
-- [Contribute](docs/Contribute.md)
-- [How does it work ?](docs/HowDoesItWork.md)
+- [Contribute](https://fchastanet.github.io/bash-dev-env/docs/contribute/)
+- [How does it work ?](https://fchastanet.github.io/bash-dev-env/docs/how-does-it-work/)
 
 ## 5. github page
 
-The web page uses [Docsify](https://docsify.js.org/) to generate a static web site.
+The documentation site is built with [Hugo](https://gohugo.io/) using the [Docsy](https://www.docsy.dev/) theme.
 
-It is recommended to install docsify-cli globally, which helps initializing and previewing the website locally.
+To preview the documentation locally:
 
-`yarn i docsify-cli -g`
-
-Run the local server with docsify serve.
-
-`docsify serve pages`
-
-Navigate to <http://localhost:3000/>
+1. [Install Hugo Extended](https://gohugo.io/installation/)
+2. Run `hugo mod get -u` to download dependencies
+3. Run `hugo server -D` to start the local server
+4. Navigate to <http://localhost:1313/bash-dev-env/>
 
 ## 6. Development
 
