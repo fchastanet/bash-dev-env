@@ -1,13 +1,13 @@
-# Dev-env - How to contribute ?
-
-- [1. Formatting rules](#1-formatting-rules)
-- [2. How to prepare an new image](#2-how-to-prepare-an-new-image)
-  - [2.1. Prepare distribution](#21-prepare-distribution)
-  - [2.2. install the project](#22-install-the-project)
-- [3. Prepare a tar image for sharing](#3-prepare-a-tar-image-for-sharing)
-  - [3.1. export the image](#31-export-the-image)
-  - [3.2. import the image](#32-import-the-image)
-  - [3.3. run again the installation](#33-run-again-the-installation)
+---
+title: How to Contribute
+description: Guidelines for contributing to Bash Dev Env
+weight: 30
+categories: [documentation, development]
+tags: [contribute, development, formatting, testing]
+creationDate: 2026-03-01
+lastUpdated: 2026-03-01
+version: '1.0'
+---
 
 ## 1. Formatting rules
 
@@ -16,7 +16,7 @@ before committing, be sure that pre-commit hooks are installed in the repository
 - format the files
 - check for errors
 
-## 2. How to prepare an new image
+## 2. How to prepare a new image
 
 Here the solution to test this solution without impacting your current distribution or in order to generate a wsl
 distribution
@@ -82,11 +82,11 @@ to use wsl as default, I suggest to create a terminal profile with the following
 
 ### 2.2. install the project
 
-Follow [Install instruction](Install.md#3-wsl-install-script)
+Follow [Install instruction](https://fchastanet.github.io/bash-dev-env/docs/install/#3-wsl-install-script)
 
 ## 3. Prepare a tar image for sharing
 
-Follow [Install instruction](Contribute.md#2-how-to-prepare-an-new-image)
+Follow [Install instruction](https://fchastanet.github.io/bash-dev-env/docs/contribute/#2-how-to-prepare-a-new-image)
 
 Ensure you are using wsl user login name instead of wslTest.
 
@@ -117,5 +117,5 @@ wsl.exe --import WslDevEnv C:\Programs\WslDevEnv C:\Programs\WslDevEnv.tar.gz
 
 ### 3.3. run again the installation
 
-Follow [Install instruction](Install.md#3-wsl-install-script) it will build docker images and copy missing files on the
-new computer
+Follow [Install instruction](/docs/install/#3-wsl-install-script) it will build docker images and copy missing files on
+the new computer

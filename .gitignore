@@ -5,9 +5,6 @@ node_modules/
 .env
 .env.distro
 
-pages/docs
-pages/README.md
-
 .history
 megalinter-reports
 

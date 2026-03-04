@@ -1,11 +1,17 @@
-# Bash-dev-env, How does it work ?
+---
+title: How Does It Work
+description: Technical overview of Bash Dev Env architecture and internals
+weight: 20
+categories: [documentation, architecture]
+tags: [architecture, engine, libraries, configuration]
+creationDate: 2026-03-01
+lastUpdated: 2026-03-01
+version: '1.0'
+---
 
-- [1. Install command](#1-install-command)
-- [2. Engine](#2-engine)
-  - [2.1. lib/loadAndCheckConfig.sh - loadAndCheckConfig](#21-libloadandcheckconfigsh---loadandcheckconfig)
-  - [2.2. lib/loadAndCheckConfig.sh - loadProfile](#22-libloadandcheckconfigsh---loadprofile)
-- [3. Libraries](#3-libraries)
-- [4. Configurations](#4-configurations)
+This chapter provides a technical overview of the architecture and internals of Bash Dev Env. It covers the main
+components, their interactions, and how they work together to provide a seamless installation and configuration
+experience.
 
 ## 1. Install command
 

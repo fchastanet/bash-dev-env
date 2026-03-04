@@ -36,7 +36,13 @@ custom bash compiler to generate self-contained installation scripts.
 │   ├── Profiles/                  # Profile management
 │   └── */                         # Framework modules (Log, Assert, UI, etc.)
 ├── profiles/                       # Profile definitions
-├── docs/                          # Documentation
+├── content/                       # Hugo documentation content
+│   ├── _index.md                  # Site home page
+│   └── docs/                      # Documentation pages
+├── configs/                       # Hugo configuration
+│   └── site-config.yaml          # Site-specific config
+├── assets/                        # Hugo assets
+│   └── scss/                     # Custom SCSS
 ├── vendor/                        # External dependencies (git submodule)
 │   └── bash-tools-framework/     # Framework (not committed)
 ├── .framework-config              # Framework configuration
@@ -384,7 +390,9 @@ Files with this header are auto-generated:
 
 ### Other Workflows
 
-- `docsify-gh-pages.yml`: Deploy GitHub Pages documentation
+- `build-site.yml`: Deploy GitHub Pages documentation
+- `main.yml`: Main workflow Test, Build and Deploy documentation
+  for pushes and PRs
 - `precommit-autoupdate.yml`: Auto-update pre-commit hooks
 - `set-github-status-on-pr-approved.yml`: Status management
 
@@ -494,16 +502,23 @@ pre-commit run bash-compiler -a
 ### Key Documents
 
 - **README.md**: Project overview and features
-- **docs/Install.md**: Installation instructions
-- **docs/Contribute.md**: Contribution guidelines
-- **docs/HowDoesItWork.md**: Architecture and internals
+- **content/docs/install.md**: Installation instructions
+- **content/docs/contribute.md**: Contribution guidelines
+- **content/docs/how-does-it-work.md**: Architecture and internals
 
-### GitHub Pages
+### Hugo Documentation Site
 
-- **Docsify-based**: `pages/` directory
-- **Local preview**: `docsify serve pages` (navigate to
-  <http://localhost:3000/>)
-- **Published**: <https://fchastanet.github.io/bash-dev-env/>
+The project uses Hugo with the Docsy theme for documentation:
+
+- **Configuration**: `configs/site-config.yaml` - Site-specific Hugo configuration
+- **Content**: `content/` - Hugo-structured markdown documentation
+- **Theme Override**: `assets/scss/_variables_project_override.scss` - Custom styling
+- **Deployment**: `.github/workflows/build-site.yml` - Automated build and deployment
+
+#### GitHub Pages
+
+- Documentation site: <https://fchastanet.github.io/bash-dev-env/>
+- Deployed via GitHub Actions using reusable workflow from fchastanet/my-documents
 
 ## Best Practices
 
@@ -562,8 +577,8 @@ pre-commit run bash-compiler -a
 # Check install script interface
 ./checkInstallScripts.sh
 
-# Local docs preview
-docsify serve pages
+# Local docs preview from my-documents folder
+SITE=bash-dev-env make start-site
 ```
 
 ### File Patterns

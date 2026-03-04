@@ -1,0 +1,295 @@
+---
+title: Documentation
+linkTitle: Documentation
+description: Complete documentation for Bash Dev Env
+type: docs
+weight: 1
+creationDate: 2026-03-01
+lastUpdated: 2026-03-01
+---
+
+{{< articles-list >}}
+
+## 1. Excerpt
+
+Allows to install, upgrade, configure and automatically maintain main softwares used by developers. You can use this
+script under wsl or virtualbox ubuntu based images.
+
+Follow these indications to [Install & Configure](#2-install--configuration). You can see a non exhaustive list of
+features provided by this tool in this chapter [Features presentation](#3-features-presentation).
+
+This is a collection of several bash installation scripts using
+[bash tools framework](https://fchastanet.github.io/bash-tools-framework/) allowing to easily install several softwares
+on ubuntu based image (under wsl or virtual box or native installation).
+
+## 2. Install & Configuration
+
+### 2.1. Dev-env install
+
+please follow [Dev-env Installation instructions](https://fchastanet.github.io/bash-dev-env/docs/install/)
+
+## 3. Features presentation
+
+This project will install, update and configure these non exhaustive dependencies:
+
+- [Awsume](https://awsu.me/) (alternative to Saml2Aws)
+
+- [AwsCli](https://aws.amazon.com/cli/?nc1=h_ls)
+
+  - Awscli with default ck configuration
+
+- ShellBash with
+
+  - pre configured aliases
+  - default variables PATH, ...
+  - completions
+  - customized git prompt
+  - fasd jump easily to directories/files
+  - Kubectx + Kubeps1
+
+- [BashTools](https://github.com/fchastanet/bash-tools) provides some useful bash tools:
+
+  - cli -- tool to easily connect to your containers
+  - dbImport -- tool to import database from aws or Mizar
+  - dbQueryAllDatabases -- tool to execute a query on multiple databases
+  - ...
+
+- CodeCheckers
+
+  - [shellcheck](https://www.shellcheck.net)
+
+- Composer
+
+  - php
+  - php-curl
+  - php-mbstring
+  - php-xml
+
+- ComposerDependencies
+
+  - squizlabs/php_codesniffer
+  - phpmd/phpmd
+  - friendsofphp/php-cs-fixer
+
+- ShellZsh: instead of using ShellBash, you can use Zsh shell with
+
+  - pre configured aliases
+  - default variables PATH, ...
+  - completions
+  - very powerful and efficient prompt powerlevel10k or starship/starship
+  - zinit plugins/themes manager
+  - Fzf (search history)
+
+- Fortune (display help message at each bash/zsh login based on the installed softwares)
+
+- [Fzf](https://github.com/junegunn/fzf) - fzf is a general-purpose command-line fuzzy finder. It's an interactive Unix
+  filter for command-line that can be used with any list; files, command history, processes, hostNames, bookmarks, git
+  commits, etc. Fzf configuration comes with [fd](https://github.com/sharkdp/fd), fd is a program to find entries in
+  your filesystem. It is a simple, fast and user-friendly alternative to find. While it does not aim to support all of
+  find's powerful functionality, it provides sensible (opinionated) defaults for a majority of use cases.
+
+- Git (default ~/.gitconfig with main branch, email, name, default aliases, ...)
+
+- GitHook
+
+  - configure [pre-commit](https://pre-commit.com/) to provide default commit linter
+  - hook for default commit message prefix based on branch name
+
+- [Hadolint](https://github.com/hadolint/hadolint) (docker linter)
+
+- Java dependency needed by Plantuml
+
+- Kubernetes
+
+  - [Helm](https://helm.sh/)
+  - [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/)
+  - [Minikube](https://minikube.sigs.k8s.io/docs/start/)
+
+- MandatorySoftwares
+
+  - build-essential
+  - curl
+  - dos2unix
+  - jq
+  - mysql-client
+  - parallel
+  - putty-tools
+  - pv
+  - unzip
+  - vim
+  - vim-gui-common
+  - vim-runtime
+  - wget
+
+- MLocate (command locate + indexing configuration) -
+
+  - Mlocate deprecated in favor of fd (installed with Fzf dependency of ShellBash and ShellZsh) contrary to Mlocate, fd
+    does not need to maintain a db of files
+
+- Node (install n + nodejs)
+
+- NodeDependencies
+
+  - hjson
+  - npm-check-updates
+  - prettier
+  - sass-lint
+  - stylelint
+
+- OpenVpn
+
+- Oq
+
+- Plantuml
+
+- Python dependency for Awsume
+
+- Saml2Aws (alternative to Awsume)
+
+- VsCodeExtensionProfiles
+
+  - install some useful extensions
+  - configure VsCode with extensions profiles that can be activated independently in VsCode
+    - Mandatory
+    - Bash-Bats-Shellcheck-jq
+    - Design API-UML
+    - Python
+    - Jenkinsfile-Docker-Helm
+    - PHP-HTML-JS-twig-Vue
+    - SQL
+
+- Xvfb (not used in any profile for now, used to launch headless chrome by aws cli)
+
+- Dependencies for WSL only
+
+  - Anacron ability to run cron asynchronously (useful for wsl that has no systemd)
+    - configured with a default weekly cron to run this install script for updating softwares
+  - Dns (use with caution, beta version, use it if dns not working anymore on wsl)
+  - DockerWslDefaultConfig (mainly configure /etc/wsl.conf)
+  - Font install fonts that allows to displays special icons in zsh/bash prompts
+  - **Note** VsCode is not needed in wsl, it has to be installed on windows and then accessible via `code` command from
+    wsl prompt.
+  - WslProfile (currently deactivated) - ability to configure windows terminal
+
+- Dependencies for virtual box only
+
+  - Chrome
+  - Docker
+  - DockerCompose
+  - Firefox
+  - JetbrainsToolbox (allows to install phpstorm)
+  - LXDE
+  - Terminator
+  - VsCode
+
+### 3.1. Periodical updates
+
+`install` script has been designed to be executed several times over the time. Anacron dependency configures a
+periodical execution of this script.
+
+### 3.2. config files backup
+
+`install` script can update or completely rewrite config files that can be personal like `.bashrc` but don't worry these
+files are backed up in the `backup` directory of this project.
+
+## 4. Additional documentation
+
+- [Contribute](https://fchastanet.github.io/bash-dev-env/docs/contribute/)
+- [How does it work ?](https://fchastanet.github.io/bash-dev-env/docs/how-does-it-work/)
+
+## 5. github page
+
+The documentation site is built with [Hugo](https://gohugo.io/) using the [Docsy](https://www.docsy.dev/) theme.
+
+To preview the documentation locally:
+
+1. [Install Hugo Extended](https://gohugo.io/installation/)
+2. Run `hugo mod get -u` to download dependencies
+3. Run `hugo server -D` to start the local server
+4. Navigate to <http://localhost:1313/bash-dev-env/>
+
+## 6. Development
+
+Install new wsl distribution (from powershell):
+
+```bash
+wsl --install -d Ubuntu-22.04
+```
+
+As root:
+
+```bash
+# if necessary create user
+adduser wsl
+
+# change hostname to avoid confusion with your current distribution
+oldName="$(hostname)"
+newName="UbuntuTest"
+hostname NewName
+sed -i -E -e 's/${oldName}/${newName}/' /etc/hosts
+```
+
+The folder /mnt/wsl is shared between all the distro, we simply mount / in a given folder each time we launch a shell if
+necessary:
+
+- From UbuntuTest
+
+```bash
+mkdir "/mnt/wsl/${WSL_DISTRO_NAME}"
+sudo mount --bind / "/mnt/wsl/${WSL_DISTRO_NAME}"
+```
+
+- From your current distro
+
+```bash
+mkdir "/mnt/wsl/${WSL_DISTRO_NAME}"
+sudo mount --bind / "/mnt/wsl/${WSL_DISTRO_NAME}"
+```
+
+- allow folder to be shared between the 2 distros
+  - from main distro, add these lines to .bashrc or .zshrc
+
+```bash
+if [[ ! -d "/mnt/wsl/${WSL_DISTRO_NAME}" ]]; then
+  mkdir -p "/mnt/wsl/${WSL_DISTRO_NAME}"
+  sudo mount --bind / "/mnt/wsl/${WSL_DISTRO_NAME}"
+fi
+```
+
+- from UbuntuTest distro, add these lines to .bashrc or .zshrc The last command will link main distro
+  home/wsl/fchastanet/bash-dev-env into this distro ~/projects/bash-dev-env folder every changes into
+  ~/projects/bash-dev-env will be reflected into main distro and vice-versa
+
+```bash
+if [[ ! -d "/mnt/wsl/${WSL_DISTRO_NAME}" ]]; then
+  mkdir -p "/mnt/wsl/${WSL_DISTRO_NAME}"
+  sudo mount --bind / "/mnt/wsl/${WSL_DISTRO_NAME}"
+fi
+MASTER_DISTRO=Ubuntu-20.04
+if [[ -d "/mnt/wsl/${MASTER_DISTRO}" ]]; then
+  mkdir -p ~/projects/bash-dev-env
+  sudo mount --bind \
+    "/mnt/wsl/${MASTER_DISTRO}/home/wsl/fchastanet/bash-dev-env" \
+    ~/projects/bash-dev-env
+fi
+```
+
+## 7. migrate from one distribution to another
+
+```bash
+# from previous distro, sync your important folders
+sudo rsync --info=progress2 --no-compress -W -ax projects /mnt/wsl/UbuntuTest/home/wsl
+sudo rsync --info=progress2 --no-compress -W -ax fchastanet /mnt/wsl/UbuntuTest/home/wsl
+sudo rsync --info=progress2 --no-compress -W -ax /var/lib/docker /mnt/wsl/UbuntuTest/var/lib
+
+# alternatively, you can sync all the necessary directories at once
+sudo rsync --info=progress2 --no-compress -W -ax \
+  --include=/home/wsl/.history \
+  --include=/home/wsl/projects \
+  --include=/home/wsl/fchastanet \
+  --include=/var/lib/docker \
+  --exclude='*' / /mnt/wsl/UbuntuTest
+
+# on target distribution, don't forget to restart docker daemon when the sync is done
+sudo service docker restart
+```

@@ -1,6 +1,6 @@
 ---
 # Lint the code base and launch unit test at each push or pull request
-name: Lint and test
+name: Test, Build and Deploy
 on: # yamllint disable-line rule:truthy
   push:
     # execute when pushing only branches, not tags
@@ -22,7 +22,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     permissions:
-      # needed by ouzi-dev/commit-status-updater@v2
+      # needed by akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
       statuses: write
       # needed by mikepenz/action-junit-report@v4
       checks: write
@@ -88,7 +88,7 @@ jobs:
 
       - uses: fchastanet/github-action-setup-shfmt@v4.0.0
 
-      - uses: ouzi-dev/commit-status-updater@v2
+      - uses: akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
         with:
           name: build-bash-dev-env
           status: pending
@@ -195,9 +195,27 @@ jobs:
           path: |
             logs/**
 
-      - uses: ouzi-dev/commit-status-updater@v2
+      - uses: akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
         if: always()
         with:
           name: build-bash-dev-env
           # neutral, success, skipped, cancelled, timed_out, action_required, failure
           status: ${{ job.status }}
+
+  build-deploy:
+    needs:
+      - build
+    # Only run if the build job succeeded, and if the push is on master branch or if it's a workflow dispatch event
+    if:
+      ${{ needs.build.result == 'success' && (github.ref == 'refs/heads/master' || github.event_name ==
+      'workflow_dispatch') }}
+
+    uses: fchastanet/my-documents/.github/workflows/build-site-action.yml@master
+    with:
+      site-name: "bash-dev-env"
+      checkout-repo: "fchastanet/bash-dev-env"
+      site-dir: "_site-content"
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

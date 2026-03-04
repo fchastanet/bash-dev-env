@@ -1,10 +1,13 @@
-# Bash-dev-env - Installation instructions
-
-- [1. Important Notes to know before executing this script](#1-important-notes-to-know-before-executing-this-script)
-- [2. Profiles](#2-profiles)
-- [3. WSL install script](#3-wsl-install-script)
-- [4. If needed, ability to install software one by one](#4-if-needed-ability-to-install-software-one-by-one)
-- [5. Additional steps](#5-additional-steps)
+---
+title: Installation Instructions
+description: Step-by-step guide to install and configure Bash Dev Env
+weight: 10
+categories: [documentation, installation]
+tags: [install, setup, wsl, ubuntu]
+creationDate: 2026-03-01
+lastUpdated: 2026-03-01
+version: '1.0'
+---
 
 ## 1. Important Notes to know before executing this script
 

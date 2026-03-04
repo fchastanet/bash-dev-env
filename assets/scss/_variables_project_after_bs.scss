@@ -1,0 +1,20 @@
+/**
+ * Site-specific SCSS variables (post-Bootstrap)
+ * These override shared defaults
+ */
+
+$primary: #ffc857;
+$secondary: #e9724c;
+
+:root {
+  --bs-primary: #ffc857;
+  --bs-secondary: #e9724c;
+  --bs-primary-text-emphasis: #ffc857;
+  --bs-link-color-rgb: #e9724c;
+  --bs-link-opacity: 1;
+  --bs-link-color: #e9724c;
+}
+
+.td-sidebar-nav a.active {
+  color: $primary;
+}
