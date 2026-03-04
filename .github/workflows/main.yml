@@ -1,6 +1,6 @@
 ---
 # Lint the code base and launch unit test at each push or pull request
-name: Lint and test
+name: Test, Build and Deploy
 on: # yamllint disable-line rule:truthy
   push:
     # execute when pushing only branches, not tags
@@ -201,3 +201,21 @@ jobs:
           name: build-bash-dev-env
           # neutral, success, skipped, cancelled, timed_out, action_required, failure
           status: ${{ job.status }}
+
+  build-deploy:
+    needs:
+      - build
+    # Only run if the build job succeeded, and if the push is on master branch or if it's a workflow dispatch event
+    if:
+      ${{ needs.build.result == 'success' && (github.ref == 'refs/heads/master' || github.event_name ==
+      'workflow_dispatch') }}
+
+    uses: fchastanet/my-documents/.github/workflows/build-site-action.yml@master
+    with:
+      site-name: "bash-dev-env"
+      checkout-repo: "fchastanet/bash-dev-env"
+      site-dir: "_site-content"
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

@@ -76,6 +76,7 @@ fmask
 fontcolor
 fpath
 friday
+frontmatter
 ftpfs
 fullscreen
 fusectl

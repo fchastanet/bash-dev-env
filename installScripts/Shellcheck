@@ -1252,7 +1252,6 @@ Env::requireLoad() {
   if [[ -f "${localFrameworkConfigFile}" ]]; then
     configFiles+=("${localFrameworkConfigFile}")
   fi
-  configFiles+=("${optionEnvFiles[@]}")
   configFiles+=("${defaultFiles[@]}")
 
   while IFS='' read -r file; do
@@ -1490,7 +1489,7 @@ Github::upgradeRelease() {
   repo="$(Github::extractRepoFromGithubUrl "${downloadReleaseUrl}")"
   local releasesUrl="https://api.github.com/repos/${repo}/releases/latest"
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2329
   extractVersion() {
     Version::githubApiExtractVersion | "${parseGithubVersionCallback}"
   }

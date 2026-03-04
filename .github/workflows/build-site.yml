@@ -2,14 +2,6 @@
 name: Build and Deploy Documentation
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - 'content/**'
-      - 'static/**'
-      - 'hugo.yaml'
-      - 'go.mod'
-      - 'go.sum'
   workflow_dispatch:
 
 concurrency:
@@ -20,9 +12,9 @@ jobs:
   build-deploy:
     uses: fchastanet/my-documents/.github/workflows/build-site-action.yml@master
     with:
-      site-name: 'bash-dev-env'
-      baseURL: 'https://fchastanet.github.io/bash-dev-env'
-      checkout-repo: 'fchastanet/bash-dev-env'
+      site-name: "bash-dev-env"
+      checkout-repo: "fchastanet/bash-dev-env"
+      site-dir: "_site-content"
     permissions:
       contents: read
       pages: write

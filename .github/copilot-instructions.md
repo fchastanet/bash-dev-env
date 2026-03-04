@@ -392,7 +392,9 @@ Files with this header are auto-generated:
 
 ### Other Workflows
 
-- `docsify-gh-pages.yml`: Deploy GitHub Pages documentation
+- `build-site.yml`: Deploy GitHub Pages documentation
+- `main.yml`: Main workflow Test, Build and Deploy documentation
+  for pushes and PRs
 - `precommit-autoupdate.yml`: Auto-update pre-commit hooks
 - `set-github-status-on-pr-approved.yml`: Status management
 
@@ -587,8 +589,8 @@ pre-commit run bash-compiler -a
 # Check install script interface
 ./checkInstallScripts.sh
 
-# Local docs preview
-docsify serve pages
+# Local docs preview from my-documents folder
+SITE=bash-dev-env make start-site
 ```
 
 ### File Patterns

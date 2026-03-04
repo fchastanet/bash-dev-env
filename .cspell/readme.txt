@@ -6,7 +6,6 @@ Brzóska
 chastanet
 connectaddress
 connectport
-docsify
 errexit
 fchastanet
 hostnames

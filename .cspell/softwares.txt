@@ -41,7 +41,7 @@ difftool
 distro
 distros
 DOCKERHUB
-docsify
+Docsy
 dotnet
 dpkg
 ecma
@@ -70,6 +70,7 @@ hadolint
 Hadolint
 hjson
 htmlhintrc
+hugo
 Hyperv
 hyphens
 iconify
