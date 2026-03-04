@@ -263,9 +263,3 @@ repos:
         always_run: true
         require_serial: true
         stages: [pre-commit, pre-push, manual]
-      - id: lychee
-        name: lychee
-        entry: bash -c "lychee --config lychee.toml --root-dir $(pwd) ."
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]

@@ -9,9 +9,10 @@ creationDate: 2026-03-01
 lastUpdated: 2026-03-01
 ---
 
-**Bash Dev Env** is a comprehensive Bash-based development environment installation and configuration system for Ubuntu-based distributions (WSL, VirtualBox, or native).
+**Bash Dev Env** is a comprehensive Bash-based development environment installation and configuration system for
+Ubuntu-based distributions (WSL, VirtualBox, or native).
 
-## Features
+## 1. Features
 
 - **Automated Installation**: Install and configure main softwares used by developers
 - **Profile-based Configuration**: Use pre-defined or custom profiles for different setups
@@ -20,7 +21,7 @@ lastUpdated: 2026-03-01
 - **Configuration Backup**: Automatic backup of system configuration files
 - **WSL Integration**: Special support for Windows Subsystem for Linux
 
-## Quick Start
+## 2. Quick Start
 
 ```bash
 # Clone the repository
@@ -35,7 +36,7 @@ cp .env.template .env
 ./install -p default
 ```
 
-## Related Projects
+## 3. Related Projects
 
 - [My documents](https://fchastanet.github.io/my-documents/)
 - [Bash Tools Framework](https://fchastanet.github.io/bash-tools-framework/)

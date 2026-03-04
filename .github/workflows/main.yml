@@ -22,7 +22,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     permissions:
-      # needed by ouzi-dev/commit-status-updater@v2
+      # needed by akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
       statuses: write
       # needed by mikepenz/action-junit-report@v4
       checks: write
@@ -88,7 +88,7 @@ jobs:
 
       - uses: fchastanet/github-action-setup-shfmt@v4.0.0
 
-      - uses: ouzi-dev/commit-status-updater@v2
+      - uses: akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
         with:
           name: build-bash-dev-env
           status: pending
@@ -195,7 +195,7 @@ jobs:
           path: |
             logs/**
 
-      - uses: ouzi-dev/commit-status-updater@v2
+      - uses: akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
         if: always()
         with:
           name: build-bash-dev-env
