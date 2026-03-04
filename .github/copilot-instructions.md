@@ -519,7 +519,6 @@ The project uses Hugo with the Docsy theme for documentation:
 
 - Documentation site: <https://fchastanet.github.io/bash-dev-env/>
 - Deployed via GitHub Actions using reusable workflow from fchastanet/my-documents
-- See `DEPLOYMENT.md` for GitHub Pages configuration instructions
 
 ## Best Practices
 
