@@ -89,6 +89,7 @@ jobs:
       - uses: fchastanet/github-action-setup-shfmt@v4.0.0
 
       - uses: akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         with:
           name: build-bash-dev-env
           status: pending
@@ -196,7 +197,7 @@ jobs:
             logs/**
 
       - uses: akatov/commit-status-updater@219d3f932547cad092e384c7a36bf4d963739c35
-        if: always()
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         with:
           name: build-bash-dev-env
           # neutral, success, skipped, cancelled, timed_out, action_required, failure

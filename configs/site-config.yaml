@@ -31,7 +31,7 @@ params:
     keywords: "bash, tools, installation, ubuntu, wsl, development, environment, automation, configuration"
 
 menu:
-  site:
+  main:
     - name: GitHub
       url: https://github.com/fchastanet/bash-dev-env
       weight: 10
