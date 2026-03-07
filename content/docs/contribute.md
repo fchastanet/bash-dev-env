@@ -82,11 +82,11 @@ to use wsl as default, I suggest to create a terminal profile with the following
 
 ### 2.2. install the project
 
-Follow [Install instruction](https://fchastanet.github.io/bash-dev-env/docs/install/#3-wsl-install-script)
+Follow [Install instruction](https://devlab.top/bash-dev-env/docs/install/#3-wsl-install-script)
 
 ## 3. Prepare a tar image for sharing
 
-Follow [Install instruction](https://fchastanet.github.io/bash-dev-env/docs/contribute/#2-how-to-prepare-a-new-image)
+Follow [Install instruction](https://devlab.top/bash-dev-env/docs/contribute/#2-how-to-prepare-a-new-image)
 
 Ensure you are using wsl user login name instead of wslTest.
 

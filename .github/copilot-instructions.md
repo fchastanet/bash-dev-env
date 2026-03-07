@@ -517,7 +517,7 @@ The project uses Hugo with the Docsy theme for documentation:
 
 #### GitHub Pages
 
-- Documentation site: <https://fchastanet.github.io/bash-dev-env/>
+- Documentation site: <https://devlab.top/bash-dev-env/>
 - Deployed via GitHub Actions using reusable workflow from fchastanet/my-documents
 
 ## Best Practices
@@ -548,8 +548,8 @@ commands\
 
 ## Additional Resources
 
-- **bash-tools-framework**: <https://fchastanet.github.io/bash-tools-framework/>
-- **bash-compiler**: <https://fchastanet.github.io/bash-compiler/>
+- **bash-tools-framework**: <https://devlab.top/bash-tools-framework/>
+- **bash-compiler**: <https://devlab.top/bash-compiler/>
 - **BATS**: <https://github.com/bats-core/bats-core>
 - **Pre-commit**: <https://pre-commit.com/>
 - **MegaLinter**: <https://megalinter.io/>

@@ -61,7 +61,7 @@ generateDoc() {
   cp "${ROOT_DIR}/README.md" "${DOC_DIR}/README.md"
   sed -i -E \
     -e '/<!-- remove -->/,/<!-- endRemove -->/d' \
-    -e 's#https://fchastanet.github.io/bash-dev-env/#/#' \
+    -e 's#https://devlab.top/bash-dev-env/#/#' \
     -e 's#^> \*\*_TIP:_\*\* (.*)$#> [!TIP|label:\1]#' \
     "${DOC_DIR}/README.md"
 

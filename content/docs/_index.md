@@ -19,14 +19,14 @@ Follow these indications to [Install & Configure](#2-install--configuration). Yo
 features provided by this tool in this chapter [Features presentation](#3-features-presentation).
 
 This is a collection of several bash installation scripts using
-[bash tools framework](https://fchastanet.github.io/bash-tools-framework/) allowing to easily install several softwares
-on ubuntu based image (under wsl or virtual box or native installation).
+[bash tools framework](https://devlab.top/bash-tools-framework/) allowing to easily install several softwares on ubuntu
+based image (under wsl or virtual box or native installation).
 
 ## 2. Install & Configuration
 
 ### 2.1. Dev-env install
 
-please follow [Dev-env Installation instructions](https://fchastanet.github.io/bash-dev-env/docs/install/)
+please follow [Dev-env Installation instructions](https://devlab.top/bash-dev-env/docs/install/)
 
 ## 3. Features presentation
 
@@ -194,8 +194,8 @@ files are backed up in the `backup` directory of this project.
 
 ## 4. Additional documentation
 
-- [Contribute](https://fchastanet.github.io/bash-dev-env/docs/contribute/)
-- [How does it work ?](https://fchastanet.github.io/bash-dev-env/docs/how-does-it-work/)
+- [Contribute](https://devlab.top/bash-dev-env/docs/contribute/)
+- [How does it work ?](https://devlab.top/bash-dev-env/docs/how-does-it-work/)
 
 ## 5. github page
 

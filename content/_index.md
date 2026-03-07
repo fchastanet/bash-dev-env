@@ -38,7 +38,7 @@ cp .env.template .env
 
 ## 3. Related Projects
 
-- [My documents](https://fchastanet.github.io/my-documents/)
-- [Bash Tools Framework](https://fchastanet.github.io/bash-tools-framework/)
-- [Bash Tools](https://fchastanet.github.io/bash-tools/)
-- [Bash Compiler](https://fchastanet.github.io/bash-compiler/)
+- [My documents](https://devlab.top/my-documents/)
+- [Bash Tools Framework](https://devlab.top/bash-tools-framework/)
+- [Bash Tools](https://devlab.top/bash-tools/)
+- [Bash Compiler](https://devlab.top/bash-compiler/)

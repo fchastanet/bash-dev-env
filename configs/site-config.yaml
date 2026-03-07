@@ -1,6 +1,6 @@
 # Site-specific configuration for bash-dev-env
 title: Bash Dev Env Documentation
-baseURL: https://fchastanet.github.io/bash-dev-env/
+baseURL: https://devlab.top/bash-dev-env/
 
 params:
   description: |
