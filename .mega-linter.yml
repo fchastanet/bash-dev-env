@@ -20,6 +20,7 @@ DISABLE_LINTERS:
   - SPELL_VALE
   - SPELL_PROSELINT
   - MARKDOWN_MARKDOWN_TABLE_FORMATTER
+  - SPELL_LYCHEE # to re-enable ASAP
 
 # DISABLE_ERRORS: true # Uncomment if you want MegaLinter to detect errors but not block CI to pass
 EXCLUDED_DIRECTORIES:

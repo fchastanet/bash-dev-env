@@ -38,7 +38,7 @@ cp .env.template .env
 
 ## 3. Related Projects
 
-- [My documents](https://devlab.top/my-documents/)
-- [Bash Tools Framework](https://devlab.top/bash-tools-framework/)
-- [Bash Tools](https://devlab.top/bash-tools/)
-- [Bash Compiler](https://devlab.top/bash-compiler/)
+- [My documents](https://devlab.top/)
+- [Bash Tools Framework](https://bash-tools-framework.devlab.top/)
+- [Bash Tools](https://bash-tools.devlab.top/)
+- [Bash Compiler](https://bash-compiler.devlab.top/)

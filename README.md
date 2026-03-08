@@ -1,6 +1,6 @@
 # bash-dev-env
 
-> **_NOTE:_** Documentation is best viewed on [github-pages](https://devlab.top/bash-dev-env/)
+> **_NOTE:_** Documentation is best viewed on [github-pages](https://bash-dev-env.devlab.top/)
 
 <!-- markdownlint-capture -->
 
@@ -34,11 +34,11 @@ update mechanisms.
 
 > **_TIP:_** Checkout related projects of this suite
 >
-> - [My documents](https://devlab.top/my-documents/)
-> - [Bash Tools Framework](https://devlab.top/bash-tools-framework/)
-> - [Bash Tools](https://devlab.top/bash-tools/)
-> - **[Bash Dev Env](https://devlab.top/bash-dev-env/)**
-> - [Bash Compiler](https://devlab.top/bash-compiler/)
+> - [My documents](https://devlab.top/)
+> - [Bash Tools Framework](https://bash-tools-framework.devlab.top/)
+> - [Bash Tools](https://bash-tools.devlab.top/)
+> - **[Bash Dev Env](https://bash-dev-env.devlab.top/)**
+> - [Bash Compiler](https://bash-compiler.devlab.top/)
 
 ## 1. Overview & Installation
 
@@ -46,7 +46,7 @@ Bash Dev Env provides a unified, automated way to install, configure, and mainta
 tools and environments on Ubuntu-based systems (including WSL, VirtualBox, and native installs). It uses modular Bash
 scripts and the Bash Tools Framework to manage everything from shells (Bash, Zsh), editors, version control, cloud
 tools, and more. Installation is straightforward—just follow the
-[installation instructions](https://devlab.top/bash-dev-env/docs/install/).
+[installation instructions](https://bash-dev-env.devlab.top/docs/install/).
 
 ## 2. Features & Supported Software
 
