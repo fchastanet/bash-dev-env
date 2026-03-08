@@ -1,19 +1,19 @@
 # bash-dev-env
 
-> **_NOTE:_** Documentation is best viewed on [github-pages](https://bash-dev-env.devlab.top/)
+> **_NOTE:_** **Documentation is best viewed on [https://bash-dev-env.devlab.top](https://bash-dev-env.devlab.top/)**
 
 <!-- markdownlint-capture -->
 
 <!-- markdownlint-disable MD013 -->
 
-[![GitHubLicense](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/fchastanet/bash-dev-env/blob/master/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/fchastanet/bash-dev-env/blob/master/LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
-[![CI/CD](https://github.com/fchastanet/bash-dev-env/actions/workflows/main.yml/badge.svg)](https://github.com/fchastanet/bash-dev-env/actions?query=workflow%3A%22Lint+and+test%22+branch%3Amaster)
-[![ProjectStatus](http://opensource.box.com/badges/active.svg)](http://opensource.box.com/badges "Project Status")
+[![CI/CD](https://github.com/fchastanet/bash-dev-env/actions/workflows/main.yml/badge.svg)](https://github.com/fchastanet/bash-dev-env/actions/workflows/main.yml?query=branch%3Amaster)
+[![Project status](https://opensource.box.com/badges/active.svg)](https://opensource.box.com/badges "Project status")
 [![DeepSource](https://deepsource.io/gh/fchastanet/bash-dev-env.svg/?label=active+issues&show_trend=true)](https://deepsource.io/gh/fchastanet/bash-dev-env/?ref=repository-badge)
 [![DeepSource](https://deepsource.io/gh/fchastanet/bash-dev-env.svg/?label=resolved+issues&show_trend=true)](https://deepsource.io/gh/fchastanet/bash-dev-env/?ref=repository-badge)
-[![AverageTimeToResolveAnIssue](http://isitmaintained.com/badge/resolution/fchastanet/bash-dev-env.svg)](http://isitmaintained.com/project/fchastanet/bash-dev-env "Average time to resolve an issue")
-[![PercentageOfIssuesStillOpen](http://isitmaintained.com/badge/open/fchastanet/bash-dev-env.svg)](http://isitmaintained.com/project/fchastanet/bash-dev-env "Percentage of issues still open")
+[![Average time to resolve an issue](https://isitmaintained.com/badge/resolution/fchastanet/bash-dev-env.svg)](https://isitmaintained.com/project/fchastanet/bash-dev-env "Average time to resolve an issue")
+[![Percentage of issues still open](https://isitmaintained.com/badge/open/fchastanet/bash-dev-env.svg)](https://isitmaintained.com/project/fchastanet/bash-dev-env "Percentage of issues still open")
 
 <!-- markdownlint-restore -->
 
