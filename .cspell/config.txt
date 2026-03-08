@@ -68,6 +68,7 @@ erasedups
 excludesfile
 exif
 expandtab
+fchastanetl
 fgcolor
 fileinfo
 fileurl
