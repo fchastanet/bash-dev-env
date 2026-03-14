@@ -38,6 +38,8 @@ dbus
 debconf
 devcert
 difftool
+diskpart
+Diskpart
 distro
 distros
 DOCKERHUB
@@ -69,6 +71,7 @@ gtpl
 hadolint
 Hadolint
 hjson
+HKCU
 htmlhintrc
 hugo
 Hyperv
@@ -156,6 +159,7 @@ pwsh
 pycharm
 pyupgrade
 redis
+regedit
 rerere
 rustc
 rustup
@@ -190,8 +194,10 @@ updatedb
 usermod
 userprofile
 vcxsrv
+vdisk
 venv
 venvs
+vhdx
 virtualbox
 virtualenv
 VIRTUALENV
