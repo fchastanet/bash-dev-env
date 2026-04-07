@@ -1228,7 +1228,7 @@ Env::pathPrepend() {
 # @arg $@ list of default files to load at the end
 # @exitcode 1 if one of env files fails to load
 # @stderr diagnostics information is displayed
-# shellcheck disable=SC2120
+# shellcheck disable=SC2120,SC2329
 Env::requireLoad() {
   export REQUIRE_FUNCTION_ENV_REQUIRE_LOAD_LOADED=1
 
@@ -1583,6 +1583,7 @@ InstallScripts::command() {
       sourceHook preInstall || ((++failures))
       install || ((++failures))
       sourceHook postInstall || ((++failures))
+      # shellcheck disable=SC2317 # false positive due to trap
       exit "${failures}"
     ) 2>&1 | tee "${logFile}"
   fi
@@ -1609,7 +1610,7 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preTestInstall || ((++failures))
-      testInstall || ((++failures))
+      testInstall testInstall || ((++failures))
       sourceHook postTestInstall || ((++failures))
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || testInstallStatus="$?" || true
@@ -1641,7 +1642,7 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preConfigure || ((++failures))
-      configure || ((++failures))
+      configure configure || ((++failures))
       sourceHook postConfigure || ((++failures))
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || configStatus="$?" || true
@@ -1674,8 +1675,10 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preTestConfigure || ((++failures))
-      testConfigure || ((++failures))
+      # shellcheck disable=SC2317
+      testConfigure testConfigure || ((++failures))
       sourceHook postTestConfigure || ((++failures))
+      # shellcheck disable=SC2317 # false positive due to trap
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || testConfigStatus="$?" || true
     if [[ "${testConfigStatus}" != "0" ]] && breakOnTestFailure; then
@@ -2043,13 +2046,14 @@ Linux::Wsl::requireWsl() {
 
 # @description retrieve linux distributor id
 # @noargs
-# @exitcode 1 if lsb_release fails or not found
+# @exitcode 1 if /etc/os-release not found
+# @exitcode 2 if ID field not found in /etc/os-release
 # @stdout the linux distributor id
 Linux::getDistributorId() {
-  (
-    source /etc/os-release
-    echo "${ID}"
-  )
+  if [[ ! -f /etc/os-release ]]; then
+    return 1
+  fi
+  awk -F= '/^ID=/ { gsub(/"/, "", $2); print $2; exit }' /etc/os-release || return 2
 }
 
 
@@ -2380,6 +2384,7 @@ Log::logWarning() {
 # @env BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION int do log rotation if > 0
 # @exitcode 0 always successful
 # @stderr diagnostics information about log file is displayed
+# shellcheck disable=SC2329
 Log::requireLoad() {
   export REQUIRE_FUNCTION_LOG_REQUIRE_LOAD_LOADED=1
 
@@ -2861,6 +2866,7 @@ UI::drawLine() {
 # @env BASH_FRAMEWORK_THEME String theme to use
 # @env LOAD_THEME int 0 to avoid loading theme
 # @exitcode 0 always successful
+# shellcheck disable=SC2329
 UI::requireTheme() {
   export REQUIRE_FUNCTION_UI_REQUIRE_THEME_LOADED=1
 
@@ -3190,6 +3196,7 @@ Web::upgradeRelease() {
 # shellcheck disable=SC2034
 declare commandFunctionName="installScriptCommand"
 
+# shellcheck disable=SC2329
 defaultBeforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
@@ -3203,6 +3210,7 @@ scriptName() {
   echo "Hadolint"
 }
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   defaultBeforeParseCallback
 }
@@ -3223,11 +3231,13 @@ listOrNone() {
   fi
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 helpDescriptionFunction() {
   helpDescription
   echo
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 helpLongDescription() {
   helpDescription
 }
@@ -3306,73 +3316,75 @@ argsInstallScriptCommandCallback() {
 
 declare -a BASH_FRAMEWORK_ARGV_FILTERED=()
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
   Log::requireLoad
 }
 
+# shellcheck disable=SC2329
 copyrightCallback() {
   #
   # shellcheck disable=SC2155,SC2154,SC2250
   echo "Copyright (c) 2024-now François Chastanet"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListInfoVerboseCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(--verbose)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListDebugVerboseCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(-vv)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListTraceVerboseCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(-vvv)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListEnvFileCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListLogLevelCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListDisplayLevelCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListNoColorCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(--no-color)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListThemeCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListQuietCallback() { :; }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionHelpCallback() {
   Log::displayError "optionHelpCallback needs to be overridden"
   exit 0
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionVersionCallback() {
   # shellcheck disable=SC2154
-  echo "${SCRIPT_NAME} version 3.0"
+  echo "${SCRIPT_NAME} version 3.1"
   exit 0
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionInfoVerboseCallback() {
   BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='--verbose'
   BASH_FRAMEWORK_ARGS_VERBOSE=${__VERBOSE_LEVEL_INFO}
   echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${__LEVEL_INFO}" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionDebugVerboseCallback() {
   BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='-vv'
   BASH_FRAMEWORK_ARGS_VERBOSE=${__VERBOSE_LEVEL_DEBUG}
   echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${__LEVEL_DEBUG}" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionTraceVerboseCallback() {
   # shellcheck disable=SC2034
   BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='-vvv'
@@ -3452,11 +3464,7 @@ optionLogLevelCallback() {
   echo "BASH_FRAMEWORK_LOG_LEVEL=${logLevel}" >>"${overrideEnvFile}"
 }
 
-optionLogLevelDefaultValueFunction() {
-  Log::getLevelText "${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
-}
-
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionLogFileCallback() {
   local logFile="$2"
   echo "BASH_FRAMEWORK_LOG_FILE='${logFile}'" >>"${overrideEnvFile}"
@@ -3467,17 +3475,17 @@ optionLogFileDefaultValueFunction() {
   echo "${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionQuietCallback() {
   echo "BASH_FRAMEWORK_QUIET_MODE=1" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionNoColorCallback() {
   UI::theme "noColor"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionThemeCallback() {
   UI::theme "$2"
 }
@@ -3492,6 +3500,7 @@ displayConfig() {
   exit 0
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionBashFrameworkConfigCallback() {
   if [[ ! -f "$2" ]]; then
     Log::fatal "Command ${SCRIPT_NAME} - Bash framework config file '$2' does not exists"
@@ -3512,27 +3521,6 @@ commandOptionParseFinished() {
   if [[ "${optionConfig}" = "1" ]]; then
     displayConfig
   fi
-}
-
-
-
-helpDescription() {
-  echo "Dockerfile linter, validate inline bash, written in Haskell"
-}
-
-fortunes() {
-  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- the following linter is available: ${__HELP_EXAMPLE}hadolint${__RESET_COLOR}"
-  echo "%"
-}
-
-install() {
-  SUDO=sudo Github::upgradeRelease \
-    "/usr/local/bin/hadolint" \
-    "https://github.com/hadolint/hadolint/releases/download/v@latestVersion@/hadolint-Linux-x86_64"
-}
-
-testInstall() {
-  Version::checkMinimal "hadolint" --version "2.12.0" || return 1
 }
 
 
@@ -3672,11 +3660,13 @@ declare -i help_cache_max_duration=86400
 
 
 
+# shellcheck disable=SC2329
 optionHelpCallback() {
   "HadolintCommandHelp"
   exit 0
 }
 
+# shellcheck disable=SC2329
 defaultBeforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
@@ -3685,36 +3675,71 @@ defaultBeforeParseCallback() {
   Linux::Wsl::requireWsl
 }
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   defaultBeforeParseCallback
 }
 
+# shellcheck disable=SC2329
 defaultAfterParseCallback() {
   Engine::Config::loadConfig
 }
 
+# shellcheck disable=SC2329
 afterParseCallback() {
   defaultAfterParseCallback
 }
 
 
 
+# shellcheck disable=SC2329
 upgradeGithubReleaseBeforeParseCallback() {
   Linux::requireJqCommand
 }
 
 # jscpd:ignore-start
+# shellcheck disable=SC2329
 dependencies() { :; }
+# shellcheck disable=SC2329
 fortunes() { :; }
+# shellcheck disable=SC2329
 listVariables() { :; }
+# shellcheck disable=SC2329
 helpVariables() { :; }
+# shellcheck disable=SC2329
 defaultVariables() { :; }
+# shellcheck disable=SC2329
 checkVariables() { :; }
+# shellcheck disable=SC2329
 breakOnConfigFailure() { :; }
+# shellcheck disable=SC2329
 breakOnTestFailure() { :; }
+# shellcheck disable=SC2329
 configure() { :; }
+# shellcheck disable=SC2329
 testConfigure() { :; }
 # jscpd:ignore-end
+
+
+
+helpDescription() {
+  echo "Dockerfile linter, validate inline bash, written in Haskell"
+}
+
+fortunes() {
+  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- the following linter is available: ${__HELP_EXAMPLE}hadolint${__RESET_COLOR}"
+  echo "%"
+}
+
+install() {
+  SUDO=sudo Github::upgradeRelease \
+    "/usr/local/bin/hadolint" \
+    "https://github.com/hadolint/hadolint/releases/download/v@latestVersion@/hadolint-Linux-x86_64"
+}
+
+testInstall() {
+  Version::checkMinimal "hadolint" --version "2.12.0" || return 1
+}
 
 
 # ------------------------------------------
@@ -3734,7 +3759,7 @@ declare optionBashFrameworkConfig=""
 declare optionInfoVerbose="0"
 declare optionDebugVerbose="0"
 declare optionTraceVerbose="0"
-declare optionLogLevel="optionLogLevelDefaultValueFunction"
+declare optionLogLevel="INFO"
 declare optionLogFile="optionLogFileDefaultValueFunction"
 declare optionDisplayLevel="optionDisplayLevelDefaultValueFunction"
 declare optionNoColor="0"
@@ -3783,7 +3808,7 @@ HadolintCommandParse() {
   optionTraceVerbose="0"
   local -i options_parse_optionParsedCountOptionTraceVerbose
   ((options_parse_optionParsedCountOptionTraceVerbose = 0)) || true
-  optionLogLevel="optionLogLevelDefaultValueFunction"
+  optionLogLevel="INFO"
   local -i options_parse_optionParsedCountOptionLogLevel
   ((options_parse_optionParsedCountOptionLogLevel = 0)) || true
   optionLogFile="optionLogFileDefaultValueFunction"
@@ -4376,7 +4401,7 @@ HadolintCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
 
-  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionLogLevelDefaultValueFunction)"
+  Array::wrap2 ' ' 76 6 "    Default value: " "INFO"
   echo
 
   echo -e "  ${__HELP_OPTION_COLOR}--log-file <log-file>${__HELP_NORMAL} {single}"
@@ -4442,7 +4467,7 @@ HadolintCommandHelp() {
   # ------------------------------------------
   echo
   echo -n -e "${__HELP_TITLE_COLOR}VERSION: ${__RESET_COLOR}"
-  echo "3.0"
+  echo "3.1"
   # ------------------------------------------
   # author section
   # ------------------------------------------

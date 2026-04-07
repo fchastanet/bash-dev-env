@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/_Configs/WslDefaultConfig-conf" as wsl_conf
 
+# shellcheck disable=SC2329
 wslBeforeParseCallback() {
   Git::requireGitCommand
   Linux::requireSudoCommand

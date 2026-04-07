@@ -3,6 +3,7 @@
 # shellcheck disable=SC2034
 declare commandFunctionName="installScriptCommand"
 
+# shellcheck disable=SC2329
 defaultBeforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
@@ -16,6 +17,7 @@ scriptName() {
   echo "{{ .Data.binData.commands.default.commandName }}"
 }
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   defaultBeforeParseCallback
 }
@@ -36,11 +38,13 @@ listOrNone() {
   fi
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 helpDescriptionFunction() {
   helpDescription
   echo
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 helpLongDescription() {
   helpDescription
 }

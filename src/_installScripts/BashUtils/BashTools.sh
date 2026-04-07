@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/BashUtils/BashTools-conf" as conf_dir
 
+# shellcheck disable=SC2329
 bashToolsBeforeParseCallback() {
   Git::requireGitCommand
 }

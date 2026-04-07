@@ -473,7 +473,7 @@ Compiler::Embed::extractFileFromBase64() {
     if [[ ! -d "${targetDir}" ]]; then
       mkdir -p "${targetDir}"
     fi
-    base64 -d >"${targetFile}" <<<"${binFileBase64}"
+    tr -d '\n ' <<<"${binFileBase64}" | base64 -d >"${targetFile}"
     chmod "${fileMode}" "${targetFile}"
   fi
 
@@ -483,27 +483,46 @@ Compiler::Embed::extractFileFromBase64() {
 }
 
 
-# @description select right file to load depending if file exists in this order:
-# - from conf.override
-# - from embedded file if provided
-# - from conf dir
-# @arg $1 file:String
-# @arg $2 embedFile:String eventual embedded file
-# @exitcode 1 if file does not exist at all
-Conf::dynamicConfFile() {
-  local file="${1/#\//}" # remove first slash if any
-  local embedFile="${2:-}"
-  if [[ -f "${CONF_OVERRIDE_DIR}/${file}" ]]; then
-    echo "${CONF_OVERRIDE_DIR}/${file}"
-    return 0
-  elif [[ -f "${embedFile}" ]]; then
-    echo "${embedFile}"
-    return 0
-  fi
-  if [[ "${IGNORE_ERROR:-0}" = "0" ]]; then
-    Log::displayWarning "Conf::dynamicConfFile - ${file} does not exist in any config dirs declared"
-    return 1
-  fi
+# @description generate temp directory where default
+# and overridden directories have been merged
+#   - if overridden dir exists, create a new temp folder
+#     - copy all files from default folder
+#     - overwrite with files from overridden folder
+#     - (Later) delete files listed in .remove$$ file
+#     - return the path of this temp folder
+#   - else just return the default folder path
+# Then it is easier to pick overridden or default files/folders
+#
+# @arg $1 defaultDir:String usually the embed directory
+# @arg $2 overriddenDirPath:String the path to the directory
+#   that could be overridden
+# @exitcode 1 if default dir does not exist
+# @exitcode 2 if error during copy
+Conf::getOverriddenDir() {
+  local -a overriddenDirPaths=("$@")
+  local overriddenDirPath
+
+  local tempDir
+  tempDir="$(mktemp -d)"
+  (
+    shopt -s dotglob
+    for overriddenDirPath in "${overriddenDirPaths[@]}"; do
+      if [[ -d "${overriddenDirPath}" && -n "$(ls -A "${overriddenDirPath}" || true)" ]]; then
+        Log::displayInfo "Conf::getOverriddenDir - use overridden files from ${overriddenDirPath}"
+        cp -R "${overriddenDirPath}/." "${tempDir}"
+      else
+        if [[ -z "${overriddenDirPath}" ]]; then
+          Log::displayError "Conf::getOverriddenDir - empty overridden directory path"
+        else
+          Log::displayInfo "Conf::getOverriddenDir - directory ${overriddenDirPath} does not exist or is empty"
+        fi
+      fi
+    done
+  ) || {
+    Log::displayError "Conf::getOverriddenDir - error during copy"
+    return 2
+  }
+  echo "${tempDir}"
 }
 
 
@@ -540,6 +559,42 @@ Conf::list() {
       sed -E "s#^\./${prefix}##g" |
         sed -E "s#${ext}\$##g" | sort | sed -E "s#^#${indentStr}#"
   )
+}
+
+
+# @description Load the nearest config file
+# in next example will search first .framework-config file in "srcDir1"
+# then if not found will go in up directories until /
+# then will search in "srcDir2"
+# then if not found will go in up directories until /
+# source the file if found
+# @example
+#   Conf::loadNearestFile ".framework-config" "srcDir1" "srcDir2"
+#
+# @arg $1 configFileName:String config file name to search
+# @arg $2 loadedFile:String (passed by reference) will return the loaded config file name
+# @arg $@ srcDirs:String[] source directories in which the config file will be searched
+# @exitcode 0 if file found
+# @exitcode 1 if file not found
+Conf::loadNearestFile() {
+  local configFileName="$1"
+  local -n loadedFile="$2"
+  shift 2 || true
+  local -a srcDirs=("$@")
+  for srcDir in "${srcDirs[@]}"; do
+    configFile="$(File::upFind "${srcDir}" "${configFileName}" || true)"
+    if [[ -n "${configFile}" ]]; then
+      # shellcheck source=/.framework-config
+      source "${configFile}" || Log::fatal "error while loading config file '${configFile}'"
+      Log::displayDebug "Config file ${configFile} is loaded"
+      # shellcheck disable=SC2034
+      loadedFile="${configFile}"
+      return 0
+    fi
+  done
+
+  Log::displayDebug "Config file '${configFileName}' not found in any source directories provided"
+  return 1
 }
 
 
@@ -599,6 +654,10 @@ Engine::Config::checkEnv() {
       ((++errorCount))
     fi
   }
+  checkIsArray() {
+    local var="$1"
+    declare -p "${var}" 2>/dev/null | grep -q 'declare \-a'
+  }
 
   if ! echo "${ID}" | grep -qEw 'debian|ubuntu'; then
     Log::fatal "This script is built to support only Debian or Ubuntu distributions. You are using ${ID}."
@@ -629,7 +688,23 @@ Engine::Config::checkEnv() {
     ((errorCount++))
   fi
 
-  checkVarAndDir CONF_OVERRIDE_DIR r || true
+  if ! checkIsArray "CONF_OVERRIDE_DIRS"; then
+    Log::displayError "CONF_OVERRIDE_DIRS - invalid format, expected : array of strings"
+    ((errorCount++))
+  fi
+  ((i = 0)) || true
+  local dir
+  for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+    if [[ ! -d "${dir}" ]]; then
+      Log::displayError "CONF_OVERRIDE_DIRS[${i}] - directory '${dir}' does not exist"
+      ((errorCount++))
+    fi
+    if [[ ! -r "${dir}" ]]; then
+      Log::displayError "CONF_OVERRIDE_DIRS[${i}] - directory '${dir}' is not readable"
+      ((errorCount++))
+    fi
+    ((++i))
+  done
   checkVarAndDir PROJECTS_DIR r || true
   checkVarAndDir BACKUP_DIR rw || true
   checkVarAndDir LOGS_DIR rw || true
@@ -638,7 +713,7 @@ Engine::Config::checkEnv() {
 
   checkValidValues UPGRADE_UBUNTU_VERSION 0 lts dev
   checkValidValues PREFERRED_SHELL ShellBash ShellZsh
-  checkValidValues ZSH_PREFERRED_THEME powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
+  checkValidValues ZSH_PREFERRED_THEME ohmyposh powerlevel10k/powerlevel10k sindresorhus/pure starship/starship
 
   checkValidValues SHOW_FORTUNES 0 1
   checkValidValues SHOW_MOTD 0 1
@@ -675,11 +750,119 @@ Engine::Config::loadConfig() {
   fi
 Linux::requireTarCommand
 Compiler::Embed::extractFileFromBase64 \
-  "${PERSISTENT_TMPDIR:-/tmp}/dfbb84bdd29315eb016a1d332348162b942dcaf9380c56ce914246da6e7d4481/envFileTemplate" \
-  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdzbCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01FPSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJmY2hhc3RhbmV0IgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdpdCAmIFNTSCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGlmIDEsIGl0IGluZGljYXRlcyB5b3UgYWNjZXB0IHRoYXQgeW91ciBnaXQga2V5IHdpbGwgYmUgbG9hZGVkLgojIGlmIDAsIGNvbmZpZ3VyYXRpb25zIHRoYXQgbmVlZCB0byBiZSBhdXRoZW50aWNhdGVkIHdpbGwgYmUgc2tpcHBlZC4KIyBEaXN0cm8gbW9kZTogaW4gYW55IGNhc2UsIHlvdXIga2V5IGlzIG5vdCBjb3BpZWQuCkFVVEhPUklaRV9TU0hfS0VZX1VTQUdFPTEKCiMgeW91ciBsb2dpbiB0byBjb25uZWN0IHRvIHNzaCBzZXJ2ZXJzIGlmIGFueQpTU0hfTE9HSU49IiIKCiMgeW91ciBnaXQgZnVsbCBuYW1lICdGaXJzdE5hbWUgTGFzdE5hbWUnCkdJVF9VU0VSTkFNRT0iIgoKIyBlbWFpbCB1c2VkIGZvciBnaXQgJ2xkYXBAZG9tYWluLmNvbScKR0lUX1VTRVJfTUFJTD0iIgoKIyBkZWZhdWx0IGdpdCBtZXJnZSB0b29sIHRvIHVzZQpHSVRfTUVSR0VfVE9PTD0idnNjb2RlIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEFXUyBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIGVtYWlsIHVzZWQgdG8gY29ubmVjdCB0byBhd3MKQVdTX1VTRVJfTUFJTD0iZmNoYXN0YW5ldEBnbWFpbC5jb20iCgojIGFwcCBpZCB0byBjb25uZWN0IHRvIGF3cyBhY2NvdW50CkFXU19BUFBfSUQ9IiIKCkFXU19QUk9GSUxFPSIiCkFXU19ERUZBVUxUX1JFR0lPTj0iIgpBV1NfVEVTVF9TRUNSRVRfSUQ9IiIKQVdTX0RFRkFVTFRfRE9DS0VSX1JFR0lTVFJZX0lEPSIiCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgSzhTIGluZm9ybWF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgS3ViZURlZmF1bHRDb25maWcgfi8ua3ViZS9jb25maWcgZ2VuZXJhdGlvbgojIGF3cyByZWdpb24gb2YgdGhlIGNsdXN0ZXIgKEVnOiB1cy1lYXN0LTEpCktVQkVfQ09ORklHX1JFR0lPTl9DT0RFPQoKIyBhd3MgYXJuIG9mIHRoZSBjbHVzdGVyLgojIEVnOiBhcm46YXdzOmVjczpyZWdpb246YXdzX2FjY291bnRfaWQ6Y2x1c3Rlci9NeUNsdXN0ZXIKS1VCRV9DT05GSUdfQ0xVU1RFUl9BUk49CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgRGlyZWN0b3JpZXMKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBvdmVycmlkZGVuIGNvbmYgZGlyZWN0b3J5IHRoYXQgd2lsbCBiZSB1c2VkIHRvIG92ZXJyaWRlCiMgdGhlIGRlZmF1bHQgY29uZmlndXJhdGlvbiB0aGF0IGFyZSBlbWJlZGRlZCBpbiBiaW5hcmllcwpDT05GX09WRVJSSURFX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2NvbmYub3ZlcnJpZGUiCgojIHdoZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29uZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lOU1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09UX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBleGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRvIDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBmaWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBjaGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmlsZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNFUlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9XU19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVzaW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5TVEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9uIHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMgdmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBVc2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFja2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0wCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUgY2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1lbmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUgdG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBzaW5kcmVzb3JodXMvcHVyZSwgc3RhcnNoaXAvc3RhcnNoaXAKWlNIX1BSRUZFUlJFRF9USEVNRT0icG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrIgoKIyBEaXNwbGF5IEZvcnR1bmUgdG9vbHRpcCBhdCBiYXNoL3pzaCBzZXNzaW9uIG9wZW4KU0hPV19GT1JUVU5FUz0xCgojIERpc3BsYXkgTU9URCBhdCBiYXNoL3pzaCBzZXNzaW9uIG9wZW4KU0hPV19NT1REPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBXU0xDT05GSUcKIyBUaGVzZSBwYXJhbWV0ZXJzIGF1dG9tYXRpY2FsbHkgY29uZmlndXJlICVVU0VSUFJPRklMRSUvLndzbGNvbmZpZyBmaWxlLgojIEBzZWUgaHR0cHM6Ly9kb2NzLm1pY3Jvc29mdC5jb20vZW4tdXMvd2luZG93cy93c2wvd3NsLWNvbmZpZwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIFJlY29tbWVuZGVkIDUwJSBvZiB0b3RhbCBtZW1vcnkKV1NMQ09ORklHX01BWF9NRU1PUlk9OEdCCgojIHBlcnNvbmFsbHkgSSBwcmVmZXIgcnVuIG91dCBvZiBtZW1vcnkgaW5zdGVhZCBvZiBiZWdpbm5pbmcgc3dhcHBpbmcKIyBTbyBJIGtub3cgaW1tZWRpYXRlbHkgaWYgc29tZSBwcm9jZXNzZXMgaGF2ZSB0byBiZSBzdG9wcGVkCldTTENPTkZJR19TV0FQPTAKCiMgaWYgMSBpdCB3aWxsIGNvbXB1dGUgYXV0b21hdGljYWxseSB0aGUgbWF4IHZoZCBzaXplCiMgZGVmYXVsdCAoMS8zIG9mIGRpc2sgc2l6ZSwgbWluIDE1MEdCKQojIGlmIDAgaXQgd2lsbCB1c2Ugd3NsIGRlZmF1bHQgdmFsdWUgKDFUQikKV1NMQ09ORklHX0NPTVBVVEVfTUFYX1ZIRF9TSVpFPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBIYWNrcwojIG9uIHNvbWUgY29uZmlndXJhdGlvbnMgd2UgaGF2ZSB0byBmb3JjZSBwYXRoIG9mIHNvbWUgd2luZG93cyBjb21tYW5kcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojUE9XRVJTSEVMTF9CSU49L21udC9jL1dpbmRvd3MvU3lzdGVtMzIvV2luZG93c1Bvd2VyU2hlbGwvdjEuMC9wb3dlcnNoZWxsLmV4ZQojSVBDT05GSUdfQklOPS9tbnQvYy9XaW5kb3dzL3N5c3RlbTMyL2lwY29uZmlnLmV4ZQojV1NMX0VYRV9CSU49L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvd3NsLmV4ZQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEdlbmVyYWwgZGlzdHJpYnV0aW9uIGluZm9ybWF0aW9uCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgaG9zdG5hbWUgb2YgdGhlIGRpc3RybwpESVNUUk9fSE9TVE5BTUU9IndzbEhvc3QiCg==" \
+  "${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate" \
+  "IyEvYmluL2Jhc2gKIyBzaGVsbGNoZWNrIGRpc2FibGU9U0MyMDM0CgojIC0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tCiMgR2VuZXJhbCBpbmZvcm1hdGlvbgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIHdz \
+bCB1c2VybmFtZSB3aXRoIGRlZmF1bHQgcGFzc3dvcmQgd3NsClVTRVJOQU1FPSJ3c2wiCgpIT01F \
+PSIvaG9tZS93c2wiCgpXSU5ET1dTX1VTRVJOQU1FPSJGcmFuY29pc0NoYXN0YW5ldCIKCiMgLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0KIyBHaXQgJiBTU0ggaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLQoKIyBpZiAxLCBpdCBpbmRpY2F0ZXMgeW91IGFjY2VwdCB0aGF0IHlvdXIgZ2l0IGtl \
+eSB3aWxsIGJlIGxvYWRlZC4KIyBpZiAwLCBjb25maWd1cmF0aW9ucyB0aGF0IG5lZWQgdG8gYmUg \
+YXV0aGVudGljYXRlZCB3aWxsIGJlIHNraXBwZWQuCiMgRGlzdHJvIG1vZGU6IGluIGFueSBjYXNl \
+LCB5b3VyIGtleSBpcyBub3QgY29waWVkLgpBVVRIT1JJWkVfU1NIX0tFWV9VU0FHRT0xCgojIHlv \
+dXIgbG9naW4gdG8gY29ubmVjdCB0byBzc2ggc2VydmVycyBpZiBhbnkKU1NIX0xPR0lOPSIiCgoj \
+IHlvdXIgZ2l0IGZ1bGwgbmFtZSAnRmlyc3ROYW1lIExhc3ROYW1lJwpHSVRfVVNFUk5BTUU9IiIK \
+CiMgZW1haWwgdXNlZCBmb3IgZ2l0ICdsZGFwQGRvbWFpbi5jb20nCkdJVF9VU0VSX01BSUw9IiIK \
+CiMgZGVmYXVsdCBnaXQgbWVyZ2UgdG9vbCB0byB1c2UKR0lUX01FUkdFX1RPT0w9InZzY29kZSIK \
+CiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBBV1MgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLQoKIyBlbWFpbCB1c2VkIHRvIGNvbm5lY3QgdG8gYXdzCkFXU19VU0VSX01BSUw9ImZj \
+aGFzdGFuZXRAZ21haWwuY29tIgoKIyBhcHAgaWQgdG8gY29ubmVjdCB0byBhd3MgYWNjb3VudApB \
+V1NfQVBQX0lEPSIiCgpBV1NfUFJPRklMRT0iIgpBV1NfREVGQVVMVF9SRUdJT049IiIKQVdTX1RF \
+U1RfU0VDUkVUX0lEPSIiCkFXU19ERUZBVUxUX0RPQ0tFUl9SRUdJU1RSWV9JRD0iIgoKIyB3aWxs \
+IHVzZSBhd3MgY29uZmlndXJlIHNzbyB0byBjb25uZWN0IHRvIGF3cyAoaW5zdGVhZCBvZiBzYW1s \
+MmF3cykKVVNFX0FXU19DT05GSUdVUkVfU1NPPTEKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyBL \
+OFMgaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBLdWJlRGVmYXVsdENvbmZp \
+ZyB+Ly5rdWJlL2NvbmZpZyBnZW5lcmF0aW9uCiMgYXdzIHJlZ2lvbiBvZiB0aGUgY2x1c3RlciAo \
+RWc6IHVzLWVhc3QtMSkKS1VCRV9DT05GSUdfUkVHSU9OX0NPREU9CgojIGF3cyBhcm4gb2YgdGhl \
+IGNsdXN0ZXIuCiMgRWc6IGFybjphd3M6ZWNzOnJlZ2lvbjphd3NfYWNjb3VudF9pZDpjbHVzdGVy \
+L015Q2x1c3RlcgpLVUJFX0NPTkZJR19DTFVTVEVSX0FSTj0KCiMgLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0KIyBEaXJlY3RvcmllcwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgojIG92ZXJyaWRkZW4gY29u \
+ZiBkaXJlY3RvcnkgdGhhdCB3aWxsIGJlIHVzZWQgdG8gb3ZlcnJpZGUKIyB0aGUgZGVmYXVsdCBj \
+b25maWd1cmF0aW9uIHRoYXQgYXJlIGVtYmVkZGVkIGluIGJpbmFyaWVzCkNPTkZfT1ZFUlJJREVf \
+RElSUz0oCiAgIiR7QkFTSF9ERVZfRU5WX1JPT1RfRElSfS9jb25mLm92ZXJyaWRlIgopCgojIHdo \
+ZXJlIHRvIGluc3RhbGwgYmFzaC10b29scywgLi4uCiMgc2hlbGxjaGVjayBkaXNhYmxlPVNDMjE1 \
+MwpQUk9KRUNUU19ESVI9IiR7SE9NRX0vcHJvamVjdHMiCgojIHdoZXJlIG92ZXJyaWRkZW4gY29u \
+ZmlnIGZpbGVzIHdpbGwgYmUgYmFja2VkIHVwCkJBQ0tVUF9ESVI9IiR7QkFTSF9ERVZfRU5WX1JP \
+T1RfRElSfS9iYWNrdXAiCiMgYmFja3VwIGZpbGVzL2RpcnMgYmVmb3JlIGluc3RhbGxpbmcgbmV3 \
+IGZpbGUgKHVzdWFsbHkgMSwgYnV0IDAgaWYgdXNpbmcgZGlzdHJvKQpCQUNLVVBfQkVGT1JFX0lO \
+U1RBTEw9MQoKIyBsb2dzIGRpcmVjdG9yeQpMT0dTX0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9E \
+SVJ9L2xvZ3MiCgojIGluc3RhbGxTY3JpcHRzIHJvb3QgZGlyCklOU1RBTExfU0NSSVBUU19ST09U \
+X0RJUj0iJHtCQVNIX0RFVl9FTlZfUk9PVF9ESVJ9L2luc3RhbGxTY3JpcHRzIgoKIyAtLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLQojIEluc3RhbGxhdGlvbiBjb25maWd1cmF0aW9uCiMgLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0KCiMgQ29uZmlndXJhdGlvbiBmaWxlcyBhcmUgb3ZlcndyaXR0ZW4gZXZlbiBpZiBl \
+eGlzdHMKIyAhISEhIEZpcnN0IHRpbWUgaW5pdGlhbGl6YXRpb246IGxldCB0aGlzIHZhbHVlIHRv \
+IDEgISEhIQojIFZhbHVlIDA6CiMgLSBJZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGV4aXN0 \
+cywgZGlzcGxheXMgYSBtZXNzYWdlIGFuZCBkbyBub3Qgb3ZlcndyaXRlIHRoZSBmaWxlCiMgLSBJ \
+ZiB0YXJnZXQgY29uZmlndXJhdGlvbiBmaWxlIGRvZXNuJ3QgZXhpc3QsIGluc3RhbGxzIHRoZSBm \
+aWxlCiMgVmFsdWUgMQojIC0gaW5zdGFsbCBvciBvdmVyd3JpdGUgdGhlIGZpbGUgd2l0aG91dCBj \
+aGVja2luZyBleGlzdGVuY2UKT1ZFUldSSVRFX0NPTkZJR19GSUxFUz0xCgojIFdpbmRvd3MgZmls \
+ZXMgY2FuIGJlIG92ZXJyaWRkZW4gaWYgMQojIGlmIDAKIyAtIHNraXAgY2hhbmdlcyB0byAlVVNF \
+UlBST0ZJTEUlLy53c2xjb25maWcKIyAtIHNraXAgY29weWluZyBmb250cwpDSEFOR0VfV0lORE9X \
+U19GSUxFUz0xCgojIEluZGljYXRlIHRoYXQgaW5zdGFsbCBzY3JpcHQgY2FuIHdhcm4geW91IHVz \
+aW5nIHNwZWFrZXIgd2hlbiB5b3VyIGlucHV0IGlzIG5lZWRlZApDQU5fVEFMS19EVVJJTkdfSU5T \
+VEFMTEFUSU9OPTEKCiMgaWYgMCBpbnN0YWxsIHNjcmlwdCB3aWxsIHNraXAgYWxsIGludGVyYWN0 \
+aXZlIGFjdGl2aXR5IChzYW1sMmF3cywgLi4uKSwKIyBzbyBkZXBlbmRlbnQgaW5zdGFsbGF0aW9u \
+IHdpbGwgYmUgc2tpcHBlZCBhcyB3ZWxsCklOU1RBTExfSU5URVJBQ1RJVkU9MQoKIyBkaXNwbGF5 \
+IGVsYXBzZWQgdGltZSBzaW5jZSBsYXN0IGxvZwpESVNQTEFZX0RVUkFUSU9OPTEKCiMgMCAgID0+ \
+IG5vIHVwZ3JhZGUgYXQgYWxsCiMgbHRzID0+IFVQR1JBREUgdG8gbGF0ZXN0IHVidW50dSBsdHMg \
+dmVyc2lvbgojIGRldiA9PiBVUEdSQURFIHRvIGxhdGVzdCB1YnVudHUgZGV2IHZlcnNpb24KIyBV \
+c2UgaWYgeW91IGtub3cgd2hhdCB5b3UgYXJlIGRvaW5nLAojIGNvdWxkIGNhdXNlIHNvbWUgcGFj \
+a2FnZXMgdG8gbm90IGJlaW5nIGF2YWlsYWJsZSB5ZXQKVVBHUkFERV9VQlVOVFVfVkVSU0lPTj0w \
+CgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgUHJvZmlsZSBjb25maWd1cmF0aW9uCiMgLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0KCiMgQ2hvb3NlIHlvdXIgcHJlZmVycmVkIHNoZWxsCiMgcG9zc2libGUg \
+Y2hvaWNlczogU2hlbGxCYXNoIChMZWdhY3kgZXhwZXJpZW5jZSksIFNoZWxsWnNoIChSZWNvbW1l \
+bmRlZCBleHBlcmllbmNlKQpQUkVGRVJSRURfU0hFTEw9IlNoZWxsWnNoIgoKIyBac2ggdGhlbWUg \
+dG8gdXNlCiMgcG9zc2libGUgY2hvaWNlczogcG93ZXJsZXZlbDEway9wb3dlcmxldmVsMTBrLCBv \
+aG15cG9zaCwgc2luZHJlc29yaHVzL3B1cmUsIHN0YXJzaGlwL3N0YXJzaGlwClpTSF9QUkVGRVJS \
+RURfVEhFTUU9InBvd2VybGV2ZWwxMGsvcG93ZXJsZXZlbDEwayIKCiMgaWYgcHJlZmVycmVkIHRo \
+ZW1lIGlzIG9obXlwb3NoLCB0aGUgcGF0aCB0byB0aGUgdGhlbWUgZmlsZQpQT1NIX1RIRU1FX1BB \
+VEg9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9vaG15cG9zaFRoZW1lcy9qYW5kZWRv \
+YmJlbGVlci55YW1sIgoKIyBpZiBwcmVmZXJyZWQgdGhlbWUgaXMgc3RhcnNoaXAKU1RBUlNISVBf \
+VEhFTUU9IiR7SE9NRX0vLmJhc2gtZGV2LWVudi90aGVtZXMuZC9zdGFyc2hpcFRoZW1lcy9kZWZh \
+dWx0LnRvbWwiClNUQVJTSElQX0NBQ0hFPSIke0hPTUV9Ly5jYWNoZS8uc3RhcnNoaXAiCgojIERp \
+c3BsYXkgRm9ydHVuZSB0b29sdGlwIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX0ZPUlRV \
+TkVTPTEKCiMgRGlzcGxheSBNT1REIGF0IGJhc2gvenNoIHNlc3Npb24gb3BlbgpTSE9XX01PVEQ9 \
+MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIFdTTENPTkZJRwojIFRoZXNlIHBhcmFtZXRlcnMg \
+YXV0b21hdGljYWxseSBjb25maWd1cmUgJVVTRVJQUk9GSUxFJS8ud3NsY29uZmlnIGZpbGUuCiMg \
+QHNlZSBodHRwczovL2RvY3MubWljcm9zb2Z0LmNvbS9lbi11cy93aW5kb3dzL3dzbC93c2wtY29u \
+ZmlnCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCiMgUmVjb21tZW5kZWQgNTAlIG9mIHRvdGFsIG1l \
+bW9yeQpXU0xDT05GSUdfTUFYX01FTU9SWT04R0IKCiMgcGVyc29uYWxseSBJIHByZWZlciBydW4g \
+b3V0IG9mIG1lbW9yeSBpbnN0ZWFkIG9mIGJlZ2lubmluZyBzd2FwcGluZwojIFNvIEkga25vdyBp \
+bW1lZGlhdGVseSBpZiBzb21lIHByb2Nlc3NlcyBoYXZlIHRvIGJlIHN0b3BwZWQKV1NMQ09ORklH \
+X1NXQVA9MAoKIyBpZiAxIGl0IHdpbGwgY29tcHV0ZSBhdXRvbWF0aWNhbGx5IHRoZSBtYXggdmhk \
+IHNpemUKIyBkZWZhdWx0ICgxLzMgb2YgZGlzayBzaXplLCBtaW4gMTUwR0IpCiMgaWYgMCBpdCB3 \
+aWxsIHVzZSB3c2wgZGVmYXVsdCB2YWx1ZSAoMVRCKQpXU0xDT05GSUdfQ09NUFVURV9NQVhfVkhE \
+X1NJWkU9MQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIEhhY2tzCiMgb24gc29tZSBjb25maWd1 \
+cmF0aW9ucyB3ZSBoYXZlIHRvIGZvcmNlIHBhdGggb2Ygc29tZSB3aW5kb3dzIGNvbW1hbmRzCiMg \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0KCiNQT1dFUlNIRUxMX0JJTj0vbW50L2MvV2luZG93cy9TeXN0 \
+ZW0zMi9XaW5kb3dzUG93ZXJTaGVsbC92MS4wL3Bvd2Vyc2hlbGwuZXhlCiNJUENPTkZJR19CSU49 \
+L21udC9jL1dpbmRvd3Mvc3lzdGVtMzIvaXBjb25maWcuZXhlCiNXU0xfRVhFX0JJTj0vbW50L2Mv \
+V2luZG93cy9zeXN0ZW0zMi93c2wuZXhlCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgR2VuZXJh \
+bCBkaXN0cmlidXRpb24gaW5mb3JtYXRpb24KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t \
+LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKIyBob3N0 \
+bmFtZSBvZiB0aGUgZGlzdHJvCkRJU1RST19IT1NUTkFNRT0id3NsSG9zdCIK" \
   "755"
 
-declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/dfbb84bdd29315eb016a1d332348162b942dcaf9380c56ce914246da6e7d4481/envFileTemplate"
+declare -gx embed_file_envFileTemplate="${PERSISTENT_TMPDIR:-/tmp}/e45723bdbf29adda89f24f72a94da7e21df12389872dca4558684132a580a936/envFileTemplate"
 
   local envFile="${BASH_DEV_ENV_ROOT_DIR}/.env"
   # shellcheck disable=SC2154
@@ -816,16 +999,26 @@ Engine::Config::loadSshKey() {
     export SSH_AGENT_PID
   fi
 
-  if [[ -z "${SSH_PRIVATE_KEY}" ]]; then
-    ssh-add "${HOME}/.ssh/id_rsa" || return 3
-  else
-    ssh-add <(base64 -d <<<"${SSH_PRIVATE_KEY}") || return 3
+  if [[ -n "${SSH_PRIVATE_KEY}" ]]; then
+    base64 -d <<<"${SSH_PRIVATE_KEY}" >"${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to decode SSH_PRIVATE_KEY"
+      return 2
+    }
+    chmod 600 "${HOME}/.ssh/id_rsa" || {
+      Log::displayError "Failed to set permissions on SSH key"
+      return 3
+    }
   fi
+  ssh-keygen -f ~/.ssh/id_rsa -y >~/.ssh/id_rsa.pub || {
+    Log::displayError "Failed to generate public key from private key"
+    return 4
+  }
+  ssh-add "${HOME}/.ssh/id_rsa" || return 5
 
   # Check key has been added to ssh agent
   ssh-add -l &>/dev/null || {
     Log::displayError "Your ssh key has not been loaded"
-    return 4
+    return 6
   }
 }
 
@@ -958,15 +1151,29 @@ Engine::Config::requireWslu() {
     Log::displayInfo "Installing pre-requisite Wslu : wslvar, wslpath, ... commands"
     Linux::Apt::installIfNecessary --no-install-recommends wslu
 
-    # @see https://github.com/microsoft/WSL/issues/8843#issuecomment-1792256894
-    Log::displayInfo "Fix wsl interoperability due to wsl bug"
-    if [[ ! -f /usr/lib/binfmt.d/WSLInterop.conf &&
-      ! -f /etc/systemd/system/wsl-binfmt.service &&
-      -f /run/systemd/generator.early/wsl-binfmt.service ]]; then
-      sudo sh -c 'echo :WSLInterop:M::MZ::/init:PF > /usr/lib/binfmt.d/WSLInterop.conf'
-      sudo ln -s /run/systemd/generator.early/wsl-binfmt.service /etc/systemd/system/wsl-binfmt.service
-    fi
+    # Fix WSL2 interop issue
+    # @see https://github.com/microsoft/WSL/issues/7181
+    sudo systemctl mask systemd-binfmt.service
+    sudo update-binfmts --enable
   fi
+}
+
+
+# @description default env file with all default values
+# @stdout the default env filepath
+Env::createDefaultEnvFile() {
+  local envFile
+  envFile="$(Framework::createTempFile "createDefaultEnvFileEnvFile")" || return 2
+
+  (
+    echo "BASH_FRAMEWORK_THEME=${BASH_FRAMEWORK_THEME:-default}"
+    echo "BASH_FRAMEWORK_LOG_LEVEL=${BASH_FRAMEWORK_LOG_LEVEL:-${__LEVEL_OFF}}"
+    echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+    # shellcheck disable=SC2016
+    echo 'BASH_FRAMEWORK_LOG_FILE="${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"'
+    echo "BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION=${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION:-5}"
+  ) >"${envFile}"
+  echo "${envFile}"
 }
 
 
@@ -987,35 +1194,39 @@ Env::pathPrepend() {
 # @arg $@ list of default files to load at the end
 # @exitcode 1 if one of env files fails to load
 # @stderr diagnostics information is displayed
-# shellcheck disable=SC2120
+# shellcheck disable=SC2120,SC2329
 Env::requireLoad() {
   export REQUIRE_FUNCTION_ENV_REQUIRE_LOAD_LOADED=1
 
   local -a defaultFiles=("$@")
   # get list of possible config files
   local -a configFiles=()
+  local defaultEnvFile
+  defaultEnvFile="$(Env::createDefaultEnvFile)" || return 1
+  configFiles+=("${defaultEnvFile}")
   if [[ -n "${BASH_FRAMEWORK_ENV_FILES[0]+1}" ]]; then
     # BASH_FRAMEWORK_ENV_FILES is an array
     configFiles+=("${BASH_FRAMEWORK_ENV_FILES[@]}")
   fi
-  local localFrameworkConfigFile
-  localFrameworkConfigFile="$(pwd)/.framework-config"
-  if [[ -f "${localFrameworkConfigFile}" ]]; then
-    configFiles+=("${localFrameworkConfigFile}")
-  fi
   if [[ -f "${FRAMEWORK_ROOT_DIR}/.framework-config" ]]; then
     configFiles+=("${FRAMEWORK_ROOT_DIR}/.framework-config")
   fi
-  configFiles+=("${optionEnvFiles[@]}")
+  local localFrameworkConfigFile
+  BASH_FRAMEWORK_DISPLAY_LEVEL="${__LEVEL_INFO}" \
+    BASH_FRAMEWORK_LOG_LEVEL="${__LEVEL_OFF}" \
+    Conf::loadNearestFile ".framework-config" localFrameworkConfigFile "$(pwd)" || true
+  if [[ -f "${localFrameworkConfigFile}" ]]; then
+    configFiles+=("${localFrameworkConfigFile}")
+  fi
   configFiles+=("${defaultFiles[@]}")
 
-  for file in "${configFiles[@]}"; do
-    # shellcheck source=/.framework-config
+  while IFS='' read -r file; do
+    # shellcheck source=/src/Env/createDefaultEnvFile.sh
     CURRENT_LOADED_ENV_FILE="${file}" source "${file}" || {
       Log::displayError "while loading config file: ${file}"
       return 1
     }
-  done
+  done < <(printf '%s\n' "${configFiles[@]}" | awk '!x[$0]++')
 }
 
 
@@ -1075,6 +1286,39 @@ File::relativeToDir() {
   realpath -m --relative-to="${relativeTo}" "${srcFile}"
 }
 
+
+# @description search a file in parent directories
+#
+# @arg $1 fromPath:String path
+# @arg $2 fileName:String
+# @arg $3 untilInclusivePath:String (optional) find for given file until reaching this folder (default value: /)
+# @arg $@ untilInclusivePaths:String[] list of untilInclusivePath
+# @stdout The filename if found
+# @exitcode 1 if the command failed or file not found
+File::upFind() {
+  local fromPath="$1"
+  shift || true
+  local fileName="$1"
+  shift || true
+  local untilInclusivePath="${1:-/}"
+  shift || true
+
+  if [[ -f "${fromPath}" ]]; then
+    fromPath="${fromPath%/*}"
+  fi
+  while true; do
+    if [[ -f "${fromPath}/${fileName}" ]]; then
+      echo "${fromPath}/${fileName}"
+      return 0
+    fi
+    if Array::contains "${fromPath}" "${untilInclusivePath}" "$@" "/"; then
+      return 1
+    fi
+    fromPath="$(readlink -f "${fromPath}"/..)"
+  done
+  return 1
+}
+
 # shellcheck disable=SC2120
 
 # @description uniq command need input file to be sorted
@@ -1115,7 +1359,7 @@ InstallScripts::command() {
   local scriptName="${fullScriptName//\//@}"
   rm -f "${statsDir}/${scriptName}-"* || true
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   onInterrupt() {
     Log::displayError "${scriptName} aborted"
     exit 1
@@ -1126,9 +1370,25 @@ InstallScripts::command() {
   local installStatus="0"
   sourceHook() {
     local hookName="$1"
+    local configDir
     # shellcheck disable=SC2154
-    hook="$(IGNORE_ERROR=1 Conf::dynamicConfFile "${scriptName}/${hookName}.sh" "${embed_dir_hooks_dir}/${hookName}.sh")"
+    local -a overriddenDirs=()
+    # shellcheck disable=SC2154
+    if [[ -d "${embed_dir_hooks_dir}" ]]; then
+      overriddenDirs+=("${embed_dir_hooks_dir}")
+    fi
+    local dir
+    for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+      overriddenDirs+=("${dir}/${scriptName//\//@}")
+    done
+    configDir="$(Conf::getOverriddenDir "${overriddenDirs[@]}")" || return 0
+
+    # ensure necessary functions are imported
+    # Assert::dirExists
+    # Assert::fileExists
+    hook="${configDir}/${hookName}.sh"
     if [[ -n "${hook}" && -f "${hook}" && -x "${hook}" ]]; then
+      Log::displayInfo "Running hook ${hook}"
       # shellcheck source=src/_installScripts/_Defaults/SimpleTest-hooks/preInstall.sh
       source "${hook}" || {
         Log::displayError "${scriptName} - unable to load hook '${hook}'"
@@ -1146,7 +1406,7 @@ InstallScripts::command() {
     # break at first install error
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         LOG_CONTEXT="${scriptName} - " Stats::statusLine "${statsFile}" "Installation"
@@ -1162,6 +1422,7 @@ InstallScripts::command() {
       sourceHook preInstall || ((++failures))
       install || ((++failures))
       sourceHook postInstall || ((++failures))
+      # shellcheck disable=SC2317 # false positive due to trap
       exit "${failures}"
     ) 2>&1 | tee "${logFile}"
   fi
@@ -1174,7 +1435,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-install.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Install ${scriptName}"
@@ -1188,7 +1449,7 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preTestInstall || ((++failures))
-      testInstall || ((++failures))
+      testInstall testInstall || ((++failures))
       sourceHook postTestInstall || ((++failures))
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || testInstallStatus="$?" || true
@@ -1206,7 +1467,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-config.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Configuration ${scriptName}"
@@ -1220,7 +1481,7 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preConfigure || ((++failures))
-      configure || ((++failures))
+      configure configure || ((++failures))
       sourceHook postConfigure || ((++failures))
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || configStatus="$?" || true
@@ -1239,7 +1500,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-test-configuration.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Test Configuration ${scriptName}"
@@ -1253,8 +1514,10 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preTestConfigure || ((++failures))
-      testConfigure || ((++failures))
+      # shellcheck disable=SC2317
+      testConfigure testConfigure || ((++failures))
       sourceHook postTestConfigure || ((++failures))
+      # shellcheck disable=SC2317 # false positive due to trap
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || testConfigStatus="$?" || true
     if [[ "${testConfigStatus}" != "0" ]] && breakOnTestFailure; then
@@ -1271,7 +1534,7 @@ InstallScripts::command() {
     statsFile="${statsDir}/${scriptName}-clean-before-export.stat"
     (
       startDate="$(date +%s)"
-      # shellcheck disable=SC2317
+      # shellcheck disable=SC2317,SC2329
       computeStats() {
         local rc=$1
         Stats::statusLine "${statsFile}" "Cleaning ${scriptName}"
@@ -1622,13 +1885,14 @@ Linux::Wsl::requireWsl() {
 
 # @description retrieve linux distributor id
 # @noargs
-# @exitcode 1 if lsb_release fails or not found
+# @exitcode 1 if /etc/os-release not found
+# @exitcode 2 if ID field not found in /etc/os-release
 # @stdout the linux distributor id
 Linux::getDistributorId() {
-  (
-    source /etc/os-release
-    echo "${ID}"
-  )
+  if [[ ! -f /etc/os-release ]]; then
+    return 1
+  fi
+  awk -F= '/^ID=/ { gsub(/"/, "", $2); print $2; exit }' /etc/os-release || return 2
 }
 
 
@@ -1779,6 +2043,35 @@ Log::fatal() {
 }
 
 
+# @description Get the text representation of a log level
+# @arg $1 level:String the log level to convert
+# @exitcode 1 if the level is invalid
+Log::getLevelText() {
+  local level="$1"
+  case "${level}" in
+    "${__LEVEL_OFF}")
+      echo OFF
+      ;;
+    "${__LEVEL_ERROR}")
+      echo ERROR
+      ;;
+    "${__LEVEL_WARNING}")
+      echo WARNING
+      ;;
+    "${__LEVEL_INFO}")
+      echo INFO
+      ;;
+    "${__LEVEL_DEBUG}")
+      echo DEBUG
+      ;;
+    *)
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      return 1
+      ;;
+  esac
+}
+
+
 # @description Display given text on full line with TEST_COLOR style
 # @arg $1 text:String text to display
 Log::headLine() {
@@ -1896,6 +2189,7 @@ Log::logWarning() {
 # @env BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION int do log rotation if > 0
 # @exitcode 0 always successful
 # @stderr diagnostics information about log file is displayed
+# shellcheck disable=SC2329
 Log::requireLoad() {
   export REQUIRE_FUNCTION_LOG_REQUIRE_LOAD_LOADED=1
 
@@ -2377,6 +2671,7 @@ UI::drawLine() {
 # @env BASH_FRAMEWORK_THEME String theme to use
 # @env LOAD_THEME int 0 to avoid loading theme
 # @exitcode 0 always successful
+# shellcheck disable=SC2329
 UI::requireTheme() {
   export REQUIRE_FUNCTION_UI_REQUIRE_THEME_LOADED=1
 
@@ -2484,6 +2779,7 @@ UI::theme() {
 # shellcheck disable=SC2034
 declare commandFunctionName="installScriptCommand"
 
+# shellcheck disable=SC2329
 defaultBeforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
@@ -2497,6 +2793,7 @@ scriptName() {
   echo "DependencySample"
 }
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   defaultBeforeParseCallback
 }
@@ -2517,11 +2814,13 @@ listOrNone() {
   fi
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 helpDescriptionFunction() {
   helpDescription
   echo
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 helpLongDescription() {
   helpDescription
 }
@@ -2566,6 +2865,19 @@ fullScriptName() {
   File::relativeToDir "${REAL_SCRIPT_FILE}" "${BASH_DEV_ENV_ROOT_DIR}"
 }
 
+fullScriptOverrideDir() {
+  local confDir
+  confDir="$(fullScriptName)"
+  local dir
+  for dir in "${CONF_OVERRIDE_DIRS[@]}"; do
+    if [[ -d "${dir}/${confDir//\//@}" ]]; then
+      echo "${dir}/${confDir//\//@}"
+      return
+    fi
+  done
+  echo "${CONF_OVERRIDE_DIRS[0]}/${confDir//\//@}"
+}
+
 argsInstallScriptCommandCallback() {
   if [[ -n "${command}" ]]; then
     case "${command}" in
@@ -2587,73 +2899,75 @@ argsInstallScriptCommandCallback() {
 
 declare -a BASH_FRAMEWORK_ARGV_FILTERED=()
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
   Log::requireLoad
 }
 
+# shellcheck disable=SC2329
 copyrightCallback() {
   #
   # shellcheck disable=SC2155,SC2154,SC2250
   echo "Copyright (c) 2024-now François Chastanet"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListInfoVerboseCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(--verbose)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListDebugVerboseCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(-vv)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListTraceVerboseCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(-vvv)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListEnvFileCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListLogLevelCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListDisplayLevelCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListNoColorCallback() {
   BASH_FRAMEWORK_ARGV_FILTERED+=(--no-color)
 }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListThemeCallback() { :; }
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 updateArgListQuietCallback() { :; }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionHelpCallback() {
   Log::displayError "optionHelpCallback needs to be overridden"
   exit 0
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionVersionCallback() {
   # shellcheck disable=SC2154
-  echo "${SCRIPT_NAME} version 3.0"
+  echo "${SCRIPT_NAME} version 3.1"
   exit 0
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionInfoVerboseCallback() {
   BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='--verbose'
   BASH_FRAMEWORK_ARGS_VERBOSE=${__VERBOSE_LEVEL_INFO}
   echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${__LEVEL_INFO}" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionDebugVerboseCallback() {
   BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='-vv'
   BASH_FRAMEWORK_ARGS_VERBOSE=${__VERBOSE_LEVEL_DEBUG}
   echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${__LEVEL_DEBUG}" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionTraceVerboseCallback() {
   # shellcheck disable=SC2034
   BASH_FRAMEWORK_ARGS_VERBOSE_OPTION='-vvv'
@@ -2680,7 +2994,7 @@ getLevel() {
       echo "${__LEVEL_DEBUG}"
       ;;
     *)
-      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${level}"
+      Log::displayError "Command ${SCRIPT_NAME} - Invalid level ${levelName}"
       return 1
       ;;
   esac
@@ -2718,6 +3032,10 @@ optionDisplayLevelCallback() {
   echo "BASH_FRAMEWORK_DISPLAY_LEVEL=${logLevel}" >>"${overrideEnvFile}"
 }
 
+optionDisplayLevelDefaultValueFunction() {
+  Log::getLevelText "${BASH_FRAMEWORK_DISPLAY_LEVEL:-${__LEVEL_INFO}}"
+}
+
 # shellcheck disable=SC2317 # if function is overridden
 optionLogLevelCallback() {
   local level="$2"
@@ -2729,23 +3047,28 @@ optionLogLevelCallback() {
   echo "BASH_FRAMEWORK_LOG_LEVEL=${logLevel}" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionLogFileCallback() {
   local logFile="$2"
   echo "BASH_FRAMEWORK_LOG_FILE='${logFile}'" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+optionLogFileDefaultValueFunction() {
+  # shellcheck disable=SC2016
+  echo "${BASH_FRAMEWORK_LOG_FILE:-"${FRAMEWORK_ROOT_DIR}/logs/${SCRIPT_NAME}.log"}"
+}
+
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionQuietCallback() {
   echo "BASH_FRAMEWORK_QUIET_MODE=1" >>"${overrideEnvFile}"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionNoColorCallback() {
   UI::theme "noColor"
 }
 
-# shellcheck disable=SC2317 # if function is overridden
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionThemeCallback() {
   UI::theme "$2"
 }
@@ -2760,59 +3083,16 @@ displayConfig() {
   exit 0
 }
 
+# shellcheck disable=SC2317,SC2329 # if function is overridden
 optionBashFrameworkConfigCallback() {
   if [[ ! -f "$2" ]]; then
     Log::fatal "Command ${SCRIPT_NAME} - Bash framework config file '$2' does not exists"
   fi
 }
 
-defaultFrameworkConfig="$(
-  cat <<'EOF'
-
-# copied from src/_includes/.framework-config.default
-# shellcheck disable=SC2034
-
-REAL_SCRIPT_FILE="${REAL_SCRIPT_FILE:-$(readlink -e "$(realpath "${BASH_SOURCE[0]}")")}"
-FRAMEWORK_ROOT_DIR="${FRAMEWORK_ROOT_DIR:-${REAL_SCRIPT_FILE%/*/*}}"
-FRAMEWORK_SRC_DIR="${FRAMEWORK_SRC_DIR:-${FRAMEWORK_ROOT_DIR}/src}"
-FRAMEWORK_BIN_DIR="${FRAMEWORK_BIN_DIR:-${FRAMEWORK_ROOT_DIR}/bin}"
-FRAMEWORK_VENDOR_DIR="${FRAMEWORK_VENDOR_DIR:-${FRAMEWORK_ROOT_DIR}/vendor}"
-FRAMEWORK_VENDOR_BIN_DIR="${FRAMEWORK_VENDOR_BIN_DIR:-${FRAMEWORK_ROOT_DIR}/vendor/bin}"
-
-# describe the functions that will be skipped from being imported
-FRAMEWORK_FUNCTIONS_IGNORE_REGEXP="${FRAMEWORK_FUNCTIONS_IGNORE_REGEXP:-^(Namespace::functions|Functions::myFunction|Namespace::requireSomething|Acquire::ForceIPv4)$}"
-# describe the files that do not contain function to be imported
-NON_FRAMEWORK_FILES_REGEXP="${NON_FRAMEWORK_FILES_REGEXP:-(^bin/|.framework-config|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/_binaries|^src/_includes|^src/batsHeaders.sh$|^src/_standalone)}"
-# describe the files that are allowed to not have an associated bats file
-BATS_FILE_NOT_NEEDED_REGEXP="${BATS_FILE_NOT_NEEDED_REGEXP:-(^bin/|.framework-config|.bats$|/testsData/|^manualTests/|/_.sh$|/ZZZ.sh$|/__all.sh$|^src/batsHeaders.sh$|^src/_includes)}"
-# describe the files that are allowed to not have a function matching the filename
-FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP="${FRAMEWORK_FILES_FUNCTION_MATCHING_IGNORE_REGEXP:-^bin/|^\.framework-config$|/testsData/|^manualTests/|\.bats$}"
-# Source directories
-if [[ ! -v FRAMEWORK_SRC_DIRS ]]; then
-  FRAMEWORK_SRC_DIRS=(
-    "${FRAMEWORK_ROOT_DIR}/src"
-  )
-fi
-
-# export here all the variables that will be used in your templates
-export REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/fchastanet/bash-tools-framework}"
-
-BASH_FRAMEWORK_THEME="${BASH_FRAMEWORK_THEME:-default}"
-BASH_FRAMEWORK_LOG_LEVEL="${BASH_FRAMEWORK_LOG_LEVEL:-0}"
-BASH_FRAMEWORK_DISPLAY_LEVEL="${BASH_FRAMEWORK_DISPLAY_LEVEL:-3}"
-BASH_FRAMEWORK_LOG_FILE="${BASH_FRAMEWORK_LOG_FILE:-${FRAMEWORK_ROOT_DIR}/logs/${0##*/}.log}"
-BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION="${BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION:-5}"
-
-EOF
-)"
-
 overrideEnvFile="$(Framework::createTempFile "overrideEnvFile")"
 
 commandOptionParseFinished() {
-  # load default template framework config
-  defaultEnvFile="${PERSISTENT_TMPDIR}/.framework-config"
-  echo "${defaultFrameworkConfig}" >"${defaultEnvFile}"
-  local -a files=("${defaultEnvFile}")
   # shellcheck disable=SC2154
   if [[ -f "${optionBashFrameworkConfig}" ]]; then
     files+=("${optionBashFrameworkConfig}")
@@ -2824,42 +3104,6 @@ commandOptionParseFinished() {
   if [[ "${optionConfig}" = "1" ]]; then
     displayConfig
   fi
-}
-
-
-
-helpDescription() {
-  echo "this is an example that can be used to debug or as a template for other install scripts"
-}
-
-dependencies() {
-  echo "installScripts/MandatorySoftwares"
-}
-
-# jscpd:ignore-start
-fortunes() { :; }
-listVariables() { :; }
-helpVariables() { :; }
-defaultVariables() { :; }
-checkVariables() { :; }
-breakOnConfigFailure() { :; }
-breakOnTestFailure() { :; }
-# jscpd:ignore-end
-
-install() {
-  echo install
-}
-
-testInstall() {
-  echo testInstall
-}
-
-configure() {
-  echo configure
-}
-
-testConfigure() {
-  echo testConfigure
 }
 
 
@@ -2999,11 +3243,13 @@ declare -i help_cache_max_duration=86400
 
 
 
+# shellcheck disable=SC2329
 optionHelpCallback() {
   "DependencySampleCommandHelp"
   exit 0
 }
 
+# shellcheck disable=SC2329
 defaultBeforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
@@ -3012,16 +3258,55 @@ defaultBeforeParseCallback() {
   Linux::Wsl::requireWsl
 }
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   defaultBeforeParseCallback
 }
 
+# shellcheck disable=SC2329
 defaultAfterParseCallback() {
   Engine::Config::loadConfig
 }
 
+# shellcheck disable=SC2329
 afterParseCallback() {
   defaultAfterParseCallback
+}
+
+
+
+helpDescription() {
+  echo "this is an example that can be used to debug or as a template for other install scripts"
+}
+
+dependencies() {
+  echo "installScripts/MandatorySoftwares"
+}
+
+# jscpd:ignore-start
+fortunes() { :; }
+listVariables() { :; }
+helpVariables() { :; }
+defaultVariables() { :; }
+checkVariables() { :; }
+breakOnConfigFailure() { :; }
+breakOnTestFailure() { :; }
+# jscpd:ignore-end
+
+install() {
+  echo install
+}
+
+testInstall() {
+  echo testInstall
+}
+
+configure() {
+  echo configure
+}
+
+testConfigure() {
+  echo testConfigure
 }
 
 
@@ -3042,9 +3327,9 @@ declare optionBashFrameworkConfig=""
 declare optionInfoVerbose="0"
 declare optionDebugVerbose="0"
 declare optionTraceVerbose="0"
-declare optionLogLevel=""
-declare optionLogFile=""
-declare optionDisplayLevel=""
+declare optionLogLevel="INFO"
+declare optionLogFile="optionLogFileDefaultValueFunction"
+declare optionDisplayLevel="optionDisplayLevelDefaultValueFunction"
 declare optionNoColor="0"
 declare optionTheme="default"
 declare optionVersion="0"
@@ -3091,13 +3376,13 @@ DependencySampleCommandParse() {
   optionTraceVerbose="0"
   local -i options_parse_optionParsedCountOptionTraceVerbose
   ((options_parse_optionParsedCountOptionTraceVerbose = 0)) || true
-  optionLogLevel=""
+  optionLogLevel="INFO"
   local -i options_parse_optionParsedCountOptionLogLevel
   ((options_parse_optionParsedCountOptionLogLevel = 0)) || true
-  optionLogFile=""
+  optionLogFile="optionLogFileDefaultValueFunction"
   local -i options_parse_optionParsedCountOptionLogFile
   ((options_parse_optionParsedCountOptionLogFile = 0)) || true
-  optionDisplayLevel=""
+  optionDisplayLevel="optionDisplayLevelDefaultValueFunction"
   local -i options_parse_optionParsedCountOptionDisplayLevel
   ((options_parse_optionParsedCountOptionDisplayLevel = 0)) || true
   optionNoColor="0"
@@ -3598,6 +3883,7 @@ DependencySampleCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}testConfigure${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}isCleanBeforeExportImplemented${__RESET_COLOR}"
 
+
   Array::wrap2 ' ' 76 6 "    Default value: " "install"
   echo
 
@@ -3683,10 +3969,16 @@ DependencySampleCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
 
+  Array::wrap2 ' ' 76 6 "    Default value: " "INFO"
+  echo
+
   echo -e "  ${__HELP_OPTION_COLOR}--log-file <log-file>${__HELP_NORMAL} {single}"
   Array::wrap2 ' ' 76 4 "    " "Set log file"
   echo
 
+
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionLogFileDefaultValueFunction)"
+  echo
 
   echo -e "  ${__HELP_OPTION_COLOR}--display-level <display-level>${__HELP_NORMAL} {single}"
   Array::wrap2 ' ' 76 4 "    " "Set display level"
@@ -3702,6 +3994,9 @@ DependencySampleCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}DEBUG${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}TRACE${__RESET_COLOR}"
 
+  Array::wrap2 ' ' 76 6 "    Default value: " "$(optionDisplayLevelDefaultValueFunction)"
+  echo
+
   echo -e "  ${__HELP_OPTION_COLOR}--no-color${__HELP_NORMAL} {single}"
   Array::wrap2 ' ' 76 4 "    " "Produce monochrome output. alias of --theme noColor."
   echo
@@ -3715,6 +4010,7 @@ DependencySampleCommandHelp() {
   echo -e "      - ${__OPTION_COLOR}default${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}default-force${__RESET_COLOR}"
   echo -e "      - ${__OPTION_COLOR}noColor${__RESET_COLOR}"
+
   Array::wrap2 ' ' 76 6 "    Default value: " "default"
   echo
 
@@ -3739,7 +4035,7 @@ DependencySampleCommandHelp() {
   # ------------------------------------------
   echo
   echo -n -e "${__HELP_TITLE_COLOR}VERSION: ${__RESET_COLOR}"
-  echo "3.0"
+  echo "3.1"
   # ------------------------------------------
   # author section
   # ------------------------------------------

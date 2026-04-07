@@ -78,6 +78,7 @@ InstallScripts::command() {
       sourceHook preInstall || ((++failures))
       install || ((++failures))
       sourceHook postInstall || ((++failures))
+      # shellcheck disable=SC2317 # false positive due to trap
       exit "${failures}"
     ) 2>&1 | tee "${logFile}"
   fi
@@ -104,7 +105,7 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preTestInstall || ((++failures))
-      testInstall || ((++failures))
+      testInstall testInstall || ((++failures))
       sourceHook postTestInstall || ((++failures))
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || testInstallStatus="$?" || true
@@ -136,7 +137,7 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preConfigure || ((++failures))
-      configure || ((++failures))
+      configure configure || ((++failures))
       sourceHook postConfigure || ((++failures))
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || configStatus="$?" || true
@@ -169,8 +170,10 @@ InstallScripts::command() {
 
       local -i failures=0
       sourceHook preTestConfigure || ((++failures))
-      testConfigure || ((++failures))
+      # shellcheck disable=SC2317
+      testConfigure testConfigure || ((++failures))
       sourceHook postTestConfigure || ((++failures))
+      # shellcheck disable=SC2317 # false positive due to trap
       exit "${failures}"
     ) 2>&1 | tee "${logFile}" || testConfigStatus="$?" || true
     if [[ "${testConfigStatus}" != "0" ]] && breakOnTestFailure; then

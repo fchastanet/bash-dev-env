@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/_Configs/KubeDefaultConfig-conf" as conf_dir
 
+# shellcheck disable=SC2329
 kubeBeforeParseCallback() {
   Git::requireGitCommand
   Linux::requireJqCommand

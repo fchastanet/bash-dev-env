@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # @embed "${BASH_DEV_ENV_ROOT_DIR}/src/_installScripts/BashUtils/Fzf-conf" as conf_dir
 
+# shellcheck disable=SC2329
 fzfBeforeParseCallback() {
   Git::requireGitCommand
 }

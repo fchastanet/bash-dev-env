@@ -27,7 +27,7 @@ install() {
     # install composer last version
     (
       # shellcheck disable=SC2154
-      trap 'rc=$?; rm -f composer-setup.php || true; exit "${rc}"' EXIT
+      trap 'trapExitCode=$?; rm -f composer-setup.php || true; exit "${trapExitCode}"' EXIT
       cd /tmp || exit 1
       EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
       php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"

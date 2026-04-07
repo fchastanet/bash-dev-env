@@ -425,7 +425,7 @@ Env::pathPrepend() {
 # @arg $@ list of default files to load at the end
 # @exitcode 1 if one of env files fails to load
 # @stderr diagnostics information is displayed
-# shellcheck disable=SC2120
+# shellcheck disable=SC2120,SC2329
 Env::requireLoad() {
   export REQUIRE_FUNCTION_ENV_REQUIRE_LOAD_LOADED=1
 
@@ -695,6 +695,7 @@ Log::logMessage() {
 # @env BASH_FRAMEWORK_LOG_FILE_MAX_ROTATION int do log rotation if > 0
 # @exitcode 0 always successful
 # @stderr diagnostics information about log file is displayed
+# shellcheck disable=SC2329
 Log::requireLoad() {
   export REQUIRE_FUNCTION_LOG_REQUIRE_LOAD_LOADED=1
 
@@ -769,6 +770,7 @@ Log::rotate() {
 # @env BASH_FRAMEWORK_THEME String theme to use
 # @env LOAD_THEME int 0 to avoid loading theme
 # @exitcode 0 always successful
+# shellcheck disable=SC2329
 UI::requireTheme() {
   export REQUIRE_FUNCTION_UI_REQUIRE_THEME_LOADED=1
 
@@ -859,6 +861,7 @@ UI::theme() {
 }
 # FUNCTIONS
 
+# shellcheck disable=SC2329
 optionHelpCallback() {
   "simpleCommandHelp"
   exit 0
@@ -882,20 +885,24 @@ Log::requireLoad() {
   export REQUIRE_FUNCTION_LOG_REQUIRE_LOAD_LOADED=1
 }
 
+# shellcheck disable=SC2329
 defaultBeforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
   Log::requireLoad
 }
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   defaultBeforeParseCallback
 }
 
+# shellcheck disable=SC2329
 defaultAfterParseCallback() {
   :
 }
 
+# shellcheck disable=SC2329
 afterParseCallback() {
   defaultAfterParseCallback
 }

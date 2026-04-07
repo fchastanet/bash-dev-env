@@ -5,18 +5,7 @@ minimum_pre_commit_version: 3.5.0
 fail_fast: true
 repos:
   - repo: local
-    # this hook is not intended to be run on github
-    # it just allows to generate the same pre-commit
-    # file with some specific option to github
     hooks:
-      - id: preCommitGeneration
-        name: preCommitGeneration
-        entry: .github/preCommitGeneration.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-        require_serial: true
-        stages: [pre-commit, pre-push, manual]
       - id: v8r
         name: v8r
         entry: npx -y v8r --ci .v8rrc.yaml
@@ -48,12 +37,6 @@ repos:
             ^src/_installScripts/_Configs/VsCodeConfig-conf/settings.json$|
             /testsData/
           )
-      - id: cspell
-        name: cspell
-        entry: npx -y cspell lint --quiet --verbose --dot .
-        language: system
-        pass_filenames: false
-        stages: [pre-commit, manual]
 
   - repo: https://github.com/executablebooks/mdformat
     # Do this before other tools "fixing" the line endings
@@ -186,6 +169,7 @@ repos:
           - --write-changes
         exclude: >
           (?x)(
+            ^.bash-compiler$|
             ^installScripts/|
             ^bin/|
             ^install$|
@@ -231,8 +215,9 @@ repos:
         exclude: /testsData/
 
   - repo: https://github.com/fchastanet/bash-tools-framework
-    rev: 6.2.5
+    rev: 6.3.4
     hooks:
+      - id: cspellForbidden
       - id: fixShebangExecutionBit
       - id: awkLint
       - id: shellcheckLint
@@ -242,6 +227,8 @@ repos:
       - id: frameworkLintGithubAction
         args: [--expected-warnings-count, "0", --format, checkstyle, --theme, default-force, --display-level, WARNING]
       - id: plantuml
+      - id: hugoUpdateLastmod
+        stages: [pre-commit]
 
   - repo: https://github.com/fchastanet/bash-compiler
     rev: 3.2.1

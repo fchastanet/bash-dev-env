@@ -1,4 +1,6 @@
 FRAMEWORK_ROOT_DIR="${ROOT_DIR}/vendor/bash-tools-framework"
 BASH_DEV_ENV_ROOT_DIR="${ROOT_DIR}"
 TEMPLATES_ROOT_DIR="${DEFAULT_TEMPLATE_FOLDER}"
-FILTER_REGEX_EXCLUDE="^vendor/|^srcAlt/"
+# go regexp do not support negative lookahead, so we need to list all the possible combinations of characters that do not match "DependencySample" after "srcAlt/"
+# equivalent to "srcAlt/(?!DependencySample)"
+FILTER_REGEX_EXCLUDE="^vendor/|^srcAlt/(.{0,15}$|[^D].*|D[^e].*|De[^p].*|Dep[^e].*|Depe[^n].*|Depen[^d].*|Depende[^n].*|Dependen[^c].*|Dependenc[^y].*|Dependency[^S].*|DependencyS[^a].*|DependencySa[^m].*|DependencySam[^p].*|DependencySamp[^l].*|DependencySampl[^e].*)"

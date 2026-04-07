@@ -8,4 +8,4 @@ binData:
       beforeParseCallbacks:
         - upgradeGithubReleaseBeforeParseCallback
       definitionFiles:
-        51: "${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/upgradeGithubRelease.sh"
+        80: "${BASH_DEV_ENV_ROOT_DIR}/src/_commandDefinitions/upgradeGithubRelease.sh"

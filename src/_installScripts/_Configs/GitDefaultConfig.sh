@@ -3,6 +3,7 @@
 # include functions for postConfigure.sh scripts
 # Assert::dirExists
 
+# shellcheck disable=SC2329
 gitDefaultConfigBeforeParseCallback() {
   Ssh::requireSshKeygenCommand
   Ssh::requireSshKeyscanCommand

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck disable=SC2329
 optionHelpCallback() {
   "{{ .Data.binData.commands.default.functionName }}Help"
   exit 0
@@ -23,20 +24,24 @@ Log::requireLoad() {
   export REQUIRE_FUNCTION_LOG_REQUIRE_LOAD_LOADED=1
 }
 
+# shellcheck disable=SC2329
 defaultBeforeParseCallback() {
   Env::requireLoad
   UI::requireTheme
   Log::requireLoad
 }
 
+# shellcheck disable=SC2329
 beforeParseCallback() {
   defaultBeforeParseCallback
 }
 
+# shellcheck disable=SC2329
 defaultAfterParseCallback() {
   :
 }
 
+# shellcheck disable=SC2329
 afterParseCallback() {
   defaultAfterParseCallback
 }

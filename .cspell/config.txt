@@ -247,8 +247,8 @@ tracefs
 twosuperior
 tzdata
 udev
-unindexed
 UNINDEXED
+unindexed
 unstaged
 upgrader
 usbfs

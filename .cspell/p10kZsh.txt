@@ -9,8 +9,8 @@ deathray
 DIRENV
 Direnv
 direnv
-dotnet
 DOTNET
+dotnet
 fluxctl
 GCLOUD
 gcloud
@@ -44,8 +44,8 @@ nodeenv
 NODENV
 Nodenv
 nodenv
-nordvpn
 NORDVPN
+nordvpn
 OMZL
 OVERTYPE
 overtype

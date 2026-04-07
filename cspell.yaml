@@ -7,77 +7,98 @@ caseSensitive: true
 useGitignore: true
 enableGlobDot: true
 ignorePaths:
-  - "**/testsData/**"
-  - "installScripts/**"
-  - "srcAlt/DependencySample/installScripts/**"
-  - "src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/themes.d/ohmyposhThemes/jandedobbeleer.json"
-  - "src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/themes.d/starshipThemes/default.toml"
-  - distro
-  - install
-  - .vscode
-  - ".cspell/**"
   - .git/**
   - "**/.git/**"
-  - ".history/**"
   - "**/node_modules/**"
-  - "**/vscode-extension/**"
+  - .bash-compiler
+  - .history/**
+  - logs/**
   - "**/logs/**"
-  - megalinter-reports
+  - bin/**
+  - "**/bin/**"
+  - "**/testsData/**"
+  - package-lock.json
+  - "**/*.svg"
+  - .vscode
+  - .cspell/**
   - report
   - .jscpd.json
+  - megalinter-reports
   - "*-megalinter_file_names_cspell.txt"
   - "**/*megalinter_file_names_cspell.txt"
   - .shellcheckrc
-  - "**/bin/**"
-  - "vendor/**"
+  - vendor/**
   - "**/backup/**"
   - commit-msg.md
-  - ".mega-linter*.yml"
-  - ".env"
+  - .mega-linter*.yml
+  - TODO.md
+  - .env
+  - installScripts/**
+  - srcAlt/DependencySample/installScripts/**
+  - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/themes.d/ohmyposhThemes/jandedobbeleer.json
+  - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/themes.d/starshipThemes/default.toml
   - src/_installScripts/_Configs/VsCodeConfig-conf/vscode-extensions-by-profile/*.md
-
+  - distro
+  - install
 dictionaryDefinitions:
+  - name: forbidden
+    addWords: false
+    path: .cspell/forbidden.txt
   - name: myBash
-    path: ".cspell/bash.txt"
+    path: .cspell/bash.txt
+    addWords: true
+  - name: githubWorkflow
+    path: .cspell/githubWorkflow.txt
     addWords: true
   - name: config
-    path: ".cspell/config.txt"
-    addWords: true
-  - name: myZsh
-    path: ".cspell/myZsh.txt"
+    path: .cspell/config.txt
     addWords: true
   - name: mySoftwares
-    path: ".cspell/softwares.txt"
+    path: .cspell/softwares.txt
     addWords: true
-  - name: dirColors
-    path: ".cspell/dirColors.txt"
-    addWords: false
-  - name: readme
-    path: ".cspell/readme.txt"
+  - name: markdown
+    path: .cspell/markdown.txt
     addWords: true
   - name: lintersConfig
-    path: ".cspell/lintersConfig.txt"
+    path: .cspell/lintersConfig.txt
     addWords: true
+  # Specific dictionaries for this repo
   - name: myAwk
-    path: ".cspell/myAwk.txt"
+    path: .cspell/myAwk.txt
+    addWords: true
+  - name: dirColors
+    path: .cspell/dirColors.txt
+    addWords: false
+  - name: myZsh
+    path: .cspell/myZsh.txt
     addWords: true
   - name: p10kZsh
-    path: ".cspell/p10kZsh.txt"
+    path: .cspell/p10kZsh.txt
     addWords: true
   - name: myPython
-    path: ".cspell/python.txt"
+    path: .cspell/python.txt
     addWords: true
   - name: vsCodeSettings
-    path: ".cspell/vsCodeSettings.txt"
+    path: .cspell/vsCodeSettings.txt
     addWords: true
 
-# https://github.com/streetsidesoftware/cspell/blob/main/packages/cspell/README.md#languagesettings
 languageSettings:
-  - languageId: dirColors
+  - languageId: githubWorkflow
     locale: "*"
     dictionaries:
-      - dirColors
-
+      - githubWorkflow
+      - bash
+      - go
+      - myBash
+      - mySoftwares
+      - software
+  - languageId: config
+    locale: "*"
+    caseSensitive: true
+    dictionaries:
+      - config
+      - mySoftwares
+      - software
   - languageId: shellscript
     locale: "*"
     dictionaries:
@@ -86,11 +107,18 @@ languageSettings:
       - mySoftwares
       - software
 
-  - languageId: javascript
+  - languageId: markdown
     locale: "*"
     dictionaries:
+      - markdown
       - mySoftwares
+      - softwareTerms
 
+  # Specific language settings for this repo
+  - languageId: dirColors
+    locale: "*"
+    dictionaries:
+      - dirColors
   - languageId: zshScript
     locale: "*"
     dictionaries:
@@ -98,30 +126,68 @@ languageSettings:
       - myZsh
       - mySoftwares
       - softwareTerms
-
-  - languageId: markdown
-    locale: "*"
-    dictionaries:
-      - readme
-      - mySoftwares
-      - softwareTerms
-
   - languageId: python
     locale: "*"
     dictionaries:
       - python
       - myPython
-
-# OVERRIDES
-overrides:
-  - filename: "**/*.bats"
-    languageId: shellscript
+  - languageId: javascript
+    locale: "*"
     dictionaries:
-      - loremIpsum
-
-  - filename: "*.yml"
+      - mySoftwares
+# ----------
+overrides:
+  - filename:
+      - ".*"
+      - "*.yml"
+      - "*.yaml"
+      - "configs/site-config.yaml"
+      - "*.toml"
+      - "package.json"
+    languageId: config
+  - filename:
+      - .github/**/*.yml
+      - .github/*.yml
+      - templates-examples/**
+    languageId: githubWorkflow
+  - filename:
+      - "*.yml"
+      - "*.yaml"
+      - "*.toml"
     dictionaries:
       - lintersConfig
+  - filename:
+      - LICENSE
+      - "**/*.md"
+      - "**/*-help.txt"
+    languageId: markdown
+  - filename: "**/*.html"
+    dictionaries:
+      - mySoftwares
+      - software
+
+  # Specific overrides for this repo
+  - languageId: shellscript
+    filename:
+      - "**/*.sh"
+      - "*.bash"
+      - .github/copilot-instructions.md
+      - "*.{yaml,yml}"
+      - "**/*.bats"
+      - "**/*.env"
+      - ".env.*"
+      - .framework-config
+      - .gitattributes
+      - .gitignore
+      - "**/update-motd.d/**"
+      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.bashrc
+      - src/_installScripts/Aws/Awsume-conf/.bash-dev-env/profile.d/awsume.zsh
+      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.bash_logout
+      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.profile
+      - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/home/.zshenv
+    dictionaries:
+      - config
+      - mySoftwares
 
   - filename:
       - "*.conf"
@@ -148,108 +214,59 @@ overrides:
       - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-key-bindings.zsh
       - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-omz.zsh
       - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-syntax-complete-suggest.zsh
-      - "src/_installScripts/_Configs/MotdDefaultConfig-conf/.bash-dev-env/interactive.d/motd.zsh"
+      - src/_installScripts/_Configs/MotdDefaultConfig-conf/.bash-dev-env/interactive.d/motd.zsh
     dictionaries:
       - config
       - mySoftwares
-
-  - filename: "**/*.html"
-    dictionaries:
-      - mySoftwares
-      - software
-
-  - filename: "**/*.md"
-    languageId: markdown
-
-  - filename: LICENSE
-    dictionaries:
-      - readme
-
-  - languageId: shellscript
-    filename:
-      - src/_installScripts/_Configs/ShellBashDefaultConfig-conf/home/.bashrc
-      - .gitattributes
-      - .gitignore
-      - "**/update-motd.d/**"
-      - .framework-config
-      - .github/**/*.{yml,yaml}
-      - \..*
-      - "*.{yaml,yml}"
-      - "*.sh"
-      - "*.bash"
-      - src/_installScripts/Aws/Awsume-conf/.bash-dev-env/profile.d/awsume.zsh
-    dictionaries:
-      - config
-      - mySoftwares
-
-  - filename:
-      - "**/settings.json"
-      - "VsCodeConfig-profiles/convert-vscode-profiles.js"
-    dictionaries:
-      - vsCodeSettings
-      - mySoftwares
-
-  - filename:
-      - ".github/copilot-instructions.md"
-      - ".github/instructions/**"
-      - ".github/skills/**"
-      - ".github/agents/**"
-      - ".github/commit-message.instructions.md"
-    dictionaries:
-      - readme
-      - mySoftwares
-      - bash
-      - myBash
-      - softwareTerms
-
   - filename:
       - src/_installScripts/_Configs/VsCodeConfig-conf/vsCode-conf/Python.code-profile
     dictionaries:
+      - mySoftwares
       - python
       - myPython
-      - mySoftwares
-
   - filename: "**/*.awk"
     dictionaries:
       - myAwk
       - mySoftwares
       - software
-
   - filename: "**/.p10k.zsh"
     dictionaries:
       - bash
       - p10kZsh
       - softwareTerms
-
   - filename:
       - "**/*.zsh"
       - "**/.zshrc"
       - "**/.zprofile"
-      - "src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-compinstall.zsh"
+      - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/interactive.d/zsh-compinstall.zsh
     languageId: zshScript
-
   - filename: "**/*.ps1"
     dictionaries:
       - powershell
       - mySoftwares
       - softwareTerms
-
   - filename: "**/.dir_colors"
     dictionaries:
       - dirColors
-
+  - filename:
+      - "**/settings.json"
+      - VsCodeConfig-profiles/convert-vscode-profiles.js
+    dictionaries:
+      - vsCodeSettings
+      - mySoftwares
 patterns:
   - name: urls
     pattern: "/https?://([^ \t\"'()]+)/g"
   - name: packages
-    pattern: "/[-A-Za-z0-9.]+/[-A-Za-z0-9.]+/g"
+    pattern: /[-A-Za-z0-9.]+/[-A-Za-z0-9.]+/g
   - name: markdownToc
-    pattern: "\\]\\(#[^)]+\\)$"
-
+    pattern: \]\(#[^)]+\)$
 ignoreRegExpList:
   - urls
   - packages
   - markdownToc
-
 enableFiletypes:
   - shellscript
+
+dictionaries:
+  - forbidden

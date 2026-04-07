@@ -63,6 +63,7 @@ INT
 keychain
 KHTML
 killall
+Lastmod
 lastpipe
 lazyload
 libkrb
@@ -113,9 +114,9 @@ strfile
 strftime
 Struct
 substr
-sudoer
-Sudoer
 SUDOER
+Sudoer
+sudoer
 SYMFONY
 tarignore
 tempdir

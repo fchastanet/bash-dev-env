@@ -22,3 +22,6 @@ src/_commandDefinitions/generated
 !.env.distro.*.template
 
 megalinter-reports/
+.cspell/forbidden.txt
+
+.pre-commit-config-github.yaml
