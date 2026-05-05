@@ -156,6 +156,7 @@ oldmode
 OMZP
 oneline
 ovpn
+oxipng
 oxsecurity
 pagedown
 pageup
@@ -258,6 +259,7 @@ Vsbycmmq
 Wayback
 wayback
 wddx
+webp
 wekyb
 widthtype
 wikilinks

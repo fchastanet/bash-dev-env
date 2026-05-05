@@ -10,6 +10,8 @@ errexit
 fchastanet
 hostnames
 Jetbrains
+Lastmod
+lastmod
 linux
 listenport
 openapi

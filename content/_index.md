@@ -7,7 +7,12 @@ type: docs
 weight: 10
 creationDate: 2026-03-01
 lastUpdated: 2026-03-01
+date: '2026-05-06T00:23:08+02:00'
+lastmod: '2026-05-06T00:23:08+02:00'
+version: '1.0'
 ---
+
+{{< img src="assets/bash-dev-env-homepage.png" alt="Bash-dev-env illustration" >}}
 
 **Bash Dev Env** is a comprehensive Bash-based development environment installation and configuration system for
 Ubuntu-based distributions (WSL, VirtualBox, or native).
