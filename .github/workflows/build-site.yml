@@ -17,6 +17,7 @@ jobs:
       site-name: "bash-dev-env"
       checkout-repo: "fchastanet/bash-dev-env"
       site-dir: "_site-content"
+    secrets: inherit
     permissions:
       contents: read
       pages: write
