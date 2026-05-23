@@ -45,7 +45,7 @@ FILEIO_REPORTER: false
 PRE_COMMANDS:
   - command: env
     cwd: "workspace"
-  - command: npm install eslint-plugin-json eslint-config-prettier
+  - command: yarn install --immutable
     cwd: "workspace"
 POST_COMMANDS:
   # FIX files set as root user

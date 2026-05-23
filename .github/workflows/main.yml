@@ -133,7 +133,7 @@ jobs:
 
       # install npm dependencies for pre-commit hooks
       - name: Install npm dependencies for pre-commit hooks
-        run: npm ci --no-audit --no-fund
+        run: yarn install --immutable
 
       - name: Transform pre-commit config for GitHub
         if: ${{ success() }}

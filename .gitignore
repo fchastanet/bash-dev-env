@@ -25,3 +25,5 @@ megalinter-reports/
 .cspell/forbidden.txt
 
 .pre-commit-config-github.yaml
+
+.yarn/install-state.gz

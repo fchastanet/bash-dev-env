@@ -8,7 +8,7 @@ repos:
     hooks:
       - id: v8r
         name: v8r
-        entry: npx -y v8r --ci .v8rrc.yaml
+        entry: yarn v8r --ci .v8rrc.yaml
         language: system
         pass_filenames: true
         stages: [pre-commit, pre-push, manual]
@@ -153,7 +153,11 @@ repos:
       - id: check-added-large-files
         # check for non image files larger than 100KB
         args: [--maxkb=128]
-        exclude: \.(avif|heic|heif|jpeg|jpg|png|webp)$
+        exclude: |
+          (?x)(
+            \.(avif|heic|heif|jpeg|jpg|png|webp)$|
+            ^\.pnp\.cjs$
+          )
       - id: forbid-new-submodules
       - id: mixed-line-ending
         args: [--fix=lf]
@@ -203,8 +207,10 @@ repos:
             ^install$|
             ^distro$|
             ^srcAlt|
-            ^package-lock.json$|
-            ^.cspell/codespellrc-.*.txt$|
+            ^yarn\.lock$|
+            ^\.pnp\.cjs$|
+            ^package-lock\.json$|
+            ^.cspell/codespellrc-.*\.txt$|
             ^src/_installScripts/_Configs/VsCodeConfig-conf/profiles/
           )
 
@@ -216,7 +222,8 @@ repos:
         exclude: |
           (?x)(
             \.md$|
-            ^\.vscode/.*\.code-snippets$
+            ^\.vscode/.*\.code-snippets$|
+            ^\.pnp\..*
           )
 
   - repo: https://github.com/fchastanet/jumanjihouse-pre-commit-hooks

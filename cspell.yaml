@@ -33,6 +33,8 @@ ignorePaths:
   - .mega-linter*.yml
   - TODO.md
   - .env
+  - .pnp.cjs
+  - .pnp.loader.mjs
   - installScripts/**
   - srcAlt/DependencySample/installScripts/**
   - src/_installScripts/_Configs/ShellZshDefaultConfig-conf/.bash-dev-env/themes.d/ohmyposhThemes/jandedobbeleer.json

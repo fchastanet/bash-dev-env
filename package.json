@@ -9,6 +9,7 @@
   "devDependencies": {
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-json": "^4.0.1",
+    "v8r": "^6.0.0",
     "v8r-plugin-emoji-output": "^0.1.0"
   },
   "dependencies": {
