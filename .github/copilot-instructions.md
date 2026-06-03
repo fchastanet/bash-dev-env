@@ -111,11 +111,11 @@ src/_installScripts/Category/ScriptName/
 └── ScriptName-hooks/            # Optional: lifecycle hooks
 ```
 
-2. **Implement required functions** in `ScriptName.sh`
+1. **Implement required functions** in `ScriptName.sh`
 
-3. **Configure binary.yaml** (see [Binary yaml Files](#binary-yaml-files))
+2. **Configure binary.yaml** (see [Binary yaml Files](#binary-yaml-files))
 
-4. **Add to profile** in `profiles/profile.*.sh`:
+3. **Add to profile** in `profiles/profile.*.sh`:
 
 ```bash
 CONFIG_LIST+=(
@@ -123,7 +123,7 @@ CONFIG_LIST+=(
 )
 ```
 
-5. **Compile**: Run `pre-commit run bash-compiler -a`
+1. **Compile**: Run `pre-commit run bash-compiler -a`
 
 ### Install Script Patterns
 
@@ -451,14 +451,14 @@ bad: some-command --long-option value --another-option value --another-option
 ./test.sh scrasnups/build:bash-tools-ubuntu-5.3 path/to/failing.bats
 ```
 
-3. **Enable debug**:
+1. **Enable debug**:
 
 ```bash
 KEEP_TEMP_FILES=1 ./test.sh ... # Keep temp files
 ```
 
-4. **Fix issues** and re-run
-5. **Commit** fixes
+1. **Fix issues** and re-run
+2. **Commit** fixes
 
 ## Troubleshooting
 
