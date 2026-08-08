@@ -6,9 +6,10 @@ type: docs
 weight: 1
 creationDate: 2026-03-01
 lastUpdated: 2026-03-01
+date: '2026-08-09T01:15:43+02:00'
+lastmod: '2026-08-09T01:15:43+02:00'
+version: '1.0'
 ---
-
-{{< articles-list >}}
 
 ## 1. Excerpt
 
