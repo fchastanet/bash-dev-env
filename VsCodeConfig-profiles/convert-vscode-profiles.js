@@ -35,10 +35,10 @@
  * - The re-encoded .json file is structurally compatible with VS Code but won't retain the original comments.
  */
 
-const fs = require("fs");
-const path = require("path");
-const util = require("util");
-const jsoncParser = require("jsonc-parser");
+const fs = require('fs');
+const path = require('path');
+const util = require('util');
+const jsoncParser = require('jsonc-parser');
 
 // Promisify fs functions
 const readFile = util.promisify(fs.readFile);
@@ -48,13 +48,13 @@ const stat = util.promisify(fs.stat);
 
 // ANSI color codes for better error highlighting
 const colors = {
-  red: "\x1b[31m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  magenta: "\x1b[35m",
-  cyan: "\x1b[36m",
-  reset: "\x1b[0m",
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+  reset: '\x1b[0m',
 };
 
 // List of key patterns that might indicate passwords or sensitive data
@@ -83,22 +83,22 @@ const passwordsFound = {
  */
 function getParseErrorMessage(errorCode) {
   const errorMessages = {
-    1: "Invalid symbol",
-    2: "Invalid file ending",
-    3: "Invalid comment",
-    4: "Comment not permitted",
-    5: "Invalid escape character in string",
-    6: "Invalid character in string",
-    7: "Property name expected",
-    8: "Comma expected",
-    9: "Colon expected",
-    10: "Value expected",
-    11: "End of file expected",
-    12: "Invalid number format",
-    13: "Invalid number format",
-    14: "Property name expected",
-    15: "Invalid trailing comma",
-    16: "Expected value",
+    1: 'Invalid symbol',
+    2: 'Invalid file ending',
+    3: 'Invalid comment',
+    4: 'Comment not permitted',
+    5: 'Invalid escape character in string',
+    6: 'Invalid character in string',
+    7: 'Property name expected',
+    8: 'Comma expected',
+    9: 'Colon expected',
+    10: 'Value expected',
+    11: 'End of file expected',
+    12: 'Invalid number format',
+    13: 'Invalid number format',
+    14: 'Property name expected',
+    15: 'Invalid trailing comma',
+    16: 'Expected value',
   };
 
   return errorMessages[errorCode] || `Unknown error (code: ${errorCode})`;
@@ -112,25 +112,25 @@ function getParseErrorMessage(errorCode) {
  */
 function getErrorSuggestion(errorCode) {
   const suggestions = {
-    1: "Check for invalid symbols or characters that are not allowed in JSON.",
-    2: "The file ended unexpectedly. Check for missing closing brackets, braces, or quotes.",
-    3: "Check for invalid characters in a comment.",
-    4: "A comment is not allowed in this position.",
-    5: "Check for invalid escape sequences in strings.",
-    6: "Invalid character in a string literal. Ensure special characters are properly escaped.",
-    7: "Property names should be enclosed in double quotes.",
-    8: "Expected a comma between object properties or array elements.",
-    9: "Expected a colon after property name in an object.",
-    10: "Value expected. Check for missing values or trailing commas.",
-    11: "End of file expected. There might be extra content after valid JSON.",
-    12: "Invalid number format.",
-    13: "Invalid characters in number format.",
-    14: "Property key expected. Check for missing or invalid object property names.",
+    1: 'Check for invalid symbols or characters that are not allowed in JSON.',
+    2: 'The file ended unexpectedly. Check for missing closing brackets, braces, or quotes.',
+    3: 'Check for invalid characters in a comment.',
+    4: 'A comment is not allowed in this position.',
+    5: 'Check for invalid escape sequences in strings.',
+    6: 'Invalid character in a string literal. Ensure special characters are properly escaped.',
+    7: 'Property names should be enclosed in double quotes.',
+    8: 'Expected a comma between object properties or array elements.',
+    9: 'Expected a colon after property name in an object.',
+    10: 'Value expected. Check for missing values or trailing commas.',
+    11: 'End of file expected. There might be extra content after valid JSON.',
+    12: 'Invalid number format.',
+    13: 'Invalid characters in number format.',
+    14: 'Property key expected. Check for missing or invalid object property names.',
     15: "Invalid trailing comma. JSON doesn't allow trailing commas in arrays or objects.",
-    16: "Expected a valid JSON value (string, number, boolean, null, object, or array).",
+    16: 'Expected a valid JSON value (string, number, boolean, null, object, or array).',
   };
 
-  return suggestions[errorCode] || "Check syntax at the highlighted position.";
+  return suggestions[errorCode] || 'Check syntax at the highlighted position.';
 }
 
 function logParseErrors(errors, path) {
@@ -159,35 +159,35 @@ function logParseErrors(errors, path) {
         snippet.substring(markerPos + errorLength);
 
       // Add a caret indicator below the error
-      const caretLine = " ".repeat(markerPos) + colors.yellow + "^" + colors.reset;
-      snippet += "\n" + caretLine;
+      const caretLine = ' '.repeat(markerPos) + colors.yellow + '^' + colors.reset;
+      snippet += '\n' + caretLine;
     }
 
     // Get the line number and column
-    const lines = str.substring(0, error.offset).split("\n");
+    const lines = str.substring(0, error.offset).split('\n');
     const lineNum = lines.length;
     const colNum = lines[lines.length - 1].length + 1;
 
     // Get context for error
-    const lineContent = str.split("\n")[lineNum - 1] || "";
+    const lineContent = str.split('\n')[lineNum - 1] || '';
     const suggestion = getErrorSuggestion(error.error);
 
     console.warn(
-      `\n${colors.yellow}[Error ${index + 1}]${colors.reset} ${colors.cyan}${errorMessage}${colors.reset} (Code: ${errorCode})`
+      `\n${colors.yellow}[Error ${index + 1}]${colors.reset} ${colors.cyan}${errorMessage}${colors.reset} (Code: ${errorCode})`,
     );
     console.warn(
-      `${colors.blue}Location:${colors.reset} line ${lineNum}, column ${colNum} in ${colors.green}${path}${colors.reset}`
+      `${colors.blue}Location:${colors.reset} line ${lineNum}, column ${colNum} in ${colors.green}${path}${colors.reset}`,
     );
 
     // Show the specific line with error
     if (lineContent) {
-      console.warn(`${colors.blue}Line ${lineNum}:${colors.reset} ${lineContent.replace(/\n/g, "")}`);
+      console.warn(`${colors.blue}Line ${lineNum}:${colors.reset} ${lineContent.replace(/\n/g, '')}`);
     }
 
     console.warn(`${colors.yellow}↓ Context around error ↓${colors.reset}`);
-    console.warn("―".repeat(40));
+    console.warn('―'.repeat(40));
     console.warn(snippet.replace(/\n/g, `${colors.magenta}↵${colors.reset}\n`));
-    console.warn("―".repeat(40));
+    console.warn('―'.repeat(40));
     console.warn(`${colors.green}Suggestion:${colors.reset} ${suggestion}`);
   });
 }
@@ -199,14 +199,14 @@ function logParseErrors(errors, path) {
  * @param {string} [path=''] - Current path for logging purposes
  * @returns {any} - Parsed object or the original string if not valid JSONC
  */
-function tryParseJsonc(str, path = "") {
-  if (typeof str !== "string") {
+function tryParseJsonc(str, path = '') {
+  if (typeof str !== 'string') {
     return str;
   }
 
   // Quick check to see if this looks like JSON/JSONC (starts with { or [)
   const trimmed = str.trim();
-  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
     return str;
   }
 
@@ -236,14 +236,14 @@ function tryParseJsonc(str, path = "") {
  * @param {string} [path=''] - Current path for logging purposes
  * @returns {any} - The processed object with decoded properties
  */
-function recursivelyDecodeJsonc(obj, path = "") {
+function recursivelyDecodeJsonc(obj, path = '') {
   // Handle null and undefined
   if (obj === null || obj === undefined) {
     return obj;
   }
 
   // If it's a string, try to parse it as JSONC
-  if (typeof obj === "string") {
+  if (typeof obj === 'string') {
     const parsed = tryParseJsonc(obj, path);
     if (parsed !== obj) {
       // It was parsed successfully, so recurse into the parsed object
@@ -258,7 +258,7 @@ function recursivelyDecodeJsonc(obj, path = "") {
   }
 
   // If it's an object, recursively process each property
-  if (typeof obj === "object") {
+  if (typeof obj === 'object') {
     const result = {};
     for (const key of Object.keys(obj)) {
       result[key] = recursivelyDecodeJsonc(obj[key], path ? `${path}.${key}` : key);
@@ -286,7 +286,7 @@ function decodeProfile(content) {
     // Recursively decode all nested JSON/JSONC strings
     return recursivelyDecodeJsonc(profile);
   } catch (e) {
-    console.error("Error parsing profile:", e);
+    console.error('Error parsing profile:', e);
     throw e;
   }
 }
@@ -312,7 +312,7 @@ function parseTreeWithComments(content) {
     disallowComments: false,
   });
 
-  return {tree, obj, errors};
+  return { tree, obj, errors };
 }
 
 /**
@@ -330,11 +330,11 @@ function stringifyJsonc(obj) {
 function isIgnoredKey(currentPath) {
   // Check if the current path matches any ignored patterns
   return (
-    currentPath === "commandPalette.mru.cache" ||
-    currentPath === "storage.commandPalette.mru.cache" ||
-    currentPath === "globalState.storage.commandPalette.mru.cache" ||
-    currentPath.includes("remote.tunnels.toRestore.") ||
-    currentPath.includes("project-scopes.scopes")
+    currentPath === 'commandPalette.mru.cache' ||
+    currentPath === 'storage.commandPalette.mru.cache' ||
+    currentPath === 'globalState.storage.commandPalette.mru.cache' ||
+    currentPath.includes('remote.tunnels.toRestore.') ||
+    currentPath.includes('project-scopes.scopes')
   );
 }
 
@@ -346,14 +346,14 @@ function isIgnoredKey(currentPath) {
  * @param {string} [filePath=''] - File being processed (for logging)
  * @returns {any} - Sanitized profile data with passwords redacted
  */
-function maskSensitiveInfo(profile, currentPath = "", filePath = "") {
+function maskSensitiveInfo(profile, currentPath = '', filePath = '') {
   // Handle null and undefined
   if (profile === null || profile === undefined) {
     return profile;
   }
 
   // Handle primitive values
-  if (typeof profile !== "object") {
+  if (typeof profile !== 'object') {
     return profile;
   }
 
@@ -361,7 +361,7 @@ function maskSensitiveInfo(profile, currentPath = "", filePath = "") {
   const result = Array.isArray(profile) ? [] : {};
 
   for (const key in profile) {
-    if (Object.hasOwnProperty.call(profile, key)) {
+    if (Object.hasOwn(profile, key)) {
       const value = profile[key];
       const keyPath = currentPath ? `${currentPath}.${key}` : key;
 
@@ -371,7 +371,7 @@ function maskSensitiveInfo(profile, currentPath = "", filePath = "") {
           result[key] = [];
           console.log(`${colors.green}INFO:${colors.reset} Cleared ${keyPath} in ${filePath}`);
           continue;
-        } else if (keyPath.includes("commandPalette.mru.cache") && Object.hasOwnProperty.call(value, "entries")) {
+        } else if (keyPath.includes('commandPalette.mru.cache') && Object.hasOwn(value, 'entries')) {
           // Special case for commandPalette.mru.cache.entries
           value.entries = [];
           result[key] = value;
@@ -392,14 +392,14 @@ function maskSensitiveInfo(profile, currentPath = "", filePath = "") {
         }
 
         // Mask the value
-        result[key] = "[SECURED]";
+        result[key] = '[SECURED]';
 
         if (filePath) {
           console.warn(
-            `${colors.yellow}WARNING:${colors.reset} Sensitive data detected in "${colors.cyan}${keyPath}${colors.reset}" in ${filePath}. Redacting from output.`
+            `${colors.yellow}WARNING:${colors.reset} Sensitive data detected in "${colors.cyan}${keyPath}${colors.reset}" in ${filePath}. Redacting from output.`,
           );
         }
-      } else if (typeof value === "object" && value !== null) {
+      } else if (typeof value === 'object' && value !== null) {
         // Recur for nested objects/arrays
         result[key] = maskSensitiveInfo(value, keyPath, filePath);
       } else {
@@ -430,17 +430,17 @@ function isSensitiveKey(key) {
  * @returns {boolean} - True if the value might be a password
  */
 function looksLikeSecret(value) {
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== 'string' || value.length === 0) {
     return false;
   }
 
   // Skip URLs
-  if (value.startsWith("http://") || value.startsWith("https://")) {
+  if (value.startsWith('http://') || value.startsWith('https://')) {
     return false;
   }
 
   // Skip common non-secret values
-  const nonSecretValues = ["true", "false", "null", "undefined", "none", "off", "on", "0", "1"];
+  const nonSecretValues = ['true', 'false', 'null', 'undefined', 'none', 'off', 'on', '0', '1'];
   if (nonSecretValues.includes(value.toLowerCase())) {
     return false;
   }
@@ -456,17 +456,17 @@ function looksLikeSecret(value) {
  */
 function encodeProfile(profile) {
   // Create a copy of the profile to modify
-  const encodedProfile = {...profile};
+  const encodedProfile = { ...profile };
 
   // The settings value should be a JSON string in VS Code profiles
-  if (encodedProfile.settings && typeof encodedProfile.settings === "object") {
+  if (encodedProfile.settings && typeof encodedProfile.settings === 'object') {
     try {
       // Format settings nicely but comments will be lost
       encodedProfile.settings = JSON.stringify(encodedProfile.settings, null, 2);
     } catch (e) {
       console.warn(
         `${colors.yellow}Warning:${colors.reset} Error stringifying settings, using simpler approach:`,
-        e.message
+        e.message,
       );
       encodedProfile.settings = JSON.stringify(encodedProfile.settings);
     }
@@ -475,7 +475,7 @@ function encodeProfile(profile) {
   // Re-encode other string properties that might be JSON
   for (const key in encodedProfile) {
     const value = encodedProfile[key];
-    if (typeof value === "object" && value !== null && key !== "settings") {
+    if (typeof value === 'object' && value !== null && key !== 'settings') {
       // For other object properties, check if they were originally JSON strings
       try {
         // In a VS Code profile, many properties might be stored as JSON strings
@@ -491,23 +491,23 @@ function encodeProfile(profile) {
 }
 
 async function writeFileContent(filePath, content) {
-  let outputContent = "";
+  let outputContent = '';
   try {
     // For now, use the standard stringify method
     // In a future version we could use jsonc-parser's modify API for more targeted changes
     outputContent = stringifyJsonc(content);
-    outputContent = outputContent + "\n"; // Ensure it ends with a newline
+    outputContent = outputContent + '\n'; // Ensure it ends with a newline
 
     // Note: Unfortunately, comments are lost during the initial parse of deeply nested JSON
     console.log(
-      `${colors.yellow}Note:${colors.reset} Comments in the original file cannot be fully preserved in the decoded output`
+      `${colors.yellow}Note:${colors.reset} Comments in the original file cannot be fully preserved in the decoded output`,
     );
   } catch (e) {
     console.warn(`${colors.yellow}Warning:${colors.reset} Error while trying to encode json:`, e.message);
   }
 
   // Write the decoded file with pretty formatting
-  await writeFile(filePath, outputContent, "utf8");
+  await writeFile(filePath, outputContent, 'utf8');
   console.log(`File saved to ${filePath}`);
 }
 
@@ -523,14 +523,14 @@ async function processFile(filePath, profilesDir) {
     console.log(`Processing ${filePath}`);
 
     // Read the file
-    const content = await readFile(filePath, "utf8");
+    const content = await readFile(filePath, 'utf8');
 
     // Try to parse with comments preservation first
-    const {tree, obj, errors} = parseTreeWithComments(content);
+    const { tree, obj, errors } = parseTreeWithComments(content);
 
     if (errors.length > 0) {
       console.warn(
-        `${colors.yellow}Warning:${colors.reset} JSONC parsing encountered ${errors.length} errors but continued`
+        `${colors.yellow}Warning:${colors.reset} JSONC parsing encountered ${errors.length} errors but continued`,
       );
     }
 
@@ -538,32 +538,32 @@ async function processFile(filePath, profilesDir) {
     const decodedProfile = decodeProfile(content);
 
     // Create output directories
-    const decodedDir = path.join(profilesDir, "decoded");
-    const sanitizedDir = path.join(profilesDir, "sanitized");
-    const reEncodedDir = path.join(profilesDir, "re-encoded");
+    const decodedDir = path.join(profilesDir, 'decoded');
+    const sanitizedDir = path.join(profilesDir, 'sanitized');
+    const reEncodedDir = path.join(profilesDir, 're-encoded');
 
     // Ensure directories exist
     if (!fs.existsSync(decodedDir)) {
-      fs.mkdirSync(decodedDir, {recursive: true});
+      fs.mkdirSync(decodedDir, { recursive: true });
     }
     if (!fs.existsSync(sanitizedDir)) {
-      fs.mkdirSync(sanitizedDir, {recursive: true});
+      fs.mkdirSync(sanitizedDir, { recursive: true });
     }
     if (!fs.existsSync(reEncodedDir)) {
-      fs.mkdirSync(reEncodedDir, {recursive: true});
+      fs.mkdirSync(reEncodedDir, { recursive: true });
     }
 
     // Create output filename for decoded version
     const baseFileName = path.basename(filePath);
-    const outputDecodedFileName = baseFileName + ".jsonc";
+    const outputDecodedFileName = baseFileName + '.jsonc';
     const outputDecodedPath = path.join(decodedDir, outputDecodedFileName);
     await writeFileContent(outputDecodedPath, decodedProfile);
 
     // Mask sensitive information
-    const sanitizedProfile = maskSensitiveInfo(decodedProfile, "", filePath);
+    const sanitizedProfile = maskSensitiveInfo(decodedProfile, '', filePath);
 
     // Create output filename for sanitized version
-    const outputSanitizedFileName = baseFileName + ".jsonc";
+    const outputSanitizedFileName = baseFileName + '.jsonc';
     const outputSanitizedPath = path.join(sanitizedDir, outputSanitizedFileName);
     await writeFileContent(outputSanitizedPath, sanitizedProfile);
 
@@ -573,17 +573,17 @@ async function processFile(filePath, profilesDir) {
 
     // Re-encode the sanitized profile and write to new file
     let encodedProfile = encodeProfile(sanitizedProfile);
-    encodedProfile = encodedProfile + "\n"; // Ensure it ends with a newline
-    await writeFile(outputProfilePath, encodedProfile, "utf8");
+    encodedProfile = encodedProfile + '\n'; // Ensure it ends with a newline
+    await writeFile(outputProfilePath, encodedProfile, 'utf8');
 
     console.log(`Re-encoded sanitized profile saved to ${outputProfilePath}`);
 
     // Log any detected passwords
     if (passwordsFound.detected) {
       console.warn(
-        `${colors.yellow}Warning:${colors.reset} Passwords or sensitive data were detected and redacted in the output.`
+        `${colors.yellow}Warning:${colors.reset} Passwords or sensitive data were detected and redacted in the output.`,
       );
-      console.warn(`See keys: ${passwordsFound.paths.join(", ")}`);
+      console.warn(`See keys: ${passwordsFound.paths.join(', ')}`);
     }
   } catch (error) {
     console.error(`Error processing ${filePath}:`, error.message);
@@ -607,7 +607,7 @@ async function processDirectory(dirPath, profilesDir) {
 
       if (stats.isDirectory()) {
         await processDirectory(fullPath, profilesDir);
-      } else if (path.extname(file) === ".code-profile") {
+      } else if (path.extname(file) === '.code-profile') {
         await processFile(fullPath, profilesDir);
       }
     }
@@ -622,7 +622,7 @@ async function deleteCodeProfileFiles(targetDir) {
     for (const file of targetFiles) {
       const filePath = path.join(targetDir, file);
       const stats = await stat(filePath);
-      if (stats.isFile() && path.extname(file) === ".code-profile") {
+      if (stats.isFile() && path.extname(file) === '.code-profile') {
         fs.unlinkSync(filePath);
         console.log(`Deleted obsolete file: ${filePath}`);
       }
@@ -637,7 +637,7 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length !== 2) {
-    console.error("Usage: node convert-vscode-profiles.js <profiles-directory-path> <target-directory-path>");
+    console.error('Usage: node convert-vscode-profiles.js <profiles-directory-path> <target-directory-path>');
     process.exit(1);
   }
 
@@ -646,7 +646,7 @@ async function main() {
 
   // Validate source and target directories
   if (!profilesDir || !targetDir) {
-    console.error("Both profiles directory and target directory paths must be provided");
+    console.error('Both profiles directory and target directory paths must be provided');
     process.exit(1);
   }
   const profilesDirStats = fs.statSync(profilesDir);
@@ -657,13 +657,13 @@ async function main() {
 
   // Create target directory if it doesn't exist
   if (!fs.existsSync(targetDir)) {
-    fs.mkdirSync(targetDir, {recursive: true});
+    fs.mkdirSync(targetDir, { recursive: true });
     console.log(`Created target directory: ${targetDir}`);
   }
 
   const targetDirStats = await stat(targetDir);
   if (!targetDirStats.isDirectory()) {
-    fs.mkdirSync(targetDir, {recursive: true});
+    fs.mkdirSync(targetDir, { recursive: true });
     console.log(`Created target directory: ${targetDir}`);
   }
 
@@ -684,7 +684,7 @@ async function main() {
   }
   // check if source and target directories are not the same
   if (path.resolve(profilesDir) === path.resolve(targetDir)) {
-    console.error("Profiles directory and target directory cannot be the same");
+    console.error('Profiles directory and target directory cannot be the same');
     process.exit(1);
   }
 
@@ -694,11 +694,11 @@ async function main() {
 
   try {
     // delete files in re-encoded directory if it exists
-    const reEncodedDir = path.join(profilesDir, "re-encoded");
+    const reEncodedDir = path.join(profilesDir, 're-encoded');
     await deleteCodeProfileFiles(reEncodedDir);
 
     // Process files in the src subdirectory
-    const srcDir = path.join(profilesDir, "src");
+    const srcDir = path.join(profilesDir, 'src');
     if (fs.existsSync(srcDir)) {
       await processDirectory(srcDir, profilesDir);
     } else {
@@ -717,9 +717,9 @@ async function main() {
         const srcFile = path.join(reEncodedDir, file);
         const destFile = path.join(targetDir, file);
         const stats = await stat(srcFile);
-        if (stats.isFile() && path.extname(file) === ".code-profile") {
-          const content = await readFile(srcFile, "utf8");
-          await writeFile(destFile, content, "utf8");
+        if (stats.isFile() && path.extname(file) === '.code-profile') {
+          const content = await readFile(srcFile, 'utf8');
+          await writeFile(destFile, content, 'utf8');
           console.log(`Copied ${srcFile} to ${destFile}`);
           profilesCount++;
         }
@@ -731,16 +731,16 @@ async function main() {
 
     // Show summary of password detection
     if (passwordsFound.detected) {
-      console.log("\n" + "=".repeat(80));
+      console.log('\n' + '='.repeat(80));
       console.log(
-        `${colors.yellow}SECURITY WARNING:${colors.reset} Passwords or sensitive data were detected and redacted`
+        `${colors.yellow}SECURITY WARNING:${colors.reset} Passwords or sensitive data were detected and redacted`,
       );
-      console.log("The following paths contained sensitive information:");
+      console.log('The following paths contained sensitive information:');
       passwordsFound.paths.forEach((path) => {
         console.log(`- ${colors.cyan}${path}${colors.reset}`);
       });
       console.log('All sensitive data has been replaced by "[SECURED]" string in the output files.');
-      console.log("=".repeat(80) + "\n");
+      console.log('='.repeat(80) + '\n');
     }
   } catch (error) {
     console.error(`Error processing profiles:`, error.message);
@@ -749,6 +749,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("Unhandled error:", error);
+  console.error('Unhandled error:', error);
   process.exit(1);
 });

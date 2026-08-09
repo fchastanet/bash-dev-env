@@ -32,6 +32,7 @@ ignorePaths:
   - commit-msg.md
   - .mega-linter*.yml
   - TODO.md
+  - osv-scanner.toml
   - .env
   - .pnp.cjs
   - .pnp.loader.mjs

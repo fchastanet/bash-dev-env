@@ -1,0 +1,44 @@
+[[IgnoredVulns]]
+id = "GHSA-3jxr-9vmj-r5cp"
+ignoreUntil = 2027-01-01
+reason = "ignore brace-expansion vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-mh99-v99m-4gvg"
+ignoreUntil = 2027-01-01
+reason = "ignore brace-expansion vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-rgw5-rvv9-x895"
+ignoreUntil = 2027-01-01
+reason = "ignore brace-expansion vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-4c8g-83qw-93j6"
+ignoreUntil = 2027-01-01
+reason = "ignore fast-uri vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-7p8r-x3mc-p8w7"
+ignoreUntil = 2027-01-01
+reason = "ignore fast-uri vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-v2hh-gcrm-f6hx"
+ignoreUntil = 2027-01-01
+reason = "ignore fast-uri vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-52cp-r559-cp3m"
+ignoreUntil = 2027-01-01
+reason = "ignore js-yaml vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-5p4m-2wfm-xmqj"
+ignoreUntil = 2027-01-01
+reason = "ignore js-yaml vulnerability in bash-dev-env"
+
+[[IgnoredVulns]]
+id = "GHSA-h67p-54hq-rp68"
+ignoreUntil = 2027-01-01
+reason = "ignore js-yaml vulnerability in bash-dev-env"

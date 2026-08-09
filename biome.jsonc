@@ -13,9 +13,10 @@
     "lineWidth": 100,
   },
   "linter": {
+    "enabled": true,
     "rules": {
-      "recommended": false,
-    },
+      "preset": "recommended"
+    }
   },
   "javascript": {
     "formatter": {

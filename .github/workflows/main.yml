@@ -107,7 +107,7 @@ jobs:
         with:
           python-version: 3.12
 
-      - uses: fchastanet/github-action-setup-shfmt@v4.0.0
+      - uses: mfinelli/setup-shfmt@v4.0.1
 
       - name: Install requirements
         run: |
@@ -130,6 +130,18 @@ jobs:
           authToken: ${{ secrets.GITHUB_TOKEN }}
           context: build-bash-dev-env
           state: pending
+
+      - name: ensure yarn is installed
+        run: |
+          corepack enable
+          corepack prepare yarn@4.18.0 --activate
+          yarn --version
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: 'yarn'
 
       # install npm dependencies for pre-commit hooks
       - name: Install npm dependencies for pre-commit hooks

@@ -13,6 +13,10 @@ DISABLE_LINTERS:
   - JSON_V8R # already included in pre-commit
   - JAVASCRIPT_ES
   - JAVASCRIPT_PRETTIER
+  - JSON_ESLINT_PLUGIN_JSONC
+  - JSX_ESLINT
+  - TSX_ESLINT
+  - TYPESCRIPT_ES
   - RUBY_RUBOCOP
   - REPOSITORY_CHECKOV
   - REPOSITORY_TRIVY
@@ -120,3 +124,10 @@ ACTION_ACTIONLINT_FILTER_REGEX_EXCLUDE: |
 
 SPELL_LYCHEE_ARGUMENTS: --config lychee.toml
 SPELL_LYCHEE_CLI_LINT_MODE: project
+
+JSON_JSONLINT_FILTER_REGEX_EXCLUDE: |
+  (?x)(
+    ^.vscode/launch\.json$|
+    ^src/_installScripts/_Configs/VsCodeConfig-conf/settings\.json$|
+    ^src/_installScripts/_Configs/ShellBashDefaultConfig-conf/\.vscode/argv.json$
+  )
