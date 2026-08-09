@@ -38,6 +38,16 @@ repos:
             /testsData/
           )
 
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.5.5
+    hooks:
+      - id: biome-format
+        stages: [pre-commit, pre-push]
+      - id: biome-check
+        stages: [pre-commit, pre-push]
+      - id: biome-ci
+        stages: [manual]
+
   - repo: https://github.com/sudosubin/pre-commit-image
     rev: v0.1.2
     hooks:
@@ -156,7 +166,8 @@ repos:
         exclude: |
           (?x)(
             \.(avif|heic|heif|jpeg|jpg|png|webp)$|
-            ^\.pnp\.cjs$
+            ^\.pnp\.cjs$|
+            ^installScripts/
           )
       - id: forbid-new-submodules
       - id: mixed-line-ending
@@ -214,18 +225,6 @@ repos:
             ^src/_installScripts/_Configs/VsCodeConfig-conf/profiles/
           )
 
-  - repo: https://github.com/ComPWA/prettier-pre-commit
-    rev: v3.8.1
-    hooks:
-      - id: prettier
-        args: [--cache]
-        exclude: |
-          (?x)(
-            \.md$|
-            ^\.vscode/.*\.code-snippets$|
-            ^\.pnp\..*
-          )
-
   - repo: https://github.com/fchastanet/jumanjihouse-pre-commit-hooks
     rev: 3.0.2
     hooks:
@@ -258,9 +257,29 @@ repos:
       - id: shellcheckLint
       - id: shellcheckLintGithubAction
       - id: frameworkLint
-        args: [--expected-warnings-count, "0", --format, plain, --theme, default-force, --display-level, WARNING]
+        args:
+          [
+            --expected-warnings-count,
+            "0",
+            --format,
+            plain,
+            --theme,
+            default-force,
+            --display-level,
+            WARNING,
+          ]
       - id: frameworkLintGithubAction
-        args: [--expected-warnings-count, "0", --format, checkstyle, --theme, default-force, --display-level, WARNING]
+        args:
+          [
+            --expected-warnings-count,
+            "0",
+            --format,
+            checkstyle,
+            --theme,
+            default-force,
+            --display-level,
+            WARNING,
+          ]
       - id: plantuml
       - id: hugoUpdateLastmod
         stages: [pre-commit]

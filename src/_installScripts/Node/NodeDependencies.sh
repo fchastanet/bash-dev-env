@@ -8,9 +8,10 @@ helpLongDescription() {
   helpDescription
   echo "$(scriptName) -- the following linters are available: "
   echo -e "  - ${__HELP_EXAMPLE}npm-check-updates${__RESET_COLOR}"
-  echo -e "  - ${__HELP_EXAMPLE}prettier${__RESET_COLOR}"
+  echo -e "  - ${__HELP_EXAMPLE}biome${__RESET_COLOR}"
   echo -e "  - ${__HELP_EXAMPLE}sass-lint${__RESET_COLOR}"
   echo -e "  - ${__HELP_EXAMPLE}stylelint${__RESET_COLOR}"
+  echo -e "  - ${__HELP_EXAMPLE}yamllint${__RESET_COLOR}"
   echo -e "  - ${__HELP_EXAMPLE}hjson${__RESET_COLOR}"
 }
 
@@ -53,9 +54,10 @@ install() {
   }
 
   npmInstall npm-check-updates
-  npmInstall prettier
+  npmInstall @biomejs/biome
   npmInstall sass-lint
   npmInstall stylelint
+  npmInstall yamllint
   npmInstall hjson
 
   Log::displayInfo "check node packages update and upgrade"
@@ -71,7 +73,7 @@ testInstall() {
   # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
   source "${HOME}/.bash-dev-env/profile.d/n_path.sh"
   Version::checkMinimal "npm-check-updates" "--version" "17.1.12" || ((++failures))
-  Version::checkMinimal "prettier" "--version" "3.4.2" || ((++failures))
+  Version::checkMinimal "biome" "--version" "2.5.7" || ((++failures))
   Version::checkMinimal "sass-lint" "--version" "1.13.1" || ((++failures))
   Version::checkMinimal "stylelint" "--version" "16.12.0" || ((++failures))
   Version::checkMinimal "hjson" "--version" "3.2.1" || ((++failures))

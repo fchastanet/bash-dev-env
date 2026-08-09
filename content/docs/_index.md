@@ -133,9 +133,8 @@ This project will install, update and configure these non exhaustive dependencie
 
   - hjson
   - npm-check-updates
-  - prettier
+  - biome
   - sass-lint
-  - stylelint
 
 - OpenVpn
 

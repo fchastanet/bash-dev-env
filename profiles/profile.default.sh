@@ -16,6 +16,7 @@ CONFIG_LIST+=(
 CONFIG_LIST+=(
   "installScripts/ShFmt"
   "installScripts/Hadolint"
+  "installScripts/ActionLint"
   "installScripts/Shellcheck"
 )
 

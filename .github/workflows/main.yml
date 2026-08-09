@@ -1,7 +1,7 @@
 ---
 # Lint the code base and launch unit test at each push or pull request
 name: Lint, Test, Build and Deploy
-on: # yamllint disable-line rule:truthy
+on:
   push:
     # execute when pushing only branches, not tags
     branches:
@@ -197,7 +197,6 @@ jobs:
 
       - name: Create Pull Request
         id: cpr
-        # prettier-ignore
         if: >
           env.COND_UPDATED_SOURCES == 'true' &&
           env.COND_APPLY_FIXES_NEEDED == 'true' &&

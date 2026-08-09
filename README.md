@@ -58,7 +58,7 @@ environments, including:
 - Cloud & DevOps: AWS CLI, Awsume, Saml2Aws, Kubernetes tools (Helm, Kind, Minikube), OpenVPN
 - Editors & IDEs: Vim, VS Code (with extension profiles), Jetbrains Toolbox
 - Utilities: Fzf, fd, jq, curl, dos2unix, parallel, pv, unzip, wget, mysql-client, putty-tools
-- Linters & Checkers: ShellCheck, Hadolint, Composer dependencies, Node dependencies (prettier, stylelint, etc.)
+- Linters & Checkers: ShellCheck, Hadolint, Composer dependencies, Node dependencies (biome, yamllint, etc.)
 - Misc: PlantUML, Fortune, Xvfb, Anacron (for WSL), Docker (VirtualBox), Chrome, Firefox, LXDE, Terminator, font
   installers
 

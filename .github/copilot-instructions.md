@@ -275,8 +275,7 @@ Pre-commit hooks run automatically on commit (configured in
 
 - **shellcheck**: Bash linting (config: `.shellcheckrc`)
 - **shfmt**: Bash formatting (2-space indent, `-i 2 -ci`)
-- **prettier**: JS/YAML/JSON/HTML formatting (config: `.prettierrc.yaml`)
-- **eslint**: JavaScript/JSON linting (config: `.eslintrc.js`)
+- **biome**: JavaScript/JSON linting (config: `biome.jsonc`)
 - **mdformat**: Markdown formatting (80-char wrap)
 - **actionlint**: GitHub Actions validation
 - **bash-compiler**: Compiles binaries from source
@@ -306,9 +305,7 @@ MegaLinter runs in CI and provides comprehensive validation:
 | File                      | Purpose               |
 | ------------------------- | --------------------- |
 | `.shellcheckrc`           | Bash linting rules    |
-| `.prettierrc.yaml`        | Code formatting       |
-| `.eslintrc.js`            | JavaScript/JSON rules |
-| `.yamllint.yml`           | YAML validation       |
+| `biome.jsonc`             | JavaScript/JSON linting rules |
 | `.markdownlint.json`      | Markdown rules        |
 | `.mega-linter.yml`        | MegaLinter config     |
 | `.pre-commit-config.yaml` | Pre-commit hooks      |

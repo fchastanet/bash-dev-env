@@ -29,8 +29,8 @@ fail-on-severity: "high"
 # file: ""
 
 # a list of globs to exclude from scanning, for example:
-# exclude:
-#   - '/etc/**'
+exclude:
+  - "./vendor/**"
 #   - './out/**/*.json'
 # same as --exclude ; GRYPE_EXCLUDE env var
 # exclude: []

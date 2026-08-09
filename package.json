@@ -2,14 +2,11 @@
   "cspell": "cspell.config.yml",
   "scripts": {
     "convert-vscode-profiles": "node VsCodeConfig-profiles/convert-vscode-profiles.js VsCodeConfig-profiles src/_installScripts/_Configs/VsCodeConfig-conf/profiles",
-    "lint": "eslint --ext .js,.jsonc src",
-    "lint:fix": "eslint --ext .js,.jsonc src --fix",
+    "lint": "biome lint",
+    "lint:fix": "biome --fix",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "devDependencies": {
-    "eslint": "^10.8.1",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-json": "^5.0.0",
     "v8r": "^6.1.0",
     "v8r-plugin-emoji-output": "^0.1.0"
   },

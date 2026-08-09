@@ -101,18 +101,6 @@ REPOSITORY_GIT_DIFF_PRE_COMMANDS:
 IGNORE_GITIGNORED_FILES: true
 IGNORE_GENERATED_FILES: true
 
-JAVASCRIPT_DEFAULT_STYLE: prettier
-JAVASCRIPT_ES_CONFIG_FILE: .eslintrc.js
-JAVASCRIPT_ES_FILTER_REGEX_EXCLUDE: (report/)
-
-JSON_ESLINT_PLUGIN_JSONC_FILE_NAME: .eslintrc.js
-
-JSON_JSONLINT_FILTER_REGEX_EXCLUDE: |
-  (?x)(
-    \.vscode/.*\.json$|
-    ^src/_installScripts/_Configs/VsCodeConfig-conf/settings.json$
-  )
-
 SPELL_FILTER_REGEX_EXCLUDE: |
   (?x)(
     \.git/|

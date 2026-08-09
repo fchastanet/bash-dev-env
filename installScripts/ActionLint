@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ###############################################################################
-# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Node/NodeDependencies-binary.yaml
+# GENERATED FROM https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/GithubReleases/ActionLint-binary.yaml
 # DO NOT EDIT IT
 # @generated
 ###############################################################################
@@ -305,22 +305,6 @@ Assert::commandExists() {
     return 1
   }
   return 0
-}
-
-
-# @description asserts that directory does not exist
-# @arg $1 dir:String
-# @env SUDO String allows to use custom sudo prefix command
-# @exitcode 1 existing dir
-# @env SUDO String allows to use custom sudo prefix command
-# @stderr diagnostics information is displayed
-Assert::dirNotExists() {
-  local dir="$1"
-  Log::displayInfo "Checking directory ${dir} does not exist"
-  if ${SUDO:-} test -d "${dir}" &>/dev/null; then
-    Log::displayError "Directory ${dir} still exists"
-    return 1
-  fi
 }
 
 
@@ -1395,6 +1379,133 @@ Framework::createTempFile() {
 }
 
 
+# @description intermediate callback that is used by Github::upgradeRelease
+# or Github::installRelease
+# if installCallback is not set, it allows to:
+#   - copy the downloaded file to the right target file
+#   - and set the execution bit
+# else
+#   installCallback is called with newSoftware, targetFile, version arguments
+# fi
+# @warning do not use this function as callback for Github::upgradeRelease or Github::installRelease, as it would result to an infinite loop
+# @arg $1 newSoftware:String the downloaded software file
+# @arg $2 targetFile:String where we want to copy the file
+# @arg $3 version:String the version that has been downloaded
+# @arg $4 installCallback:Function (optional) the callback to call with 3 first arguments
+# @env SUDO String allows to use custom sudo prefix command
+# @exitcode * on failure
+# @see Github::upgradeRelease
+# @see Github::installRelease
+# @internal
+Github::defaultInstall() {
+  local newSoftware="$1"
+  local targetFile="$2"
+  local version="$3"
+  local installCallback=$4
+  # shellcheck disable=SC2086
+  if ! ${SUDO:-} test -d "${targetFile%/*}"; then
+    ${SUDO:-} mkdir -p "${targetFile%/*}"
+  fi
+  if [[ "$(type -t "${installCallback}")" = "function" ]]; then
+    ${installCallback} "${newSoftware}" "${targetFile}" "${version}"
+  else
+    ${SUDO:-} mv "${newSoftware}" "${targetFile}" || {
+      Log::displayError "Failed to move ${newSoftware} to ${targetFile}"
+      return 1
+    }
+    ${SUDO:-} chmod +x "${targetFile}" || {
+      Log::displayError "Failed to set execution bit on ${targetFile}"
+      return 1
+    }
+    hash -r
+    ${SUDO:-} rm -f "${newSoftware}" || true
+    if [[ -z "${CURRENT_VERSION}" ]]; then
+      Log::displaySuccess "Version ${version} installed in ${targetFile}"
+    else
+      Log::displaySuccess "Version ${CURRENT_VERSION} upgraded to ${version} in ${targetFile}"
+    fi
+  fi
+}
+
+
+# @description github repository eg: kubernetes-sigs/kind
+# @arg $1 githubUrl:String eg: https://github.com/kubernetes-sigs/kind/releases/download/@latestVersion@/kind-linux-amd64
+# @exitcode 1 if no matching repo found in provided url, 0 otherwise
+# @stdout the repo in the form owner/repo
+Github::extractRepoFromGithubUrl() {
+  local githubUrl="$1"
+  local result
+  result="$(sed -n -E 's#^https://github.com/([^/]+/[^/]+)/.*$#\1#p' <<<"${githubUrl}")"
+  if [[ -z "${result}" ]]; then
+    return 1
+  fi
+  echo "${result}"
+}
+
+
+# @description check if specified release software version exists in github
+# @arg $1 releaseUrl:String eg: https://github.com/kubernetes-sigs/kind/releases/download/v1.0.0/kind-linux-amd64
+# @exitcode 1 on failure
+# @exitcode 0 if release version exists
+# @env CURL_CONNECT_TIMEOUT number of seconds before giving up host connection
+Github::isReleaseVersionExist() {
+  local releaseUrl="$1"
+
+  Log::displayDebug "Checking if release version exists on github: ${releaseUrl}"
+  curl \
+    -L \
+    --connect-timeout "${CURL_CONNECT_TIMEOUT:-5}" \
+    -o /dev/null \
+    --silent \
+    --head \
+    --fail \
+    "${releaseUrl}"
+}
+
+
+# @description upgrade given binary to latest github release using retry
+#
+# downloadReleaseUrl argument : the placeholder @latestVersion@ will be replaced by the latest release version
+# @arg $1 targetFile:String target binary file (eg: /usr/local/bin/kind)
+# @arg $2 downloadReleaseUrl:String github release url (eg: https://github.com/kubernetes-sigs/kind/releases/download/@latestVersion@/kind-linux-amd64)
+# @arg $3 softVersionArg:String parameter to add to existing command to compute current version
+# @arg $4 softVersionCallback:Function function called to get software version (default: Version::getCommandVersionFromPlainText will call software with argument --version)
+# @arg $5 installCallback:Function function called to install the file retrieved on github (default copy as is and set execution bit)
+# @arg $6 softVersionCallback:Function function to call to filter the version retrieved from github (Default: Version::parse)
+# @stdout log messages about retry, install, upgrade
+# @env SOFT_VERSION_CALLBACK pass softVersionCallback by env variable instead of passing it by arg
+# @env INSTALL_CALLBACK pass installCallback by env variable instead of passing it by arg
+# @env CURL_CONNECT_TIMEOUT number of seconds before giving up host connection
+# @env EXACT_VERSION if provided, retrieve exact version instead of the latest
+Github::upgradeRelease() {
+  local targetFile="$1"
+  local downloadReleaseUrl="$2"
+  local softVersionArg="${3:---version}"
+  local softVersionCallback="${4:-${SOFT_VERSION_CALLBACK:-Version::getCommandVersionFromPlainText}}"
+  # shellcheck disable=SC2034
+  local installCallback="${5:-${INSTALL_CALLBACK:-}}"
+  local parseGithubVersionCallback="${6:-${PARSE_VERSION_CALLBACK:-Version::parse}}"
+
+  local repo
+  repo="$(Github::extractRepoFromGithubUrl "${downloadReleaseUrl}")"
+  local releasesUrl="https://api.github.com/repos/${repo}/releases/latest"
+
+  # shellcheck disable=SC2329
+  extractVersion() {
+    Version::githubApiExtractVersion | "${parseGithubVersionCallback}"
+  }
+  FILTER_LAST_VERSION_CALLBACK=${FILTER_LAST_VERSION_CALLBACK:-extractVersion} \
+    SOFT_VERSION_CALLBACK="${softVersionCallback}" \
+    INSTALL_CALLBACK="${installCallback}" \
+    Web::upgradeRelease \
+    "${targetFile}" \
+    "${releasesUrl}" \
+    "${downloadReleaseUrl}" \
+    "${softVersionArg}" \
+    "${EXACT_VERSION:-}"
+}
+
+
 # @description the command launch different actions(install, configure, test)
 # depending on the options selected
 # @env SKIP_INSTALL
@@ -1944,6 +2055,18 @@ Linux::getDistributorId() {
     return 1
   fi
   awk -F= '/^ID=/ { gsub(/"/, "", $2); print $2; exit }' /etc/os-release || return 2
+}
+
+
+# @description ensure command jq is available
+# @exitcode 1 if jq command not available
+# @stderr diagnostics information is displayed
+Linux::requireJqCommand() {
+  export REQUIRE_FUNCTION_LINUX_REQUIRE_JQ_COMMAND_LOADED=1
+
+  if [[ "${SKIP_REQUIRE_JQ:-0}" = "0" && "${SKIP_REQUIRES:-0}" = "0" ]]; then
+    Assert::commandExists jq
+  fi
 }
 
 
@@ -2928,6 +3051,33 @@ Version::compare() {
 }
 
 
+# @description extract software version number
+# @arg $1 command:String the command that will be called with --version parameter
+# @arg $2 argVersion:String  allows to override default --version parameter
+Version::getCommandVersionFromPlainText() {
+  local command="$1"
+  local argVersion="${2:---version}"
+  "${command}" "${argVersion}" 2>&1 |
+    Version::parse # keep only version numbers
+}
+
+
+# @description extract version number from github api
+# @noargs
+# @stdin json result of github API
+# @exitcode 1 if jq or Version::parse fails
+# @stdout the version parsed
+Version::githubApiExtractVersion() {
+
+  if [[ "${REQUIRE_FUNCTION_LINUX_REQUIRE_JQ_COMMAND_LOADED:-0}" != 1 ]]; then
+    echo >&2 "Requirement Linux::requireJqCommand has not been loaded"
+    exit 1
+  fi
+
+  jq -r ".tag_name"
+}
+
+
 # @description filter to keep only version number from a string
 # @arg $@ files:String[] the files to filter
 # @exitcode * if one of the filter command fails
@@ -2941,6 +3091,106 @@ Version::parse() {
     -e 's/[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/' \
     -e '//{p;Q}' \
     "$@"
+}
+
+
+# @description Retrieve the latest version number of a web release
+# @arg $1 releaseListUrl:String the url from which version list can be retrieved
+# @stdout log messages about retry
+# @env CURL_CONNECT_TIMEOUT number of seconds before giving up host connection
+Web::getReleases() {
+  local releaseListUrl="$1"
+  # Get latest release from GitHub api
+  if command -v gh &>/dev/null && [[ -n "${GH_TOKEN}" ]]; then
+    Log::displayDebug "Using gh to retrieve release versions list"
+    Retry::parameterized "${RETRY_MAX_RETRY:-5}" \
+      "${RETRY_DELAY_BETWEEN_RETRIES:-15}" \
+      "Retrieving release versions list ..." \
+      gh api "${releaseListUrl#https://github.com}"
+  else
+    if command -v gh &>/dev/null && [[ "${GH_WARNING_DISPLAYED:-0}" = "0" ]]; then
+      Log::displayWarning "GH_TOKEN is not set, cannot use gh, using curl to retrieve release versions list"
+      GH_WARNING_DISPLAYED=1
+    fi
+    Retry::parameterized "${RETRY_MAX_RETRY:-5}" \
+      "${RETRY_DELAY_BETWEEN_RETRIES:-15}" \
+      "Retrieving release versions list ..." \
+      curl \
+      -L \
+      --connect-timeout "${CURL_CONNECT_TIMEOUT:-5}" \
+      --fail \
+      --silent \
+      "${releaseListUrl}"
+  fi
+}
+
+
+# @description upgrade given binary to latest release using retry
+#
+# releasesUrl argument : the placeholder @latestVersion@ will be replaced by the latest release version
+# @arg $1 targetFile:String target binary file (eg: /usr/local/bin/kind)
+# @arg $2 releasesUrl:String url on which we can query all available versions (eg: "https://go.dev/dl/?mode=json")
+# @arg $3 downloadReleaseUrl:String url from which the software will be downloaded (eg: https://storage.googleapis.com/golang/go@latestVersion@.linux-amd64.tar.gz)
+# @arg $4 softVersionArg:String parameter to add to existing command to compute current version
+# @arg $5 exactVersion:String if you want to retrieve a specific version instead of the latest
+# @stdout log messages about retry, install, upgrade
+# @env FILTER_LAST_VERSION_CALLBACK a callback to filter the latest version from releasesUrl
+# @env SOFT_VERSION_CALLBACK a callback to execute command version
+# @env PARSE_VERSION_CALLBACK a callback to parse the version of the existing command
+# @env INSTALL_CALLBACK a callback to install the software downloaded
+# @env CURL_CONNECT_TIMEOUT number of seconds before giving up host connection
+# @env VERSION_PLACEHOLDER a placeholder to replace in downloadReleaseUrl (default: @latestVersion@)
+Web::upgradeRelease() {
+  local targetFile="$1"
+  local releasesUrl="$2"
+  local downloadReleaseUrl="$3"
+  local softVersionArg="${4:---version}"
+  local exactVersion="${5:-}"
+  # options from env variables
+  local filterLastVersionCallback="${FILTER_LAST_VERSION_CALLBACK:-Version::parse}"
+  local softVersionCallback="${SOFT_VERSION_CALLBACK:-Version::getCommandVersionFromPlainText}"
+  local installCallback="${INSTALL_CALLBACK:-}"
+
+  local currentVersion="not existing"
+  if [[ -f "${targetFile}" ]]; then
+    currentVersion="$(${softVersionCallback} "${targetFile}" "${softVersionArg}" || true)"
+  fi
+  if [[ -z "${exactVersion}" ]]; then
+    local latestVersion
+    latestVersion="$(Web::getReleases "${releasesUrl}" | ${filterLastVersionCallback})" || {
+      Log::displayError "latest version not found on ${releasesUrl}"
+      return 1
+    }
+    Log::displayInfo "Latest version found is ${latestVersion}"
+
+    exactVersion="${latestVersion}"
+  fi
+  local url="${downloadReleaseUrl//${VERSION_PLACEHOLDER:-@latestVersion@}/${exactVersion}}"
+  if [[ -n "${exactVersion}" ]] && ! Github::isReleaseVersionExist "${url}"; then
+    Log::displayError "${targetFile} version ${exactVersion} doesn't exist on github"
+    return 2
+  fi
+  Log::displayDebug "currentVersion: '${currentVersion}'"
+  Log::displayDebug "exactVersion: '${exactVersion}'"
+  if [[ "${currentVersion}" = "${exactVersion}" ]]; then
+    Log::displayInfo "${targetFile} version ${exactVersion} already installed"
+  else
+    if [[ -z "${currentVersion}" ]]; then
+      Log::displayInfo "Installing ${targetFile} with version ${exactVersion}"
+    else
+      Log::displayInfo "Upgrading ${targetFile} from version ${currentVersion} to ${exactVersion}"
+    fi
+    Log::displayInfo "Using url ${url}"
+    newSoftware=$(mktemp -p "${TMPDIR:-/tmp}" -t web.newSoftware.XXXX)
+    Retry::default curl \
+      -L \
+      --connect-timeout "${CURL_CONNECT_TIMEOUT:-5}" \
+      -o "${newSoftware}" \
+      --fail \
+      "${url}"
+
+    CURRENT_VERSION="${currentVersion}" Github::defaultInstall "${newSoftware}" "${targetFile}" "${exactVersion}" "${installCallback}"
+  fi
 }
 # FUNCTIONS
 
@@ -2958,7 +3208,7 @@ defaultBeforeParseCallback() {
 }
 
 scriptName() {
-  echo "NodeDependencies"
+  echo "ActionLint"
 }
 
 # shellcheck disable=SC2329
@@ -3078,7 +3328,7 @@ beforeParseCallback() {
 copyrightCallback() {
   #
   # shellcheck disable=SC2155,SC2154,SC2250
-  echo "Copyright (c) 2024-now François Chastanet"
+  echo "Copyright (c) 2026-now François Chastanet"
 }
 
 # shellcheck disable=SC2317,SC2329 # if function is overridden
@@ -3117,7 +3367,7 @@ optionHelpCallback() {
 # shellcheck disable=SC2317,SC2329 # if function is overridden
 optionVersionCallback() {
   # shellcheck disable=SC2154
-  echo "${SCRIPT_NAME} version 3.0"
+  echo "${SCRIPT_NAME} version 3.1"
   exit 0
 }
 
@@ -3276,98 +3526,6 @@ commandOptionParseFinished() {
 
 
 
-helpDescription() {
-  echo "Node dependencies mainly code checkers"
-}
-
-helpLongDescription() {
-  helpDescription
-  echo "$(scriptName) -- the following linters are available: "
-  echo -e "  - ${__HELP_EXAMPLE}npm-check-updates${__RESET_COLOR}"
-  echo -e "  - ${__HELP_EXAMPLE}biome${__RESET_COLOR}"
-  echo -e "  - ${__HELP_EXAMPLE}sass-lint${__RESET_COLOR}"
-  echo -e "  - ${__HELP_EXAMPLE}stylelint${__RESET_COLOR}"
-  echo -e "  - ${__HELP_EXAMPLE}yamllint${__RESET_COLOR}"
-  echo -e "  - ${__HELP_EXAMPLE}hjson${__RESET_COLOR}"
-}
-
-dependencies() {
-  echo "installScripts/NodeNpm"
-}
-
-fortunes() {
-  helpLongDescription
-  echo "%"
-}
-
-# jscpd:ignore-start
-listVariables() { :; }
-helpVariables() { :; }
-defaultVariables() { :; }
-checkVariables() { :; }
-breakOnConfigFailure() { :; }
-breakOnTestFailure() { :; }
-configure() { :; }
-testConfigure() { :; }
-# jscpd:ignore-end
-
-install() {
-  if [[ ! -d "${HOME}/n" ]]; then
-    Log::displaySkipped "node dependencies skipped as node not installed"
-    return 0
-  fi
-  # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
-  source "${HOME}/.bash-dev-env/profile.d/n_path.sh"
-
-  # npm install
-  npmInstall() {
-    if npm -g list "$1" >/dev/null; then
-      Log::displaySkipped "Node package $1 already installed"
-    else
-      Log::displayInfo "Installing node package $1 globally"
-      npm install -g "$1"
-    fi
-  }
-
-  npmInstall npm-check-updates
-  npmInstall @biomejs/biome
-  npmInstall sass-lint
-  npmInstall stylelint
-  npmInstall yamllint
-  npmInstall hjson
-
-  Log::displayInfo "check node packages update and upgrade"
-  local updates
-  updates=$(npm-check-updates -g -u | grep 'npm -g' || true)
-  if [[ -n "${updates}" ]]; then
-    eval "${updates}"
-  fi
-}
-
-testInstall() {
-  local -i failures=0
-  # shellcheck source=src/_installScripts/Node/NodeNpm-conf/.bash-dev-env/profile.d/n_path.sh
-  source "${HOME}/.bash-dev-env/profile.d/n_path.sh"
-  Version::checkMinimal "npm-check-updates" "--version" "17.1.12" || ((++failures))
-  Version::checkMinimal "biome" "--version" "2.5.7" || ((++failures))
-  Version::checkMinimal "sass-lint" "--version" "1.13.1" || ((++failures))
-  Version::checkMinimal "stylelint" "--version" "16.12.0" || ((++failures))
-  Version::checkMinimal "hjson" "--version" "3.2.1" || ((++failures))
-  return "${failures}"
-}
-
-cleanBeforeExport() {
-  rm -Rf "${HOME}/.npm/_cacache" || true
-}
-
-testCleanBeforeExport() {
-  ((failures = 0)) || true
-  Assert::dirNotExists "${HOME}/.npm/_cacache" || ((++failures))
-  return "${failures}"
-}
-
-
-
 softwareArgHelpFunction() {
   echo "    List of softwares to install (--profile option cannot be used in this case)"
   echo "    See below for complete list of softwares available"
@@ -3505,7 +3663,7 @@ declare -i help_cache_max_duration=86400
 
 # shellcheck disable=SC2329
 optionHelpCallback() {
-  "NodeDependenciesCommandHelp"
+  "ActionLintCommandHelp"
   exit 0
 }
 
@@ -3534,8 +3692,66 @@ afterParseCallback() {
 }
 
 
+
+# shellcheck disable=SC2329
+upgradeGithubReleaseBeforeParseCallback() {
+  Linux::requireJqCommand
+}
+
+# jscpd:ignore-start
+# shellcheck disable=SC2329
+dependencies() { :; }
+# shellcheck disable=SC2329
+fortunes() { :; }
+# shellcheck disable=SC2329
+listVariables() { :; }
+# shellcheck disable=SC2329
+helpVariables() { :; }
+# shellcheck disable=SC2329
+defaultVariables() { :; }
+# shellcheck disable=SC2329
+checkVariables() { :; }
+# shellcheck disable=SC2329
+breakOnConfigFailure() { :; }
+# shellcheck disable=SC2329
+breakOnTestFailure() { :; }
+# shellcheck disable=SC2329
+configure() { :; }
+# shellcheck disable=SC2329
+testConfigure() { :; }
+# jscpd:ignore-end
+
+
+
+helpDescription() {
+  echo "Static checker for GitHub Actions workflow files"
+}
+
+fortunes() {
+  echo -e "${__INFO_COLOR}$(scriptName)${__RESET_COLOR} -- the following linter is available: ${__HELP_EXAMPLE}actionlint${__RESET_COLOR}"
+  echo "%"
+}
+
+actionlintInstallCallback() {
+  sudo tar xzvf "$1" -C /usr/local/bin actionlint
+  sudo chmod +x /usr/local/bin/actionlint
+  hash -r
+  sudo rm -f "$1"
+}
+
+install() {
+  SUDO=sudo INSTALL_CALLBACK=actionlintInstallCallback Github::upgradeRelease \
+    /usr/local/bin/actionlint \
+    "https://github.com/rhysd/actionlint/releases/download/v@latestVersion@/actionlint_@latestVersion@_linux_amd64.tar.gz"
+}
+
+testInstall() {
+  Version::checkMinimal "actionlint" --version "1.7.12" || return 1
+}
+
+
 # ------------------------------------------
-# Command NodeDependenciesCommand
+# Command ActionLintCommand
 # ------------------------------------------
 
 # options variables initialization
@@ -3560,8 +3776,8 @@ declare optionVersion="0"
 declare optionQuiet="0"
 # arguments variables initialization
 declare command="install"
-# @description parse command options and arguments for NodeDependenciesCommand
-NodeDependenciesCommandParse() {
+# @description parse command options and arguments for ActionLintCommand
+ActionLintCommandParse() {
   Log::displayDebug "Command ${SCRIPT_NAME} - parse arguments: ${BASH_FRAMEWORK_ARGV[*]}"
   Log::displayDebug "Command ${SCRIPT_NAME} - parse filtered arguments: ${BASH_FRAMEWORK_ARGV_FILTERED[*]}"
   SKIP_CONFIGURE="0"
@@ -4047,8 +4263,8 @@ NodeDependenciesCommandParse() {
 
 }
 
-# @description display command options and arguments help for NodeDependenciesCommand
-NodeDependenciesCommandHelp() {
+# @description display command options and arguments help for ActionLintCommand
+ActionLintCommandHelp() {
   echo -e "${__HELP_TITLE_COLOR}SYNOPSIS:${__RESET_COLOR}"
   helpDescriptionFunction
 
@@ -4056,7 +4272,7 @@ NodeDependenciesCommandHelp() {
   # ------------------------------------------
   # usage section
   # ------------------------------------------
-  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "NodeDependencies [OPTIONS] [ARGUMENTS]"
+  Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" "ActionLint [OPTIONS] [ARGUMENTS]"
   echo
   # ------------------------------------------
   # usage/options section
@@ -4064,7 +4280,7 @@ NodeDependenciesCommandHelp() {
   optionsAltList=("[--skip-config|--skip-configure|--skip-configuration|-sc]" "[--skip-install|--skip-installation|-si]" "[--skip-test|--skip-tests|-st]" "[--skip-deps|--skip-dependencies|-sd]" "[--prepare-export|-e]" "[--profile|-p <profile>]" "[--help|-h]" "[--config]" "[--bash-framework-config <bash-framework-config>]" "[--verbose|-v]" "[-vv]" "[-vvv]" "[--log-level <log-level>]" "[--log-file <log-file>]" "[--display-level <display-level>]" "[--no-color]" "[--theme <theme>]" "[--version]" "[--quiet|-q]"
   )
   Array::wrap2 " " 80 2 "${__HELP_TITLE_COLOR}USAGE:${__RESET_COLOR}" \
-    "NodeDependencies" "${optionsAltList[@]}"
+    "ActionLint" "${optionsAltList[@]}"
   echo
 
   # ------------------------------------------
@@ -4259,7 +4475,7 @@ NodeDependenciesCommandHelp() {
   # ------------------------------------------
   echo
   echo -n -e "${__HELP_TITLE_COLOR}VERSION: ${__RESET_COLOR}"
-  echo "3.0"
+  echo "3.1"
   # ------------------------------------------
   # author section
   # ------------------------------------------
@@ -4271,7 +4487,7 @@ NodeDependenciesCommandHelp() {
   # ------------------------------------------
   echo
   echo -n -e "${__HELP_TITLE_COLOR}SOURCE FILE: ${__RESET_COLOR}"
-  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/Node/NodeDependencies-binary.yaml"
+  echo "https://github.com/fchastanet/bash-dev-env/tree/master/src/_installScripts/GithubReleases/ActionLint-binary.yaml"
   # ------------------------------------------
   # license section
   # ------------------------------------------
@@ -4286,8 +4502,9 @@ NodeDependenciesCommandHelp() {
 
 
 beforeParseCallback
+upgradeGithubReleaseBeforeParseCallback
 
-NodeDependenciesCommandParse "$@"
+ActionLintCommandParse "$@"
 MAIN_FUNCTION_NAME="main"
 main() {
 

@@ -1,0 +1,47 @@
+{
+  "files": {
+    "includes": [
+      "**",
+      "!.history",
+      "!**/dist",
+      "!**/vendor",
+      "!megalinter-reports",
+    ],
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "lineWidth": 100,
+  },
+  "linter": {
+    "rules": {
+      "recommended": false,
+    },
+  },
+  "javascript": {
+    "formatter": {
+      "lineWidth": 120,
+      "quoteStyle": "single",
+    },
+  },
+  "json": {
+    "formatter": {
+      "enabled": false,
+    },
+  },
+  "overrides": [
+    {
+      "includes": [
+        "./.vscode/*.json",
+        "**/*.jsonc",
+        "src/_installScripts/_Configs/VsCodeConfig-conf/**/*.json",
+      ],
+      "json": {
+        "formatter": { "trailingCommas": "all" },
+        "parser": {
+          "allowComments": true,
+          "allowTrailingCommas": true,
+        },
+      },
+    },
+  ],
+}

@@ -7,8 +7,7 @@ ajuvercr.jsonld-lsp
 
 ## 1. Linters
 
-dbaeumer.vscode-eslint
-stylelint.vscode-stylelint
+biomejs.biome
 
 ## 2. css/less/sass/scss
 
