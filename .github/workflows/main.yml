@@ -80,7 +80,7 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
 
-      - uses: actions/create-github-app-token@v3.1.1
+      - uses: actions/create-github-app-token@v3.2.0
         if: ${{ success() }}
         id: generate-token
         with:
