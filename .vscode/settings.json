@@ -47,7 +47,7 @@
   },
   "github.copilot.chat.localeOverride": "en",
   "github.copilot.chat.commitMessageGeneration.instructions": [
-    {"file": ".github/instructions/commit-message.instructions.md"}
+    { "file": ".github/instructions/commit-message.instructions.md" }
   ],
   "github.copilot.enable": {
     "*": true,
