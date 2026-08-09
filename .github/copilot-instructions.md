@@ -302,13 +302,13 @@ MegaLinter runs in CI and provides comprehensive validation:
 
 ### Linter Configuration Files
 
-| File                      | Purpose               |
-| ------------------------- | --------------------- |
-| `.shellcheckrc`           | Bash linting rules    |
+| File                      | Purpose                       |
+| ------------------------- | ----------------------------- |
+| `.shellcheckrc`           | Bash linting rules            |
 | `biome.jsonc`             | JavaScript/JSON linting rules |
-| `.markdownlint.json`      | Markdown rules        |
-| `.mega-linter.yml`        | MegaLinter config     |
-| `.pre-commit-config.yaml` | Pre-commit hooks      |
+| `.markdownlint.json`      | Markdown rules                |
+| `.mega-linter.yml`        | MegaLinter config             |
+| `.pre-commit-config.yaml` | Pre-commit hooks              |
 
 **Key Settings:**
 
